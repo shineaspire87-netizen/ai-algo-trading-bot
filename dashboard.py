@@ -115,14 +115,25 @@ def sync_trade_to_google_sheet(trade_record):
     except Exception as e:
         pass
 
-def send_telegram_alert(msg):
-    """Instant Telegram HTML Alert Sender"""
-    try:
-        url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
-        payload = {"chat_id": TELEGRAM_CHAT_ID, "text": msg, "parse_mode": "HTML"}
-        requests.post(url, json=payload, timeout=3)
-    except:
-        pass
+# 🟢 FAIL-SAFE TELEGRAM NOTIFIER INTEGRATION
+try:
+    from notifier import send_telegram_message
+    def send_telegram_alert(msg):
+        try:
+            send_telegram_message(msg)
+        except:
+            pass
+except:
+    def send_telegram_alert(msg):
+        try:
+            # Fallback direct Telegram API request
+            token = "7864817112:AAFq2c4N3M055W6u1g0wY6q0P5bBqY" # Replace with exact full token if needed
+            chat_id = "1388656143"
+            url = f"https://api.telegram.org/bot{token}/sendMessage"
+            payload = {"chat_id": chat_id, "text": msg, "parse_mode": "HTML"}
+            requests.post(url, json=payload, timeout=5)
+        except:
+            pass
 
 def fetch_real_today_news_rss():
     """Parses Google News RSS Feed for past 24h market sentiment"""
