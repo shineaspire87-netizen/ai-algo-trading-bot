@@ -1,15 +1,31 @@
-# paper_broker.py - Full Telegram Mobile Alerts Integration
+# paper_broker.py - Institutional Paper Broker with SEBI Order Slicing & VIX Protection
 import os
 import csv
 import json
 import datetime
 from notifier import send_telegram_alert
+from config import SEBI_FREEZE_LIMITS
 
 CSV_FILE = "trades.csv"
 ACTIVE_JSON = "active_trade.json"
 STATE_JSON = "live_state.json"
-
 BROKERAGE_PER_TRADE = 45.0
+
+def slice_order_quantity(symbol, total_qty):
+    """SEBI Order Slicing Engine: Splits large parent orders into compliant child slices"""
+    asset_key = "BANKNIFTY" if "BANK" in symbol else ("NIFTY50" if "NIFTY" in symbol else "DEFAULT")
+    max_cap = SEBI_FREEZE_LIMITS.get(asset_key, 1800)
+    
+    if total_qty <= max_cap:
+        return [total_qty]
+    
+    slices = []
+    remaining = total_qty
+    while remaining > 0:
+        chunk = min(remaining, max_cap)
+        slices.append(chunk)
+        remaining -= chunk
+    return slices
 
 class PaperBroker:
     def __init__(self, initial_capital=100000):
@@ -81,10 +97,12 @@ class PaperBroker:
         if self.position is not None:
             return
 
+        # SEBI Slicing Validation
+        child_slices = slice_order_quantity(symbol, qty)
+        
         stop_loss = round(entry_price * (1 - stop_loss_pct), 2)
         target = round(entry_price * (1 + target_pct), 2)
         now_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
         p_curr = "$" if "USD" in symbol or "BTC" in symbol or "ETH" in symbol else "₹"
 
         if option_type == "CALL":
@@ -103,21 +121,22 @@ class PaperBroker:
             "target_stock_price": target_stock_price,
             "sl_stock_price": sl_stock_price,
             "qty": qty,
+            "slices": child_slices,
             "stop_loss": stop_loss,
             "initial_stop_loss": stop_loss,
             "target": target,
+            "max_premium_seen": entry_price,
             "trailed_to_breakeven": False
         }
         self.daily_trades_count += 1
         self._update_active_json()
         
-        # 🚨 TELEGRAM INSTANT TRADE ENTRY ALERT
         telegram_msg = (
             f"🚨 <b>ALGO TRADE ENTERED!</b>\n\n"
             f"<b>Symbol:</b> {symbol} ({option_type})\n"
             f"<b>Stock Price:</b> {p_curr}{stock_price:,.2f}\n"
             f"<b>Option Premium:</b> {p_curr}{entry_price:.2f}\n"
-            f"<b>Quantity:</b> {qty}\n"
+            f"<b>Quantity:</b> {qty} (SEBI Slices: {len(child_slices)})\n"
             f"<b>Stop Loss:</b> {p_curr}{stop_loss:.2f} (-15%)\n"
             f"<b>Target:</b> {p_curr}{target:.2f} (+30%)\n"
             f"<b>Time:</b> {now_str}"
@@ -133,24 +152,20 @@ class PaperBroker:
         qty = self.position["qty"]
         now_time = datetime.datetime.now()
         now_str = now_time.strftime("%Y-%m-%d %H:%M:%S")
-
         p_curr = "$" if "USD" in self.position["symbol"] or "BTC" in self.position["symbol"] else "₹"
 
-        # Trailing Stop Loss to Break-Even
-        half_target_price = entry * 1.15
-        if current_price >= half_target_price and not self.position["trailed_to_breakeven"]:
-            self.position["stop_loss"] = entry
-            self.position["trailed_to_breakeven"] = True
-            self._update_active_json()
-            
-            # 🛡️ TELEGRAM TRAILING SL ALERT
-            trail_msg = (
-                f"🛡️ <b>TRAILING SL TO BREAK-EVEN!</b>\n\n"
-                f"<b>Symbol:</b> {self.position['symbol']}\n"
-                f"<b>Reason:</b> 50% Target Reached (+15% Gain)\n"
-                f"<b>New Stop Loss:</b> {p_curr}{entry:.2f} (0% Risk Locked)"
-            )
-            send_telegram_alert(trail_msg)
+        # Track Max Premium Seen
+        max_seen = self.position.get("max_premium_seen", entry)
+        if current_price > max_seen:
+            self.position["max_premium_seen"] = current_price
+
+        # Trailing Stop Loss & Profit Lock (+4% Profit Locks to Break-Even)
+        if current_price >= (entry * 1.04):
+            trailed_sl = max(entry, round(self.position["max_premium_seen"] * 0.96, 2))
+            if trailed_sl > self.position["stop_loss"]:
+                self.position["stop_loss"] = trailed_sl
+                self.position["trailed_to_breakeven"] = True
+                self._update_active_json()
 
         # 1. Target Check
         if current_price >= self.position["target"]:
@@ -202,7 +217,6 @@ class PaperBroker:
                 f"{self.capital:.2f}"
             ])
 
-        # 🏁 TELEGRAM TRADE EXIT ALERT
         exit_msg = (
             f"🏁 <b>TRADE COMPLETED & LOGGED!</b>\n\n"
             f"<b>Symbol:</b> {self.position['symbol']} ({self.position['type']})\n"

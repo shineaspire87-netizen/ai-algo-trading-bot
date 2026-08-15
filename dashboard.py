@@ -1,4 +1,4 @@
-# dashboard.py - Antony Quant AI Algo Terminal (Institutional Grade Engine)
+# dashboard.py - Antony Quant AI Algo Terminal (Complete Institutional Engine & Live Sync)
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -149,6 +149,16 @@ def fetch_real_today_news_rss():
         return status, advice, theme, headlines
     except Exception as e:
         return "🟢 TODAY'S NEWS SENTIMENT STABLE", "✅ இன்றைய செய்திகள் நிலவரம் சாதகமாக உள்ளது.", "glass-card-green", ["• Today's live news feed connected."]
+
+def calculate_hurst_exponent(ts: pd.Series, max_lag: int = 20) -> float:
+    """Calculates Hurst Exponent (H < 0.45 indicates mean-reverting sideways chop)"""
+    try:
+        lags = range(2, max_lag)
+        tau = [np.sqrt(np.std(np.subtract(ts[lag:], ts[:-lag]))) for lag in lags]
+        poly = np.polyfit(np.log(lags), np.log(tau), 1)
+        return float(poly[0] * 2.0)
+    except:
+        return 0.50
 
 st.sidebar.header("🕹️ Control Panel")
 selected_name = st.sidebar.selectbox("Select Asset Chart to View:", list(WATCHLIST.keys()), index=0)
@@ -372,9 +382,14 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
 
         is_bullish_engulfing = (c_close > c_open) and (c_close >= p_open) and (c_open <= p_close)
         is_bearish_engulfing = (c_close < c_open) and (c_close <= p_open) and (c_open >= p_close)
+        
+        # 🟢 HURST EXPONENT SIDEWAYS DETECTOR
+        hurst_val = calculate_hurst_exponent(df['Close'])
+        is_hurst_sideways = (hurst_val < 0.45)
     else:
         current_price, atm_strike, rsi_val, ema9_val, ema21_val, vwap_val = 0.0, 0, 50.0, 0.0, 0.0, 0.0
-        is_bullish_engulfing, is_bearish_engulfing, is_vol_spike = False, False, False
+        is_bullish_engulfing, is_bearish_engulfing, is_vol_spike, is_hurst_sideways = False, False, False, False
+        hurst_val = 0.50
 
     # TOP KPI METRICS CARDS
     k1, k2, k3, k4, k5, k6 = st.columns(6)
@@ -443,7 +458,7 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
         if weekday_idx in [1, 3]: # Tuesday (Nifty) or Thursday
             is_expiry_cutoff = True
 
-    # EVALUATE AI SIGNAL WITH VWAP & PDH/PDL FILTERS
+    # EVALUATE AI SIGNAL WITH VWAP, HURST EXPONENT & PDH/PDL FILTERS
     if not is_market_open and not is_crypto_selected:
         bot_signal_str = "MARKET CLOSED 🔒 (TRADING PAUSED)"
         card_theme = "glass-card"
@@ -486,8 +501,15 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
         reason_msg = f"<b>பாட் கூல்டவுன்:</b> முந்தைய டிரேட் முடிவடைந்து 15 நிமிடக் கூல்டவுன் ஓடிக் கொண்டிருக்கிறது."
         thought_steps = f"• Step 1: Cooldown Timer ➔ ⏳ ACTIVE ({cooldown_remaining_mins} Mins Left)"
         raw_sig = "HOLD"
+    elif is_hurst_sideways:
+        bot_signal_str = f"HURST SIDEWAYS CHOP ⏸️ (H: {hurst_val:.2f} < 0.45)"
+        card_theme = "glass-card-yellow"
+        ai_conf = "0.00% (Chop Guard)"
+        reason_msg = f"<b>பாட் பாதுகாப்பு:</b> Hurst Exponent (<b>H: {hurst_val:.2f} < 0.45</b>) சந்தை பக்கவாட்டில் (Chop Range) நகர்வதைக் காட்டுகிறது. பிரீமியம் கரைவதைத் தவிர்க்க பாட் காத்திருக்கிறது!"
+        thought_steps = f"• Step 1: Hurst Exponent Check ➔ ⏸️ H: {hurst_val:.2f} < 0.45 (MEAN REVERTING CHOP)<br>• Step 2: Risk Engine ➔ 🔒 HOLD TO PREVENT THETA DECAY"
+        raw_sig = "HOLD"
 
-    # INSTITUTIONAL ENTRY SIGNALS WITH VWAP + PDH/PDL BREAKOUT
+    # INSTITUTIONAL ENTRY SIGNALS WITH VWAP + PDH/PDL BREAKOUT + ENGULFING
     elif ema9_val > ema21_val and rsi_val > 60 and current_price > vwap_val and (is_bullish_engulfing or is_vol_spike):
         bot_signal_str = "QUICK SCALP: BUY CALL 🚀 (Target: +12% | SL: -7% | Engulfing & Vol Spike Confirmed)"
         card_theme = "glass-card-green"
@@ -507,12 +529,12 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
         bot_signal_str = "HOLD ⏸️ (SCANNING FOR VOLT, VWAP & BREAKOUT)"
         card_theme = "glass-card-yellow"
         ai_conf = "52.40% (Buffer Range)"
-        reason_msg = f"<b>பாட் காத்திருக்கிறது:</b> {asset_name} நேரலை விலை (RSI: {rsi_val:.2f} | VWAP: {p_curr}{vwap_val:,.2f}) பக்கவாட்டில் நகர்கிறது."
+        reason_msg = f"<b>பாட் காத்திருக்கிறது:</b> {asset_name} நேரலை விலை (RSI: {rsi_val:.2f} | VWAP: {p_curr}{vwap_val:,.2f} | H: {hurst_val:.2f}) பக்கவாட்டில் நகர்கிறது."
         thought_steps = f"• Step 1: News Risk Filter ➔ 🟢 SAFE<br>• Step 2: VWAP Alignment ➔ ⏸️ BUFFER REGIME<br>• Step 3: Indicator Filter ➔ ⏸️ RSI: {rsi_val:.1f}"
         raw_sig = "HOLD"
 
     # AUTO-TRIGGER PAPER TRADE
-    if raw_sig in ["BUY_CALL", "BUY_PUT"] and active_data.get("status") == "NO_POSITION" and is_market_open and not is_cooldown_active and not is_daily_limit_reached and not is_2_consecutive_losses and not is_opening_buffer and not is_expiry_cutoff:
+    if raw_sig in ["BUY_CALL", "BUY_PUT"] and active_data.get("status") == "NO_POSITION" and is_market_open and not is_cooldown_active and not is_daily_limit_reached and not is_2_consecutive_losses and not is_opening_buffer and not is_expiry_cutoff and not is_hurst_sideways:
         opt_type = "CALL" if raw_sig == "BUY_CALL" else "PUT"
         trade_sym = f"{asset_name}_OPT_{opt_type}"
         prem = round(current_price * 0.01 if "NIFTY" in asset_name else current_price * 0.02, 2)

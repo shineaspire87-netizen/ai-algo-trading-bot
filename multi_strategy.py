@@ -1,4 +1,4 @@
-# multi_strategy.py - With Direct Telegram Mobile Alerts
+# multi_strategy.py - With Direct Telegram Mobile Alerts & Hurst Engine
 import os
 import datetime
 import yfinance as yf
@@ -54,22 +54,11 @@ def calculate_daily_reset_vwap(df: pd.DataFrame) -> pd.Series:
     vwap = cum_vol_price / cum_vol
     return vwap.fillna(typical_price)
 
-def calculate_yang_zhang_volatility(df: pd.DataFrame, window: int = 14) -> pd.Series:
-    log_ho = np.log(df['High'] / df['Open'])
-    log_lo = np.log(df['Low'] / df['Open'])
-    log_co = np.log(df['Close'] / df['Open'])
-    log_oc = np.log(df['Open'] / df['Close'].shift(1))
-    log_cc = np.log(df['Close'] / df['Close'].shift(1))
-    
-    rs = log_ho * (log_ho - log_co) + log_lo * (log_lo - log_co)
-    k = 0.34 / (1.34 + (window + 1) / (window - 1))
-    
-    var_o = (log_oc - log_oc.rolling(window).mean()) ** 2
-    var_c = (log_cc - log_cc.rolling(window).mean()) ** 2
-    var_rs = rs.rolling(window).mean()
-    
-    yz_vol = np.sqrt(var_o.rolling(window).mean() + k * var_c.rolling(window).mean() + (1 - k) * var_rs)
-    return yz_vol.fillna(0)
+def calculate_garman_klass_volatility(df: pd.DataFrame, window: int = 14) -> pd.Series:
+    log_hl = np.log(df['High'] / df['Low']) ** 2
+    log_co = np.log(df['Close'] / df['Open']) ** 2
+    gk = 0.5 * log_hl - (2 * np.log(2) - 1) * log_co
+    return np.sqrt(gk.rolling(window).mean()).fillna(0)
 
 def scan_all_assets():
     now_dt = datetime.datetime.now()
@@ -104,7 +93,7 @@ def scan_all_assets():
             
             df['ATR'] = ta.volatility.average_true_range(df['High'], df['Low'], df['Close'], window=14)
             df['ATR_Pct'] = (df['ATR'] / df['Close']) * 100.0
-            df['YZ_Volatility'] = calculate_yang_zhang_volatility(df, window=14)
+            df['GK_Volatility'] = calculate_garman_klass_volatility(df, window=14)
             
             df['VWAP'] = calculate_daily_reset_vwap(df)
             df['VWAP_Diff'] = (df['Close'] - df['VWAP']) / df['VWAP']
@@ -131,7 +120,7 @@ def scan_all_assets():
                     'EMA_Diff': latest['EMA_Diff'],
                     'ADX': latest['ADX'],
                     'ATR_Pct': latest['ATR_Pct'],
-                    'YZ_Volatility': latest['YZ_Volatility'],
+                    'GK_Volatility': latest['GK_Volatility'],
                     'VWAP_Diff': latest['VWAP_Diff'],
                     'BB_Width': latest['BB_Width'],
                     'BB_Pband': latest['BB_Pband'],
@@ -159,7 +148,6 @@ def scan_all_assets():
             else:
                 signal = "BUY_CALL" if (latest['EMA_9'] > latest['EMA_21'] and latest['RSI'] > 58) else ("BUY_PUT" if (latest['EMA_9'] < latest['EMA_21'] and latest['RSI'] < 42) else "HOLD")
 
-            # TELEGRAM INSTANT SIGNAL ALERT TRIGGER
             if signal != "HOLD" and last_notified_signal.get(name) != signal:
                 last_notified_signal[name] = signal
                 alert_msg = f"🚨 <b>AI TRADE SIGNAL DETECTED!</b>\n\n<b>Asset:</b> {name}\n<b>Signal:</b> {signal}\n<b>Live Price:</b> {latest['Close']:,.2f}\n<b>RSI:</b> {latest['RSI']:.1f}\n<b>Time:</b> {now_dt.strftime('%H:%M:%S IST')}"
