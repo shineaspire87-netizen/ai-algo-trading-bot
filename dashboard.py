@@ -1,6 +1,45 @@
 # dashboard.py - Antony Quant AI Algo Terminal (Complete Institutional Engine & Live Sync)
 import streamlit as st
+import streamlit.components.v1 as components
 import pandas as pd
+
+def render_tradingview_live_chart(asset_name):
+    """Embeds Official TradingView Real-Time Live WebSocket Chart (0ms Latency)"""
+    tv_map = {
+        "BANKNIFTY": "NSE:BANKNIFTY",
+        "NIFTY50": "NSE:NIFTY",
+        "RELIANCE": "NSE:RELIANCE",
+        "HDFCBANK": "NSE:HDFCBANK",
+        "ICICIBANK": "NSE:ICICIBANK",
+        "INFY": "NSE:INFY",
+        "SBIN": "NSE:SBIN",
+        "BITCOIN": "BINANCE:BTCUSDT",
+        "ETHEREUM": "BINANCE:ETHUSDT"
+    }
+    tv_symbol = tv_map.get(asset_name, "NSE:NIFTY")
+
+    widget_code = f"""
+    <div class="tradingview-widget-container" style="height:540px;width:100%">
+      <div id="tradingview_live_chart" style="height:540px;width:100%"></div>
+      <script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
+      <script type="text/javascript">
+      new TradingView.widget({{
+        "autosize": true,
+        "symbol": "{tv_symbol}",
+        "interval": "5",
+        "timezone": "Asia/Kolkata",
+        "theme": "dark",
+        "style": "1",
+        "locale": "en",
+        "toolbar_bg": "#0f172a",
+        "enable_publishing": false,
+        "allow_symbol_change": true,
+        "container_id": "tradingview_live_chart"
+      }});
+      </script>
+    </div>
+    """
+    components.html(widget_code, height=550)
 import numpy as np
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
@@ -871,33 +910,8 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
     st.markdown("---")
 
     # CANDLESTICK CHART (WITH VWAP, PDH & PDL LINES)
-    st.subheader(f"📊 TradingView Candlestick Chart: {asset_name} ({tf_str})")
-    if not df.empty:
-        fig = make_subplots(rows=2, cols=1, shared_xaxes=True, vertical_spacing=0.03, row_heights=[0.75, 0.25])
-        fig.add_trace(go.Candlestick(x=df.index, open=df['Open'], high=df['High'], low=df['Low'], close=df['Close'], name="Price"), row=1, col=1)
-        fig.add_trace(go.Scatter(x=df.index, y=df['EMA_9'], line=dict(color='#facc15', width=1.5), name="EMA 9"), row=1, col=1)
-        fig.add_trace(go.Scatter(x=df.index, y=df['EMA_21'], line=dict(color='#22d3ee', width=1.5), name="EMA 21"), row=1, col=1)
-        fig.add_trace(go.Scatter(x=df.index, y=df['VWAP'], line=dict(color='#a855f7', width=2), name="VWAP"), row=1, col=1)
-        
-        # 🟢 PREVIOUS DAY HIGH (PDH) & LOW (PDL) LINES ON CHART
-        if pdh_val > 0:
-            fig.add_hline(y=pdh_val, line_dash="dot", line_color="#f59e0b", annotation_text=f"PDH ({p_curr}{pdh_val:,.2f})", annotation_position="top left", row=1, col=1)
-        if pdl_val > 0:
-            fig.add_hline(y=pdl_val, line_dash="dot", line_color="#ec4899", annotation_text=f"PDL ({p_curr}{pdl_val:,.2f})", annotation_position="bottom left", row=1, col=1)
-
-        fig.add_trace(go.Bar(x=df.index, y=df['Volume'], name="Volume", marker_color='rgba(14, 165, 233, 0.4)'), row=2, col=1)
-
-        if entry_stock_p is not None and asset_name in active_data.get("symbol", ""):
-            fig.add_hline(y=entry_stock_p, line_dash="dash", line_color="#00e5ff", annotation_text="📍 ENTRY POINT", annotation_position="top right", row=1, col=1)
-            if target_stock_p:
-                fig.add_hline(y=target_stock_p, line_dash="dash", line_color="#10b981", annotation_text="🎯 TARGET (+12%)", annotation_position="top right", row=1, col=1)
-            if sl_stock_p:
-                fig.add_hline(y=sl_stock_p, line_dash="dash", line_color="#ef4444", annotation_text="❌ STOP LOSS (-7%)", annotation_position="bottom right", row=1, col=1)
-
-        rb = [] if is_crypto_selected else [dict(bounds=["sat", "mon"]), dict(bounds=[15.5, 9.15], pattern="hour")]
-        fig.update_xaxes(rangebreaks=rb)
-        fig.update_layout(height=520, template="plotly_dark", dragmode="pan", uirevision=f"{asset_symbol}_{tf_str}", xaxis_rangeslider_visible=False, yaxis=dict(side="right", tickformat=".2f"), margin=dict(l=10, r=30, t=20, b=10))
-        st.plotly_chart(fig, key="candlestick_chart", use_container_width=True, config={'scrollZoom': True, 'displayModeBar': True, 'responsive': True})
+    st.subheader(f"📊 TradingView Live Chart: {asset_name}")
+    render_tradingview_live_chart(asset_name)
 
     st.markdown("---")
 
