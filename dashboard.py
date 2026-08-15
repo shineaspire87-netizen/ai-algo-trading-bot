@@ -1,4 +1,4 @@
-# dashboard.py - Pro Terminal with Live AI Reason & Confidence Score
+# dashboard.py - Fixed NameError total_pnl & Live AI Reason Box
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
@@ -155,20 +155,21 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
 
     total_trades = len(trades_df)
     
+    # Safe KeyError Fallback for PnL & Name Fix
     if total_trades > 0:
         if 'Net_PnL' in trades_df.columns:
-            total_net_pnl = float(trades_df['Net_PnL'].sum())
+            total_pnl = float(trades_df['Net_PnL'].sum())
             win_trades = len(trades_df[trades_df['Net_PnL'] > 0])
         elif 'PnL' in trades_df.columns:
-            total_net_pnl = float(trades_df['PnL'].sum())
+            total_pnl = float(trades_df['PnL'].sum())
             win_trades = len(trades_df[trades_df['PnL'] > 0])
         else:
-            total_net_pnl = 0.0
+            total_pnl = 0.0
             win_trades = 0
         win_rate = (win_trades / total_trades * 100)
         current_capital = float(trades_df['Capital_Balance'].iloc[-1]) if 'Capital_Balance' in trades_df.columns else 100022.50
     else:
-        total_net_pnl = 0.0
+        total_pnl = 0.0
         win_trades = 0
         win_rate = 0.0
         current_capital = 100022.50
@@ -193,7 +194,7 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
         except:
             pass
 
-    # 2. LIVE BOT INTELLIGENCE & REASON CARD (பாட் ஏன் காத்திருக்கிறது?)
+    # 2. LIVE BOT INTELLIGENCE & REASON CARD
     st.subheader(f"🧠 Live AI Intelligence & Reason: {asset_name}")
 
     if ema9_val > ema21_val and rsi_val > 58:
