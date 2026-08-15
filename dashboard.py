@@ -521,6 +521,21 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
         capital_risk_pct = (risk_amount / current_capital) * 100
         pnl_color = "#34d399" if live_pnl >= 0 else "#f87171"
 
+        # 🚀 DYNAMIC TRAILING SL & PROFIT LOCK ENGINE
+        max_seen = active_data.get("max_premium_seen", e_price)
+        if live_premium > max_seen:
+            max_seen = live_premium
+            active_data["max_premium_seen"] = max_seen
+
+        # Lock SL to Entry Price once profit reaches +4%
+        if live_premium >= (e_price * 1.04):
+            trailed_sl = max(e_price, round(max_seen * 0.96, 2))
+            if trailed_sl > sl_price:
+                sl_price = trailed_sl
+                active_data["stop_loss"] = sl_price
+                with open(ACTIVE_JSON, "w", encoding="utf-8") as f:
+                    json.dump(active_data, f, indent=4)
+
         # AUTONOMOUS TARGET / SL AUTO-EXIT ENGINE
         auto_exit_triggered = False
         exit_reason_str = ""
