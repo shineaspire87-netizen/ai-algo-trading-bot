@@ -28,8 +28,23 @@ st.markdown("""
     html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
     .stApp { background: radial-gradient(circle at top left, #0f172a, #090d16); }
 
-    div[data-testid="stAppViewContainer"] > section { opacity: 1 !important; }
-    .stApp [data-testid="stElementContainer"] { animation: none !important; }
+    /* 🔴 ZERO-BLINK & ANTI-FLICKER OVERRIDE */
+    div[data-testid="stAppViewContainer"] > section { 
+        opacity: 1 !important; 
+        transition: none !important;
+    }
+    .stApp [data-testid="stElementContainer"],
+    div[data-testid="stFragment"] { 
+        animation: none !important; 
+        transition: none !important;
+        opacity: 1 !important;
+    }
+    div[data-st-mode="running"] {
+        opacity: 1 !important;
+    }
+    div[data-testid="stStatusWidget"] {
+        display: none !important;
+    }
 
     .glass-card {
         background: rgba(30, 41, 59, 0.7);
