@@ -241,14 +241,17 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
     range_high = round(current_price * 1.005, 2)
 
     CSV_FILE = "trades.csv"
-    if os.path.exists(CSV_FILE):
-        trades_df = pd.read_csv(CSV_FILE)
-    else:
-        trades_df = pd.DataFrame(columns=[
-            "Entry_Time", "Exit_Time", "Symbol", "Option_Type", 
-            "Entry_Price", "Exit_Price", "Stop_Loss", "Target", 
-            "Quantity", "Exit_Reason", "Net_PnL", "Capital_Balance"
-        ])
+    
+    # Safe CSV Loading with Error Handling
+    try:
+        if os.path.exists(CSV_FILE) and os.path.getsize(CSV_FILE) > 0:
+            trades_df = pd.read_csv(CSV_FILE)
+        else:
+            # ஃபைல் காலியாக இருந்தால் அல்லது இல்லை என்றால் எம்டி டேட்டாபிரேம் உருவாக்கும்
+            trades_df = pd.DataFrame(columns=['Timestamp', 'Symbol', 'Option_Type', 'Entry_Price', 'Exit_Price', 'Quantity', 'Exit_Reason', 'PnL', 'Capital_Balance'])
+    except Exception as e:
+        # கரப்ட் ஆகியிருந்தால் ஆப் கிராஷ் ஆகாமல் தடுக்க
+        trades_df = pd.DataFrame(columns=['Timestamp', 'Symbol', 'Option_Type', 'Entry_Price', 'Exit_Price', 'Quantity', 'Exit_Reason', 'PnL', 'Capital_Balance'])
 
     total_trades = len(trades_df)
     
