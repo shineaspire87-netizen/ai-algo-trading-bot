@@ -1,14 +1,15 @@
-# paper_broker.py - Institutional Grade Defensive & Capital Protection Broker
+# paper_broker.py - Full Telegram Mobile Alerts Integration
 import os
 import csv
 import json
 import datetime
+from notifier import send_telegram_alert
 
 CSV_FILE = "trades.csv"
 ACTIVE_JSON = "active_trade.json"
 STATE_JSON = "live_state.json"
 
-BROKERAGE_PER_TRADE = 45.0  # ₹45 Brokerage + STT + GST per trade
+BROKERAGE_PER_TRADE = 45.0
 
 class PaperBroker:
     def __init__(self, initial_capital=100000):
@@ -17,7 +18,7 @@ class PaperBroker:
         self.daily_trades_count = 0
         self.daily_pnl = 0.0
         self.max_trades_per_day = 3
-        self.max_daily_loss_limit = initial_capital * 0.02  # 2% Daily Loss Limit (₹2,000)
+        self.max_daily_loss_limit = initial_capital * 0.02
         self._init_csv()
         self._load_state()
 
@@ -41,7 +42,6 @@ class PaperBroker:
         with open(ACTIVE_JSON, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=4)
 
-        # Persistent State Storage
         state_data = {
             "capital": self.capital,
             "daily_trades_count": self.daily_trades_count,
@@ -52,7 +52,6 @@ class PaperBroker:
             json.dump(state_data, f, indent=4)
 
     def _load_state(self):
-        """கணினி ரீஸ்டார்ட் ஆனாலும் நினைவகத்தை மீட்டெடுக்கிறது"""
         if os.path.exists(STATE_JSON):
             try:
                 with open(STATE_JSON, "r", encoding="utf-8") as f:
@@ -71,14 +70,12 @@ class PaperBroker:
         self._update_active_json()
 
     def buy_option(self, symbol, option_type, entry_price, stock_price=0.0, qty=15, stop_loss_pct=0.15, target_pct=0.30):
-        # 1. Check Max Trades Per Day
         if self.daily_trades_count >= self.max_trades_per_day:
-            print(f"\n[RISK GUARD] 🚫 Max Trades Limit ({self.max_trades_per_day}) reached for today. Trade Skipped.")
+            print(f"\n[RISK GUARD] 🚫 Max Trades Limit ({self.max_trades_per_day}) reached for today.")
             return
 
-        # 2. Check Hard Daily Loss Limit (2%)
         if self.daily_pnl <= -self.max_daily_loss_limit:
-            print(f"\n[RISK GUARD] 🚨 Hard Daily Loss Limit (-2% / -₹{self.max_daily_loss_limit}) hit! Bot Kill-Switch Activated.")
+            print(f"\n[RISK GUARD] 🚨 Hard Daily Loss Limit (-2%) hit! Bot Kill-Switch Activated.")
             return
 
         if self.position is not None:
@@ -87,6 +84,8 @@ class PaperBroker:
         stop_loss = round(entry_price * (1 - stop_loss_pct), 2)
         target = round(entry_price * (1 + target_pct), 2)
         now_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+        p_curr = "$" if "USD" in symbol or "BTC" in symbol or "ETH" in symbol else "₹"
 
         if option_type == "CALL":
             target_stock_price = round(stock_price + (entry_price * target_pct / 0.5), 2)
@@ -111,7 +110,20 @@ class PaperBroker:
         }
         self.daily_trades_count += 1
         self._update_active_json()
-        print(f"\n[{now_str}] 📥 [TRADE ENTERED] {symbol} ({option_type}) | Stock Entry: ₹{stock_price:.2f} | Trade #{self.daily_trades_count} Today")
+        
+        # 🚨 TELEGRAM INSTANT TRADE ENTRY ALERT
+        telegram_msg = (
+            f"🚨 <b>ALGO TRADE ENTERED!</b>\n\n"
+            f"<b>Symbol:</b> {symbol} ({option_type})\n"
+            f"<b>Stock Price:</b> {p_curr}{stock_price:,.2f}\n"
+            f"<b>Option Premium:</b> {p_curr}{entry_price:.2f}\n"
+            f"<b>Quantity:</b> {qty}\n"
+            f"<b>Stop Loss:</b> {p_curr}{stop_loss:.2f} (-15%)\n"
+            f"<b>Target:</b> {p_curr}{target:.2f} (+30%)\n"
+            f"<b>Time:</b> {now_str}"
+        )
+        send_telegram_alert(telegram_msg)
+        print(f"\n[{now_str}] 📥 [TRADE ENTERED] {symbol} ({option_type}) | Stock Entry: {p_curr}{stock_price:.2f}")
 
     def update_market_price(self, current_price):
         if self.position is None:
@@ -122,13 +134,23 @@ class PaperBroker:
         now_time = datetime.datetime.now()
         now_str = now_time.strftime("%Y-%m-%d %H:%M:%S")
 
-        # Trailing Stop Loss to Break-Even once 50% target (+15% gain) is reached
+        p_curr = "$" if "USD" in self.position["symbol"] or "BTC" in self.position["symbol"] else "₹"
+
+        # Trailing Stop Loss to Break-Even
         half_target_price = entry * 1.15
         if current_price >= half_target_price and not self.position["trailed_to_breakeven"]:
-            self.position["stop_loss"] = entry  # Trailed to Cost-to-Cost
+            self.position["stop_loss"] = entry
             self.position["trailed_to_breakeven"] = True
             self._update_active_json()
-            print(f"\n[{now_str}] 🛡️ [TRAILING SL] 50% Target Reached! Stop Loss Trailed to Break-Even (₹{entry:.2f} - 0% Risk).")
+            
+            # 🛡️ TELEGRAM TRAILING SL ALERT
+            trail_msg = (
+                f"🛡️ <b>TRAILING SL TO BREAK-EVEN!</b>\n\n"
+                f"<b>Symbol:</b> {self.position['symbol']}\n"
+                f"<b>Reason:</b> 50% Target Reached (+15% Gain)\n"
+                f"<b>New Stop Loss:</b> {p_curr}{entry:.2f} (0% Risk Locked)"
+            )
+            send_telegram_alert(trail_msg)
 
         # 1. Target Check
         if current_price >= self.position["target"]:
@@ -136,7 +158,6 @@ class PaperBroker:
             net_pnl = gross_pnl - BROKERAGE_PER_TRADE
             self.capital += net_pnl
             self.daily_pnl += net_pnl
-            print(f"[{now_str}] 🎯 [TARGET HIT] Exited at ₹{current_price:.2f} | Net PnL: ₹{net_pnl:.2f}")
             self._log_trade(current_price, "TARGET_HIT", gross_pnl, BROKERAGE_PER_TRADE, net_pnl, now_str)
             self._clear_active_json()
 
@@ -147,21 +168,21 @@ class PaperBroker:
             self.capital += net_pnl
             self.daily_pnl += net_pnl
             reason = "BREAKEVEN_EXIT" if self.position["trailed_to_breakeven"] else "STOP_LOSS_HIT"
-            print(f"[{now_str}] ❌ [{reason}] Exited at ₹{current_price:.2f} | Net PnL: ₹{net_pnl:.2f}")
             self._log_trade(current_price, reason, gross_pnl, BROKERAGE_PER_TRADE, net_pnl, now_str)
             self._clear_active_json()
 
         # 3. Market Close (3:15 PM) Auto Square-Off Check
-        elif now_time.time() >= datetime.time(15, 15):
+        elif now_time.time() >= datetime.time(15, 15) and "USD" not in self.position["symbol"]:
             gross_pnl = (current_price - entry) * qty
             net_pnl = gross_pnl - BROKERAGE_PER_TRADE
             self.capital += net_pnl
             self.daily_pnl += net_pnl
-            print(f"[{now_str}] 🔔 [3:15 PM MARKET CLOSE SQUARE-OFF] Exited at ₹{current_price:.2f} | Net PnL: ₹{net_pnl:.2f}")
             self._log_trade(current_price, "3:15_PM_MARKET_CLOSE", gross_pnl, BROKERAGE_PER_TRADE, net_pnl, now_str)
             self._clear_active_json()
 
     def _log_trade(self, exit_price, reason, gross_pnl, brokerage, net_pnl, exit_time_str):
+        p_curr = "$" if "USD" in self.position["symbol"] or "BTC" in self.position["symbol"] else "₹"
+        
         with open(CSV_FILE, mode="a", newline="", encoding="utf-8") as f:
             writer = csv.writer(f)
             writer.writerow([
@@ -180,4 +201,16 @@ class PaperBroker:
                 f"{net_pnl:.2f}",
                 f"{self.capital:.2f}"
             ])
-        print(f"✅ [SAVED] டிரேட் விவரங்கள் 'trades.csv' கோப்பில் சேமிக்கப்பட்டது.\n")
+
+        # 🏁 TELEGRAM TRADE EXIT ALERT
+        exit_msg = (
+            f"🏁 <b>TRADE COMPLETED & LOGGED!</b>\n\n"
+            f"<b>Symbol:</b> {self.position['symbol']} ({self.position['type']})\n"
+            f"<b>Exit Reason:</b> {reason}\n"
+            f"<b>Entry Premium:</b> {p_curr}{self.position['entry_price']:.2f}\n"
+            f"<b>Exit Premium:</b> {p_curr}{exit_price:.2f}\n"
+            f"<b>Net P&L:</b> {p_curr}{net_pnl:+.2f}\n"
+            f"<b>Account Capital:</b> {p_curr}{self.capital:,.2f}"
+        )
+        send_telegram_alert(exit_msg)
+        print(f"✅ [SAVED & NOTIFIED] டிரேட் விவரங்கள் 'trades.csv' கோப்பில் சேமிக்கப்பட்டு Telegram-க்கும் அனுப்பப்பட்டது.\n")
