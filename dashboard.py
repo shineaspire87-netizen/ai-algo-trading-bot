@@ -123,6 +123,18 @@ def sync_trade_to_google_sheet(trade_record):
     except Exception as e:
         print(f"Google Sheet Sync Error: {e}")
 
+# 🟢 FETCH TRADES FROM GOOGLE SHEETS CLOUD DATABASE
+def fetch_trades_from_google_sheet():
+    try:
+        resp = requests.get(GOOGLE_SHEET_URL, timeout=5, allow_redirects=True)
+        if resp.status_code == 200:
+            data = resp.json()
+            if isinstance(data, list) and len(data) > 0:
+                return pd.DataFrame(data)
+    except:
+        pass
+    return pd.DataFrame()
+
 # 🟢 FAIL-SAFE TELEGRAM NOTIFIER INTEGRATION
 try:
     from notifier import send_telegram_message
@@ -307,7 +319,7 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
     else:
         next_unlock_msg = "சந்தை முடிவடைந்துவிட்டது. நாளை காலை 9:15 மணிக்கு பாட் அன்லாக் ஆகும்!"
 
-    # READ TRADES FROM BOTH FILE AND SESSION MEMORY
+    # READ TRADES FROM FILE, SESSION MEMORY & GOOGLE SHEETS
     if "trades_memory" not in st.session_state:
         st.session_state.trades_memory = []
 
@@ -319,11 +331,13 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
         except:
             file_df = pd.DataFrame()
 
+    gsheet_df = fetch_trades_from_google_sheet()
+
     if len(st.session_state.trades_memory) > 0:
         mem_df = pd.DataFrame(st.session_state.trades_memory)
-        trades_df = pd.concat([file_df, mem_df], ignore_index=True).drop_duplicates(subset=['Entry_Time', 'Symbol'])
+        trades_df = pd.concat([file_df, gsheet_df, mem_df], ignore_index=True).drop_duplicates(subset=['Entry_Time', 'Symbol'])
     else:
-        trades_df = file_df
+        trades_df = pd.concat([file_df, gsheet_df], ignore_index=True).drop_duplicates(subset=['Entry_Time', 'Symbol'])
 
     total_trades = len(trades_df)
     
