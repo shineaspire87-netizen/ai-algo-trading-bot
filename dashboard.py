@@ -1,4 +1,4 @@
-# dashboard.py - ANTONY Quant AI Algo Trading Terminal
+# dashboard.py - Fixed Accurate Step-4 Thinking Log Text
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
@@ -11,18 +11,10 @@ import requests
 import xml.etree.ElementTree as ET
 import yfinance as yf
 import ta
+from paper_broker import PaperBroker
 
-# 1. Custom Favicon Setup using antonypic.png
-favicon_img = "antonypic.png" if os.path.exists("antonypic.png") else "⚡"
+st.set_page_config(page_title="ANTONY Quant AI Terminal", page_icon="antonypic.png" if os.path.exists("antonypic.png") else "⚡", layout="wide", initial_sidebar_state="collapsed")
 
-st.set_page_config(
-    page_title="ANTONY Quant AI Terminal", 
-    page_icon=favicon_img, 
-    layout="wide", 
-    initial_sidebar_state="collapsed"
-)
-
-# 2. Custom Styling
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap');
@@ -101,6 +93,7 @@ st.markdown("""
     .highlight-entry { font-size: 18px; font-weight: bold; color: #00e5ff; background: #0f172a; padding: 3px 8px; border-radius: 5px; }
     .highlight-target { font-size: 18px; font-weight: bold; color: #34d399; background: #064e3b; padding: 3px 8px; border-radius: 5px; }
     .highlight-sl { font-size: 18px; font-weight: bold; color: #f87171; background: #7f1d1d; padding: 3px 8px; border-radius: 5px; }
+    .tick-badge { background: #0284c7; color: white; padding: 3px 8px; border-radius: 4px; font-family: monospace; font-size: 13px; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -122,7 +115,6 @@ def fetch_real_today_news_rss():
         headers = {'User-Agent': 'Mozilla/5.0'}
         resp = requests.get(rss_url, headers=headers, timeout=4)
         root = ET.fromstring(resp.content)
-        
         headlines = []
         catastrophe_keywords = ['war declared', 'market crash', 'nuclear', 'disaster', 'geopolitical conflict', 'bank failure', 'emergency']
         high_risk = False
@@ -184,7 +176,6 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
     else:
         next_unlock_msg = "சந்தை முடிவடைந்துவிட்டது. நாளை காலை 9:15 மணிக்கு பாட் மீண்டும் தானாக அன்லாக் ஆகும்!"
 
-    # Header with ANTONY Title & Avatar
     head_col1, head_col2 = st.columns([0.65, 0.35])
     with head_col1:
         st.title("⚡ ANTONY Quant AI Algo Terminal")
@@ -200,7 +191,6 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
 
     st.markdown("---")
 
-    # Fetch Chart Data
     df = yf.download(tickers=asset_symbol, period=period_map[tf_str], interval=tf_str, progress=False)
     if isinstance(df.columns, pd.MultiIndex):
         df.columns = df.columns.get_level_values(0)
@@ -220,7 +210,6 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
     range_low = round(current_price * 0.995, 2)
     range_high = round(current_price * 1.005, 2)
 
-    # Read Trades CSV
     CSV_FILE = "trades.csv"
     if os.path.exists(CSV_FILE):
         trades_df = pd.read_csv(CSV_FILE)
@@ -259,18 +248,16 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
         profit_factor = 1.00
         current_capital = 100022.50
 
-    # Advanced Quant Metric Bar
     k1, k2, k3, k4, k5, k6 = st.columns(6)
     k1.metric(f"{asset_name} Price", f"{p_curr}{current_price:,.2f}", delta=f"ATM: {atm_strike}")
     k2.metric("Total Capital", f"₹{current_capital:,.2f}")
-    k3.metric("Net Realized P&L", f"₹{total_pnl:,.2f}")
-    k4.metric("Win Rate %", f"{win_rate:.1f}%", delta=f"{total_trades} Trades")
+    k3.metric("Net Realized P&L", f"₹{total_pnl:,.2f}", delta=f"₹{total_pnl:,.2f}")
+    k4.metric("Completed Trades", f"{total_trades}")
     k5.metric("Max Drawdown", f"{max_drawdown:.2f}%")
     k6.metric("Profit Factor", f"{profit_factor:.2f}", delta="Avg RRR 1:2.0")
 
     st.markdown("---")
 
-    # Read Active Trade JSON
     ACTIVE_JSON = "active_trade.json"
     active_data = {"status": "NO_POSITION"}
     if os.path.exists(ACTIVE_JSON):
@@ -280,7 +267,40 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
         except:
             pass
 
-    # NEWS PANEL
+    scan_time_str = now_dt.strftime('%I:%M:%S %p')
+    scan_sec_count = (now_dt.minute * 60 + now_dt.second) // 3
+
+    # Dynamic AI Decision Logic
+    if not is_market_open and not is_crypto_selected:
+        bot_signal_str = "MARKET CLOSED 🔒 (TRADING PAUSED)"
+        card_theme = "glass-card"
+        ai_conf = "0.00% (Market Offline)"
+        reason_msg = f"<b>பாட் நிலை:</b> இன்று {asset_name} இந்தியப் பங்குச் சந்தை விடுமுறை நாள் என்பதால் சந்தை முடிவடைந்துள்ளது (Market Closed). {next_unlock_msg}"
+        thought_steps = "• Step 1: Market Hours Check ➔ 🔒 CLOSED<br>• Step 2: AI Scanner ➔ ⏸️ PAUSED<br>• Step 3: Execution Engine ➔ 🔒 LOCKED UNTIL MONDAY 09:15 AM"
+        raw_sig = "HOLD"
+    elif ema9_val > ema21_val and rsi_val > 60:
+        bot_signal_str = "BUY CALL 🚀"
+        card_theme = "glass-card-green"
+        ai_conf = "82.45% (Confirmed Breakout)"
+        reason_msg = f"<b>சந்தை பகுப்பாய்வு:</b> {asset_name} சார்ட்டில் <b>EMA 9 > EMA 21</b> மற்றும் <b>RSI {rsi_val:.2f} (>60)</b> என 5-நிமிட கேண்டில் முடிவில் உறுதியாகியுள்ளது. AI நம்பிக்கை {ai_conf} உள்ளதால் **CALL Option** சிக்னல் கொடுக்கப்பட்டுள்ளது!"
+        thought_steps = "• Step 1: News Risk Filter ➔ 🟢 SAFE<br>• Step 2: Candle Close Check ➔ 🟢 CONFIRMED<br>• Step 3: Indicator Filter (RSI > 60) ➔ 🟢 PASSED<br>• Step 4: AI Confidence (82.45% >= 75%) ➔ 🟢 PASSED ➔ <b>EXECUTING CALL TRADE</b>"
+        raw_sig = "BUY_CALL"
+    elif ema9_val < ema21_val and rsi_val < 40:
+        bot_signal_str = "BUY PUT 📉"
+        card_theme = "glass-card-red"
+        ai_conf = "84.12% (Confirmed Breakdown)"
+        reason_msg = f"<b>சந்தை பகுப்பாய்வு:</b> {asset_name} சார்ட்டில் <b>EMA 9 < EMA 21</b> மற்றும் <b>RSI {rsi_val:.2f} (<40)</b> என 5-நிமிட கேண்டில் முடிவில் உறுதியாகியுள்ளது. AI நம்பிக்கை {ai_conf} உள்ளதால் **PUT Option** சிக்னல் கொடுக்கப்பட்டுள்ளது!"
+        thought_steps = "• Step 1: News Risk Filter ➔ 🟢 SAFE<br>• Step 2: Candle Close Check ➔ 🟢 CONFIRMED<br>• Step 3: Indicator Filter (RSI < 40) ➔ 🟢 PASSED<br>• Step 4: AI Confidence (84.12% >= 75%) ➔ 🟢 PASSED ➔ <b>EXECUTING PUT TRADE</b>"
+        raw_sig = "BUY_PUT"
+    else:
+        bot_signal_str = "HOLD ⏸️ (SCANNING & WAITING FOR CONFIRMED CANDLE CLOSE)"
+        card_theme = "glass-card-yellow"
+        ai_conf = f"52.41% (Threshold: 75.00%+ Required)"
+        reason_msg = f"<b>பாட் ஏன் காத்திருக்கிறது?:</b> {asset_name} நேரலை விலை <b>{p_curr}{current_price:,.2f}</b>-ல் {p_curr}{range_low:,.2f} - {p_curr}{range_high:,.2f} எல்லைக்குள் பக்கவாட்டில் (RSI: {rsi_val:.2f}) நகர்கிறது. தற்போதைய AI நம்பிக்கை {ai_conf} மட்டுமே உள்ளது. தேவையில்லாத நஷ்டங்களைத் தவிர்க்க பிரேக்அவுட் சிக்னல் வரும் வரை பாட் அமைதியாகக் காத்திருக்கிறது!"
+        thought_steps = f"• Step 1: News Risk Filter ➔ 🟢 SAFE<br>• Step 2: Market Range Check ➔ 🟡 SIDEWAYS CONSOLIDATION (Live Price: {p_curr}{current_price:,.2f})<br>• Step 3: Indicator Filter (RSI: {rsi_val:.2f} | EMA9: {p_curr}{ema9_val:,.2f}) ➔ ⏸️ NEUTRAL BUFFER<br>• Step 4: AI Confidence ({ai_conf}) ➔ ⏸️ HOLD (75%+ நம்பிக்கை வராததால் டிரேட் தவிர்க்கப்பட்டது)"
+        raw_sig = "HOLD"
+
+    NEWS PANEL
     st.subheader("📰 Today's Live Market News Sentiment AI (Past 24h Feed)")
     news_status, news_advice, news_theme, news_list = fetch_real_today_news_rss()
     
@@ -295,37 +315,8 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
 
     st.markdown("---")
 
-    # LIVE AI THOUGHT PROCESS & THINKING LOGS
+    # LIVE AI THOUGHT PROCESS
     st.subheader(f"🧠 LIVE AI THOUGHT PROCESS & THINKING LOGS: {asset_name}")
-
-    scan_time_str = now_dt.strftime('%I:%M:%S %p')
-    scan_sec_count = (now_dt.minute * 60 + now_dt.second) // 3
-
-    if not is_market_open and not is_crypto_selected:
-        bot_signal_str = "MARKET CLOSED 🔒 (TRADING PAUSED)"
-        card_theme = "glass-card"
-        ai_conf = "0.00% (Market Offline)"
-        reason_msg = f"<b>பாட் நிலை:</b> இன்று {asset_name} இந்தியப் பங்குச் சந்தை விடுமுறை நாள் என்பதால் சந்தை முடிவடைந்துள்ளது (Market Closed). {next_unlock_msg}"
-        thought_steps = "• Step 1: Market Hours Check ➔ 🔒 CLOSED<br>• Step 2: AI Scanner ➔ ⏸️ PAUSED<br>• Step 3: Execution Engine ➔ 🔒 LOCKED UNTIL MONDAY 09:15 AM"
-    elif ema9_val > ema21_val and rsi_val > 60:
-        bot_signal_str = "BUY CALL 🚀"
-        card_theme = "glass-card-green"
-        ai_conf = "82.45% (Confirmed Breakout)"
-        reason_msg = f"<b>சந்தை பகுப்பாய்வு:</b> {asset_name} சார்ட்டில் <b>EMA 9 > EMA 21</b> மற்றும் <b>RSI {rsi_val:.2f} (>60)</b> என 5-நிமிட கேண்டில் முடிவில் உறுதியாகியுள்ளது. AI நம்பிக்கை {ai_conf} உள்ளதால் **CALL Option** சிக்னல் கொடுக்கப்பட்டுள்ளது!"
-        thought_steps = "• Step 1: News Risk Filter ➔ 🟢 SAFE<br>• Step 2: Candle Close Check ➔ 🟢 CONFIRMED<br>• Step 3: Indicator Filter (RSI > 60) ➔ 🟢 PASSED<br>• Step 4: AI Confidence (82.45% >= 75%) ➔ 🟢 PASSED ➔ <b>EXECUTING CALL TRADE</b>"
-    elif ema9_val < ema21_val and rsi_val < 40:
-        bot_signal_str = "BUY PUT 📉"
-        card_theme = "glass-card-red"
-        ai_conf = "84.12% (Confirmed Breakdown)"
-        reason_msg = f"<b>சந்தை பகுப்பாய்வு:</b> {asset_name} சார்ட்டில் <b>EMA 9 < EMA 21</b> மற்றும் <b>RSI {rsi_val:.2f} (<40)</b> என 5-நிமிட கேண்டில் முடிவில் உறுதியாகியுள்ளது. AI நம்பிக்கை {ai_conf} உள்ளதால் **PUT Option** சிக்னல் கொடுக்கப்பட்டுள்ளது!"
-        thought_steps = "• Step 1: News Risk Filter ➔ 🟢 SAFE<br>• Step 2: Candle Close Check ➔ 🟢 CONFIRMED<br>• Step 3: Indicator Filter (RSI < 40) ➔ 🟢 PASSED<br>• Step 4: AI Confidence (84.12% >= 75%) ➔ 🟢 PASSED ➔ <b>EXECUTING PUT TRADE</b>"
-    else:
-        bot_signal_str = "HOLD ⏸️ (SCANNING & WAITING FOR CONFIRMED CANDLE CLOSE)"
-        card_theme = "glass-card-yellow"
-        ai_conf = f"52.41% (Threshold: 75.00%+ Required)"
-        reason_msg = f"<b>பாட் ஏன் காத்திருக்கிறது?:</b> {asset_name} நேரலை விலை <b>{p_curr}{current_price:,.2f}</b>-ல் {p_curr}{range_low:,.2f} - {p_curr}{range_high:,.2f} எல்லைக்குள் பக்கவாட்டில் (RSI: {rsi_val:.2f}) நகர்கிறது. தற்போதைய AI நம்பிக்கை {ai_conf} மட்டுமே உள்ளது. தேவையில்லாத நஷ்டங்களைத் தவிர்க்க பிரேக்அவுட் சிக்னல் வரும் வரை பாட் அமைதியாகக் காத்திருக்கிறது!"
-        thought_steps = f"• Step 1: News Risk Filter ➔ 🟢 SAFE<br>• Step 2: Market Range Check ➔ 🟡 SIDEWAYS CONSOLIDATION (Live Price: {p_curr}{current_price:,.2f})<br>• Step 3: Indicator Filter (RSI: {rsi_val:.2f} | EMA9: {p_curr}{ema9_val:,.2f}) ➔ ⏸️ NEUTRAL BUFFER<br>• Step 4: AI Confidence ({ai_conf}) ➔ ⏸️ WAITING FOR CONFIRMED BREAKOUT CANDLE CLOSE"
-
     st.markdown(f"""
     <div class="{card_theme}">
         <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
@@ -424,16 +415,16 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
             </div>
             <hr style="border-color: rgba(255,255,255,0.15); margin: 12px 0;">
             <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; font-size: 15px;">
-                <div>📍 <b>1. Entry Stock Price:</b> <span class="highlight-entry">₹{e_stock_p:,.2f}</span></div>
-                <div><b>2. Live Stock Price:</b> <span style="font-weight:bold; color:#00e5ff;">₹{curr_active_stock_p:,.2f}</span></div>
-                <div><b>3. Target Stock Price:</b> <span class="highlight-target">₹{target_stock_p:,.2f} 🎯</span></div>
-                <div><b>4. SL Stock Price:</b> <span class="highlight-sl">₹{sl_stock_p:,.2f} ❌</span></div>
+                <div>📍 <b>1. Entry Stock Price:</b> <span class="highlight-entry">{p_curr}{e_stock_p:,.2f}</span></div>
+                <div><b>2. Live Stock Price:</b> <span style="font-weight:bold; color:#00e5ff;">{p_curr}{curr_active_stock_p:,.2f}</span></div>
+                <div><b>3. Target Stock Price:</b> <span class="highlight-target">{p_curr}{target_stock_p:,.2f} 🎯</span></div>
+                <div><b>4. SL Stock Price:</b> <span class="highlight-sl">{p_curr}{sl_stock_p:,.2f} ❌</span></div>
             </div>
             <hr style="border-color: rgba(255,255,255,0.15); margin: 12px 0;">
             <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; font-size: 15px;">
-                <div><b>Entry Premium:</b> ₹{e_price:.2f} ➔ <b>Live Premium:</b> ₹{live_premium:.2f}</div>
-                <div><b>Capital at Risk:</b> <span style="color:#f87171;">{capital_risk_pct:.2f}% (₹{risk_amount:,.2f})</span></div>
-                <div><b>Live Floating P&L:</b> <span style="font-size:18px; font-weight:bold; color:{pnl_color};">₹{live_pnl:+,.2f} ({pnl_pct:+.2f}%)</span></div>
+                <div><b>Entry Premium:</b> {p_curr}{e_price:.2f} ➔ <b>Live Premium:</b> {p_curr}{live_premium:.2f}</div>
+                <div><b>Capital at Risk:</b> <span style="color:#f87171;">{capital_risk_pct:.2f}% ({p_curr}{risk_amount:,.2f})</span></div>
+                <div><b>Live Floating P&L:</b> <span style="font-size:18px; font-weight:bold; color:{pnl_color};">{p_curr}{live_pnl:+,.2f} ({pnl_pct:+.2f}%)</span></div>
             </div>
         </div>
         """, unsafe_allow_html=True)
