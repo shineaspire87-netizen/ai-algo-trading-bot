@@ -626,9 +626,9 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
             </div>
             <hr style="border-color: rgba(255,255,255,0.15); margin: 12px 0;">
             <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; font-size: 15px;">
-                <div><b>Entry Premium:</b> ₹{e_price:.2f} ➔ <b>Live Premium:</b> ₹{live_premium:.2f}</div>
-                <div><b>Capital at Risk:</b> <span style="color:#f87171;">{capital_risk_pct:.2f}% (₹{risk_amount:,.2f})</span></div>
-                <div><b>Live Floating P&L:</b> <span style="font-size:18px; font-weight:bold; color:{pnl_color};">₹{live_pnl:+,.2f} ({pnl_pct:+.2f}%)</span></div>
+                <div><b>Entry Premium:</b> {p_curr}{e_price:.2f} ➔ <b>Live Premium:</b> {p_curr}{live_premium:.2f}</div>
+                <div><b>Capital at Risk:</b> <span style="color:#f87171;">{capital_risk_pct:.2f}% ({p_curr}{risk_amount:,.2f})</span></div>
+                <div><b>Live Floating P&L:</b> <span style="font-size:18px; font-weight:bold; color:{pnl_color};">{p_curr}{live_pnl:+,.2f} ({pnl_pct:+.2f}%)</span></div>
             </div>
             <hr style="border-color: rgba(255,255,255,0.15); margin: 12px 0;">
             <small style="color:#cbd5e1;"><b>🔍 AI Thinking Process:</b><br>• Active Position: {sym} ({opt_type}) ➔ Live Risk & Trailing SL Active.<br>• Elapsed Time: {elapsed_mins:.1f} Mins (Max 20 Mins Limit).<br>• Position Rule: Currently holding active position. Opposite signals ignored until Target/SL/Timeout.</small>
