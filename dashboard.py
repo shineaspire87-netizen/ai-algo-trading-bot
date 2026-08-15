@@ -621,8 +621,12 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
         premium_change = (stock_diff * 0.5) if opt_type == "CALL" else (-stock_diff * 0.5)
 
         live_premium = max(1.0, e_price + premium_change)
-        live_pnl = (live_premium - e_price) * qty
-        pnl_pct = ((live_premium - e_price) / e_price) * 100
+        if active_data.get("is_partial_booked", False):
+            live_pnl = (e_price * 0.06 * (qty / 2)) + (live_premium - e_price) * (qty / 2)
+            pnl_pct = (live_pnl / (e_price * qty)) * 100
+        else:
+            live_pnl = (live_premium - e_price) * qty
+            pnl_pct = ((live_premium - e_price) / e_price) * 100
 
         # DYNAMIC TRAILING SL & PROFIT LOCK ENGINE
         max_seen = active_data.get("max_premium_seen", e_price)
@@ -637,6 +641,31 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
                 active_data["stop_loss"] = sl_price
                 with open(ACTIVE_JSON, "w", encoding="utf-8") as f:
                     json.dump(active_data, f, indent=4)
+
+        # 🟢 STRATEGY C: 50% PARTIAL PROFIT BOOKING & BREAKEVEN SL SHIFT
+        is_partial_booked = active_data.get("is_partial_booked", False)
+        
+        # 1. Target 1 (+6% Profit / 1:1 RRR) - Book 50% Quantity
+        if live_premium >= (e_price * 1.06) and not is_partial_booked:
+            active_data["is_partial_booked"] = True
+            active_data["stop_loss"] = e_price # Move SL to Breakeven (Cost-to-Cost)
+            
+            # Save updated active trade state
+            with open(ACTIVE_JSON, "w", encoding="utf-8") as f:
+                json.dump(active_data, f, indent=4)
+                
+            partial_pnl = round((live_premium - e_price) * (qty / 2), 2)
+            send_telegram_alert(
+                f"🎉 <b>PARTIAL TARGET 1 HIT (+6%)!</b>\n\n"
+                f"<b>Symbol:</b> {sym}\n"
+                f"<b>Booked 50% Profit:</b> ₹{partial_pnl:+,.2f}\n"
+                f"<b>SL Shifted:</b> Moved to Entry Price (₹{e_price:.2f}) [ZERO RISK MODE ACTIVE]"
+            )
+            st.rerun()
+
+        # 2. Dynamic Trailing SL for Remaining 50% Quantity
+        if is_partial_booked:
+            sl_price = max(sl_price, e_price) # Ensure SL never drops below entry price
 
         risk_amount = (e_price - sl_price) * qty
         capital_risk_pct = (risk_amount / current_capital) * 100
