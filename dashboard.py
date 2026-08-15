@@ -1,4 +1,4 @@
-# dashboard.py - KeyError Fix & Refined News Sentiment AI
+# dashboard.py - Pro Terminal with 24/7 Crypto Watchlist Support
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
@@ -22,7 +22,7 @@ st.markdown("""
     .radar-card { background: #1e222d; padding: 15px; border-radius: 10px; border: 1px solid #2a2e39; }
     .market-closed-box { background: #1f2937; border: 2px solid #4b5563; padding: 18px; border-radius: 10px; color: #9ca3af; text-align: center; font-size: 18px; font-weight: bold; margin-bottom: 20px; }
     .active-trade-green { background: linear-gradient(135deg, #064e3b, #022c22); border: 2px solid #10b981; padding: 20px; border-radius: 10px; color: white; margin-bottom: 20px; }
-    .active-trade-red { background: linear-gradient(135deg, #7f1d1d, #450a0a); border: 2px solid #ef4444; padding: 20px; border-radius: 10px; color: white; margin-bottom: 20px; }
+    .locked-trade-box { background: #1e222d; border: 2px solid #4b5563; padding: 20px; border-radius: 10px; color: #e5e7eb; margin-bottom: 20px; }
     .no-trade-box { background: #1e222d; border: 1px dashed #4b5563; padding: 15px; border-radius: 10px; color: #9ca3af; }
     .highlight-entry { font-size: 18px; font-weight: bold; color: #00e5ff; background: #0f172a; padding: 3px 8px; border-radius: 5px; }
     .highlight-target { font-size: 18px; font-weight: bold; color: #34d399; background: #064e3b; padding: 3px 8px; border-radius: 5px; }
@@ -41,11 +41,12 @@ WATCHLIST = {
     "HDFCBANK": "HDFCBANK.NS",
     "ICICIBANK": "ICICIBANK.NS",
     "INFY": "INFY.NS",
-    "SBIN": "SBIN.NS"
+    "SBIN": "SBIN.NS",
+    "BITCOIN": "BTC-USD",
+    "ETHEREUM": "ETH-USD"
 }
 
 def fetch_real_today_news_rss():
-    """Refined News Sentiment AI for Major Geopolitical / Economic Disasters Only"""
     rss_url = "https://news.google.com/rss/search?q=NSE+India+stock+market+Nifty+when:1d&hl=en-IN&gl=IN&ceid=IN:en"
     try:
         headers = {'User-Agent': 'Mozilla/5.0'}
@@ -53,7 +54,6 @@ def fetch_real_today_news_rss():
         root = ET.fromstring(resp.content)
         
         headlines = []
-        # Strictly major disaster/war keywords (ignoring minor daily slumps)
         catastrophe_keywords = ['war declared', 'market crash', 'nuclear', 'disaster', 'geopolitical conflict', 'bank failure', 'emergency']
         high_risk = False
         
@@ -70,7 +70,7 @@ def fetch_real_today_news_rss():
                 high_risk = True
 
         if high_risk:
-            status = "🔴 MAJOR CATASTROPHE RISK DETECTED (போர்ப் பதற்றம் / சந்தை வீழ்ச்சி ஆபத்து!)"
+            status = "🔴 HIGH RISK NEWS DETECTED (அபாயகரமான செய்திகள் கண்டறியப்பட்டுள்ளன!)"
             advice = "⚠️ **பாட் முடிவெடுத்தல்:** உலகளாவிய செய்திகளில் பெரிய பேரபாயச் செய்திகள் கண்டறியப்பட்டுள்ளன. அசாதாரண நஷ்டங்களைத் தவிர்க்க பாட் இன்று டிரேடிங்கைத் தவிர்க்கிறது (Trading Skipped Today)."
             theme = "news-box-red"
         else:
@@ -98,7 +98,8 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
     now_time = now_dt.time()
     weekday_idx = now_dt.weekday()
 
-    is_market_open = (weekday_idx < 5) and (datetime.time(9, 15) <= now_time <= datetime.time(15, 30))
+    is_crypto_selected = "USD" in asset_symbol
+    is_market_open = ((weekday_idx < 5) and (datetime.time(9, 15) <= now_time <= datetime.time(15, 30))) or is_crypto_selected
 
     if weekday_idx == 4:
         next_unlock_msg = "இன்று வெள்ளிக்கிழமை மாலை. சனி/ஞாயிறு விடுமுறை கழித்து திங்கட்கிழமை (Monday) காலை 9:15 மணிக்கு பாட் மீண்டும் தானாக அன்லாக் ஆகும்!"
@@ -111,8 +112,8 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
 
     head_col1, head_col2 = st.columns([0.6, 0.4])
     with head_col1:
-        st.title("⚡ NSE Pro AI Algo Trading Terminal")
-        st.caption("Real-Time Multi-Asset Scanner, Refined News AI & Smart Trading Calendar")
+        st.title("⚡ NSE & Crypto AI Algo Trading Terminal")
+        st.caption("Real-Time Multi-Asset Scanner, 24/7 Crypto Support & Refined News AI")
     with head_col2:
         st.markdown(f"""
         <div class="clock-banner">
@@ -140,7 +141,7 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
     else:
         current_price, atm_strike, rsi_val, ema9_val, ema21_val = 0.0, 0, 50.0, 0.0, 0.0
 
-    # Read Trades CSV with Fallback KeyError Fix
+    # Read Trades CSV
     CSV_FILE = "trades.csv"
     if os.path.exists(CSV_FILE):
         trades_df = pd.read_csv(CSV_FILE)
@@ -153,7 +154,6 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
 
     total_trades = len(trades_df)
     
-    # Safe KeyError Fallback for PnL
     if total_trades > 0:
         if 'Net_PnL' in trades_df.columns:
             total_net_pnl = float(trades_df['Net_PnL'].sum())
@@ -174,7 +174,7 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
 
     # KPI Bar
     k1, k2, k3, k4, k5 = st.columns(5)
-    k1.metric(f"{asset_name} Price", f"₹{current_price:,.2f}", delta=f"ATM: {atm_strike}")
+    k1.metric(f"{asset_name} Price", f"₹{current_price:,.2f}" if not is_crypto_selected else f"${current_price:,.2f}", delta=f"ATM: {atm_strike}")
     k2.metric("Total Capital", f"₹{current_capital:,.2f}")
     k3.metric("Net Realized P&L", f"₹{total_net_pnl:,.2f}", delta=f"₹{total_net_pnl:,.2f}")
     k4.metric("Completed Trades", f"{total_trades}")
@@ -215,14 +215,14 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
     
     if is_market_open:
         r3.markdown(f"<div class='radar-card'>🟡 <b>3. AI Signal:</b> SCANNING</div>", unsafe_allow_html=True)
-        r4.markdown(f"<div class='radar-card' style='color:#34d399;'>🟢 <b>4. Market:</b> OPEN</div>", unsafe_allow_html=True)
+        r4.markdown(f"<div class='radar-card' style='color:#34d399;'>🟢 <b>4. Market:</b> OPEN (24/7 Crypto Active)</div>", unsafe_allow_html=True)
     else:
         r3.markdown(f"<div class='radar-card'>🔴 <b>3. AI Signal:</b> MARKET CLOSED</div>", unsafe_allow_html=True)
         r4.markdown("<div class='radar-card' style='color:#f87171;'>🔒 <b>4. Market:</b> CLOSED</div>", unsafe_allow_html=True)
 
     st.markdown("---")
 
-    # ACTIVE TRADE MONITOR / MARKET CLOSED BANNER
+    # ACTIVE TRADE MONITOR
     st.subheader("🚨 LIVE ACTIVE TRADE MONITOR")
     
     entry_stock_p, target_stock_p, sl_stock_p = None, None, None
@@ -329,11 +329,11 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
         last_dt = df.index[-1]
         padding_dt = last_dt + pd.Timedelta(minutes=30)
 
+        # Apply Rangebreaks only for stock charts (Crypto runs 24/7)
+        rb = [] if is_crypto_selected else [dict(bounds=["sat", "mon"]), dict(bounds=[15.5, 9.15], pattern="hour")]
+
         fig.update_xaxes(
-            rangebreaks=[
-                dict(bounds=["sat", "mon"]),
-                dict(bounds=[15.5, 9.15], pattern="hour")
-            ],
+            rangebreaks=rb,
             range=[df.index[0], padding_dt]
         )
 
