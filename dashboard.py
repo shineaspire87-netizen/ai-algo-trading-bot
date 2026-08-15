@@ -1,4 +1,4 @@
-# dashboard.py - Fixed Accurate Step-4 Thinking Log Text
+# dashboard.py - Unified AI Trading Center with On-Chart Lines for Active Asset
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
@@ -27,11 +27,9 @@ st.markdown("""
     .glass-card {
         background: rgba(30, 41, 59, 0.7);
         backdrop-filter: blur(12px);
-        -webkit-backdrop-filter: blur(12px);
         border: 1px solid rgba(255, 255, 255, 0.1);
         border-radius: 12px;
         padding: 16px;
-        box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
         margin-bottom: 15px;
     }
 
@@ -45,16 +43,6 @@ st.markdown("""
         margin-bottom: 15px;
     }
 
-    .glass-card-yellow {
-        background: rgba(120, 53, 15, 0.5);
-        border: 1.5px solid #f59e0b;
-        box-shadow: 0 0 15px rgba(245, 158, 11, 0.2);
-        border-radius: 12px;
-        padding: 18px;
-        color: #fef08a;
-        margin-bottom: 15px;
-    }
-
     .glass-card-red {
         background: rgba(127, 29, 29, 0.6);
         border: 1.5px solid #ef4444;
@@ -62,6 +50,15 @@ st.markdown("""
         border-radius: 12px;
         padding: 18px;
         color: white;
+        margin-bottom: 15px;
+    }
+
+    .glass-card-yellow {
+        background: rgba(120, 53, 15, 0.5);
+        border: 1.5px solid #f59e0b;
+        border-radius: 12px;
+        padding: 18px;
+        color: #fef08a;
         margin-bottom: 15px;
     }
 
@@ -73,22 +70,11 @@ st.markdown("""
         border-radius: 20px;
         font-weight: 600;
         text-align: right;
-        box-shadow: 0 0 10px rgba(56, 189, 248, 0.2);
     }
 
-    .badge-tag {
-        background: #0284c7;
-        color: white;
-        padding: 4px 10px;
-        border-radius: 20px;
-        font-size: 12px;
-        font-weight: bold;
-    }
-
+    .badge-tag { background: #0284c7; color: white; padding: 4px 10px; border-radius: 20px; font-size: 12px; font-weight: bold; }
     .market-tag-nse { background: #1e3a8a; color: #93c5fd; padding: 4px 10px; border-radius: 15px; font-size: 12px; font-weight: bold; border: 1px solid #3b82f6; display: inline-block; }
     .market-tag-crypto { background: #581c87; color: #f472b6; padding: 4px 10px; border-radius: 15px; font-size: 12px; font-weight: bold; border: 1px solid #c084fc; display: inline-block; }
-
-    .sub-caption { color: #94a3b8; font-size: 14px; margin-top: -8px; margin-bottom: 15px; }
 
     .highlight-entry { font-size: 18px; font-weight: bold; color: #00e5ff; background: #0f172a; padding: 3px 8px; border-radius: 5px; }
     .highlight-target { font-size: 18px; font-weight: bold; color: #34d399; background: #064e3b; padding: 3px 8px; border-radius: 5px; }
@@ -130,7 +116,7 @@ def fetch_real_today_news_rss():
 
         if high_risk:
             status = "🔴 HIGH RISK NEWS DETECTED (இன்றைய செய்திகளில் அபாயம்!)"
-            advice = "⚠️ **பாட் முடிவெடுத்தல்:** இன்றைய செய்திகளில் சந்தை வீழ்ச்சி / போர்ப் பதற்றம் சுட்டிக்காட்டப்பட்டுள்ளது. அசாதாரண நஷ்டங்களைத் தவிர்க்க பாட் இன்று டிரேடிங்கைத் தவிர்க்கிறது (Trading Skipped Today)."
+            advice = "⚠️ **பாட் முடிவெடுத்தல்:** இன்றைய செய்திகளில் சந்தை வீழ்ச்சி / போர்ப் பதற்றம் சுட்டிக்காட்டப்பட்டுள்ளது. பாட் இன்று டிரேடிங்கைத் தவிர்க்கிறது (Trading Skipped Today)."
             theme = "glass-card-red"
         else:
             status = "🟢 TODAY'S NEWS SENTIMENT STABLE (செய்திகள் நிலவரம் சாதகமாக உள்ளது)"
@@ -270,7 +256,6 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
     scan_time_str = now_dt.strftime('%I:%M:%S %p')
     scan_sec_count = (now_dt.minute * 60 + now_dt.second) // 3
 
-    # Dynamic AI Decision Logic
     if not is_market_open and not is_crypto_selected:
         bot_signal_str = "MARKET CLOSED 🔒 (TRADING PAUSED)"
         card_theme = "glass-card"
@@ -300,7 +285,20 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
         thought_steps = f"• Step 1: News Risk Filter ➔ 🟢 SAFE<br>• Step 2: Market Range Check ➔ 🟡 SIDEWAYS CONSOLIDATION (Live Price: {p_curr}{current_price:,.2f})<br>• Step 3: Indicator Filter (RSI: {rsi_val:.2f} | EMA9: {p_curr}{ema9_val:,.2f}) ➔ ⏸️ NEUTRAL BUFFER<br>• Step 4: AI Confidence ({ai_conf}) ➔ ⏸️ HOLD (75%+ நம்பிக்கை வராததால் டிரேட் தவிர்க்கப்பட்டது)"
         raw_sig = "HOLD"
 
-    NEWS PANEL
+    # AUTO-TRIGGER PAPER TRADE
+    if raw_sig in ["BUY_CALL", "BUY_PUT"] and active_data.get("status") == "NO_POSITION" and is_market_open:
+        broker = PaperBroker(initial_capital=current_capital)
+        opt_type = "CALL" if raw_sig == "BUY_CALL" else "PUT"
+        trade_sym = f"{asset_name}_OPT_{opt_type}"
+        prem = round(current_price * 0.01 if "NIFTY" in asset_name else current_price * 0.02, 2)
+        
+        broker.buy_option(trade_sym, opt_type, prem, stock_price=current_price, qty=15)
+        
+        if os.path.exists(ACTIVE_JSON):
+            with open(ACTIVE_JSON, "r", encoding="utf-8") as f:
+                active_data = json.load(f)
+
+    # NEWS PANEL
     st.subheader("📰 Today's Live Market News Sentiment AI (Past 24h Feed)")
     news_status, news_advice, news_theme, news_list = fetch_real_today_news_rss()
     
@@ -315,44 +313,9 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
 
     st.markdown("---")
 
-    # LIVE AI THOUGHT PROCESS
-    st.subheader(f"🧠 LIVE AI THOUGHT PROCESS & THINKING LOGS: {asset_name}")
-    st.markdown(f"""
-    <div class="{card_theme}">
-        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
-            <h3 style="margin:0;">🤖 Active AI Signal: <u>{bot_signal_str}</u></h3>
-            <div>
-                <span class="badge-tag">⏱️ Last Scan: {scan_time_str} (Cycle #{scan_sec_count})</span>
-                <span style="background:rgba(15,23,42,0.8); padding:4px 10px; border-radius:15px; border:1px solid #475569; font-size:13px; color:#e2e8f0; margin-left:6px;">AI Confidence: <b>{ai_conf}</b></span>
-            </div>
-        </div>
-        <hr style="border-color: rgba(255,255,255,0.15); margin: 10px 0;">
-        <p style="margin:0;">{reason_msg}</p>
-        <hr style="border-color: rgba(255,255,255,0.15); margin: 10px 0;">
-        <small style="color:#cbd5e1;"><b>🔍 பாட்டின் நேரலை சிந்தனை வரிசை (Step-by-Step AI Thinking Process):</b><br>{thought_steps}</small>
-    </div>
-    """, unsafe_allow_html=True)
+    # UNIFIED LIVE AI TRADING CENTER (INTEGRATED SINGLE CARD)
+    st.subheader(f"🤖 UNIFIED LIVE AI TRADING CENTER: {asset_name}")
 
-    st.markdown("---")
-
-    # Radar Bar
-    st.subheader("📡 Bot Live Status Radar & Execution Speed")
-    r1, r2, r3, r4 = st.columns(4)
-    r1.markdown("<div class='glass-card'>🟢 <b>1. Data Feed:</b> Connected</div>", unsafe_allow_html=True)
-    r2.markdown("<div class='glass-card'>🟢 <b>2. AI Engine:</b> Active (89.36% Acc)</div>", unsafe_allow_html=True)
-    
-    if is_market_open:
-        r3.markdown(f"<div class='glass-card'>🟡 <b>3. AI Signal:</b> {bot_signal_str}</div>", unsafe_allow_html=True)
-        r4.markdown(f"<div class='glass-card' style='color:#34d399;'>⚡ <b>4. Order Latency:</b> 38 ms (Active)</div>", unsafe_allow_html=True)
-    else:
-        r3.markdown(f"<div class='glass-card'>🔴 <b>3. AI Signal:</b> MARKET CLOSED</div>", unsafe_allow_html=True)
-        r4.markdown("<div class='glass-card' style='color:#f87171;'>🔒 <b>4. Market:</b> CLOSED</div>", unsafe_allow_html=True)
-
-    st.markdown("---")
-
-    # ACTIVE TRADE MONITOR
-    st.subheader("🚨 LIVE ACTIVE TRADE MONITOR")
-    
     entry_stock_p, target_stock_p, sl_stock_p = None, None, None
 
     if active_data.get("status") == "ACTIVE" and is_market_open:
@@ -364,7 +327,7 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
         tgt_price = float(active_data.get("target", 0))
         qty = int(active_data.get("qty", 15))
 
-        e_stock_p = float(active_data.get("entry_stock_price", 1307.0))
+        e_stock_p = float(active_data.get("entry_stock_price", current_price))
         target_stock_p = float(active_data.get("target_stock_price", e_stock_p * 1.01))
         sl_stock_p = float(active_data.get("sl_stock_price", e_stock_p * 0.99))
 
@@ -426,12 +389,41 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
                 <div><b>Capital at Risk:</b> <span style="color:#f87171;">{capital_risk_pct:.2f}% ({p_curr}{risk_amount:,.2f})</span></div>
                 <div><b>Live Floating P&L:</b> <span style="font-size:18px; font-weight:bold; color:{pnl_color};">{p_curr}{live_pnl:+,.2f} ({pnl_pct:+.2f}%)</span></div>
             </div>
+            <hr style="border-color: rgba(255,255,255,0.15); margin: 12px 0;">
+            <small style="color:#cbd5e1;"><b>🔍 AI Thinking Process:</b> {thought_steps}</small>
         </div>
         """, unsafe_allow_html=True)
-    elif not is_market_open:
-        st.markdown(f"<div class='market-closed-box'>🔒 MARKET CLOSED - NO ACTIVE POSITIONS<br><small>{next_unlock_msg}</small></div>", unsafe_allow_html=True)
     else:
-        st.markdown("<div class='no-trade-box'>ℹ️ தற்போது நேரலை டிரேடுகள் எதுவும் ஓடவில்லை. பாட் அடுத்த சிறந்த வாய்ப்பிற்காகக் காத்திருக்கிறது.</div>", unsafe_allow_html=True)
+        st.markdown(f"""
+        <div class="{card_theme}">
+            <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+                <h3 style="margin:0;">🤖 Active AI Signal: <u>{bot_signal_str}</u></h3>
+                <div>
+                    <span class="badge-tag">⏱️ Last Scan: {scan_time_str} (Cycle #{scan_sec_count})</span>
+                    <span style="background:rgba(15,23,42,0.8); padding:4px 10px; border-radius:15px; border:1px solid #475569; font-size:13px; color:#e2e8f0; margin-left:6px;">AI Confidence: <b>{ai_conf}</b></span>
+                </div>
+            </div>
+            <hr style="border-color: rgba(255,255,255,0.15); margin: 10px 0;">
+            <p style="margin:0;">{reason_msg}</p>
+            <hr style="border-color: rgba(255,255,255,0.15); margin: 10px 0;">
+            <small style="color:#cbd5e1;"><b>🔍 பாட்டின் நேரலை சிந்தனை வரிசை (Step-by-Step AI Thinking Process):</b><br>{thought_steps}</small>
+        </div>
+        """, unsafe_allow_html=True)
+
+    st.markdown("---")
+
+    # Radar Bar
+    st.subheader("📡 Bot Live Status Radar & Execution Speed")
+    r1, r2, r3, r4 = st.columns(4)
+    r1.markdown("<div class='glass-card'>🟢 <b>1. Data Feed:</b> Connected</div>", unsafe_allow_html=True)
+    r2.markdown("<div class='glass-card'>🟢 <b>2. AI Engine:</b> Active (89.36% Acc)</div>", unsafe_allow_html=True)
+    
+    if is_market_open:
+        r3.markdown(f"<div class='glass-card'>🟡 <b>3. AI Signal:</b> {bot_signal_str}</div>", unsafe_allow_html=True)
+        r4.markdown(f"<div class='glass-card' style='color:#34d399;'>⚡ <b>4. Order Latency:</b> 38 ms (Active)</div>", unsafe_allow_html=True)
+    else:
+        r3.markdown(f"<div class='glass-card'>🔴 <b>3. AI Signal:</b> MARKET CLOSED</div>", unsafe_allow_html=True)
+        r4.markdown("<div class='glass-card' style='color:#f87171;'>🔒 <b>4. Market:</b> CLOSED</div>", unsafe_allow_html=True)
 
     st.markdown("---")
 
