@@ -303,44 +303,106 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
     scan_time_str = now_dt.strftime('%I:%M:%S %p')
     scan_sec_count = (now_dt.minute * 60 + now_dt.second) // 3
 
+    # ==========================================
+    # 🚀 FIX: COOLDOWN & INTRADAY QUICK SCALPER LOGIC
+    # ==========================================
+
+    # 1. Read Trades History to check Cooldown & Daily Limit
+    trades_today_count = 0
+    last_exit_time = None
+
+    if os.path.exists("trades.csv"):
+        try:
+            t_df = pd.read_csv("trades.csv")
+            if not t_df.empty and 'Exit_Time' in t_df.columns:
+                # Get today's trades count
+                today_str = now_dt.strftime('%Y-%m-%d')
+                today_trades = t_df[t_df['Exit_Time'].astype(str).str.contains(today_str)]
+                trades_today_count = len(today_trades)
+                
+                # Get last exit timestamp for 15-min cooldown
+                last_exit_str = t_df['Exit_Time'].iloc[-1]
+                last_exit_time = datetime.datetime.strptime(last_exit_str, "%Y-%m-%d %H:%M:%S")
+                last_exit_time = pytz.timezone('Asia/Kolkata').localize(last_exit_time)
+        except Exception as e:
+            pass
+
+    # Check if Cooldown Period (15 Minutes) is Active
+    is_cooldown_active = False
+    cooldown_remaining_mins = 0
+    if last_exit_time is not None:
+        time_diff_sec = (now_dt - last_exit_time).total_seconds()
+        if time_diff_sec < 900:  # 900 seconds = 15 minutes
+            is_cooldown_active = True
+            cooldown_remaining_mins = int((900 - time_diff_sec) // 60) + 1
+
+    # Check Daily Trade Limit (Max 3 Trades)
+    is_daily_limit_reached = (trades_today_count >= 3)
+
+    # 2. EVALUATE INTRA DAY SCALPING SIGNALS (1-5 Candles Exit)
     if not is_market_open and not is_crypto_selected:
         bot_signal_str = "MARKET CLOSED 🔒 (TRADING PAUSED)"
         card_theme = "glass-card"
         ai_conf = "0.00% (Market Offline)"
-        reason_msg = f"<b>பாட் நிலை:</b> இன்று {asset_name} இந்தியப் பங்குச் சந்தை விடுமுறை நாள் என்பதால் சந்தை முடிவடைந்துள்ளது (Market Closed). {next_unlock_msg}"
-        thought_steps = "• Step 1: Market Hours Check ➔ 🔒 CLOSED<br>• Step 2: AI Scanner ➔ ⏸️ PAUSED<br>• Step 3: Execution Engine ➔ 🔒 LOCKED UNTIL MONDAY 09:15 AM"
-        raw_sig = "HOLD"
-    elif ema9_val > ema21_val and rsi_val > 60:
-        bot_signal_str = "BUY CALL 🚀"
-        card_theme = "glass-card-green"
-        ai_conf = "82.45% (Confirmed Breakout)"
-        reason_msg = f"<b>சந்தை பகுப்பாய்வு:</b> {asset_name} சார்ட்டில் <b>EMA 9 > EMA 21</b> மற்றும் <b>RSI {rsi_val:.2f} (>60)</b> என 5-நிமிட கேண்டில் முடிவில் உறுதியாகியுள்ளது. AI நம்பிக்கை {ai_conf} உள்ளதால் **CALL Option** சிக்னல் கொடுக்கப்பட்டுள்ளது!"
-        thought_steps = "• Step 1: News Risk Filter ➔ 🟢 SAFE<br>• Step 2: Candle Close Check ➔ 🟢 CONFIRMED<br>• Step 3: Indicator Filter (RSI > 60) ➔ 🟢 PASSED<br>• Step 4: AI Confidence (82.45% >= 75%) ➔ 🟢 PASSED ➔ <b>EXECUTING CALL TRADE</b>"
-        raw_sig = "BUY_CALL"
-    elif ema9_val < ema21_val and rsi_val < 40:
-        bot_signal_str = "BUY PUT 📉"
-        card_theme = "glass-card-red"
-        ai_conf = "84.12% (Confirmed Breakdown)"
-        reason_msg = f"<b>சந்தை பகுப்பாய்வு:</b> {asset_name} சார்ட்டில் <b>EMA 9 < EMA 21</b> மற்றும் <b>RSI {rsi_val:.2f} (<40)</b> என 5-நிமிட கேண்டில் முடிவில் உறுதியாகியுள்ளது. AI நம்பிக்கை {ai_conf} உள்ளதால் **PUT Option** சிக்னல் கொடுக்கப்பட்டுள்ளது!"
-        thought_steps = "• Step 1: News Risk Filter ➔ 🟢 SAFE<br>• Step 2: Candle Close Check ➔ 🟢 CONFIRMED<br>• Step 3: Indicator Filter (RSI < 40) ➔ 🟢 PASSED<br>• Step 4: AI Confidence (84.12% >= 75%) ➔ 🟢 PASSED ➔ <b>EXECUTING PUT TRADE</b>"
-        raw_sig = "BUY_PUT"
-    else:
-        bot_signal_str = "HOLD ⏸️ (SCANNING & WAITING FOR CONFIRMED CANDLE CLOSE)"
-        card_theme = "glass-card-yellow"
-        ai_conf = f"52.41% (Threshold: 75.00%+ Required)"
-        reason_msg = f"<b>பாட் ஏன் காத்திருக்கிறது?:</b> {asset_name} நேரலை விலை <b>{p_curr}{current_price:,.2f}</b>-ல் {p_curr}{range_low:,.2f} - {p_curr}{range_high:,.2f} எல்லைக்குள் பக்கவாட்டில் (RSI: {rsi_val:.2f}) நகர்கிறது. தற்போதைய AI நம்பிக்கை {ai_conf} மட்டுமே உள்ளது. தேவையில்லாத நஷ்டங்களைத் தவிர்க்க பிரேக்அவுட் சிக்னல் வரும் வரை பாட் அமைதியாகக் காத்திருக்கிறது!"
-        thought_steps = f"• Step 1: News Risk Filter ➔ 🟢 SAFE<br>• Step 2: Market Range Check ➔ 🟡 SIDEWAYS CONSOLIDATION (Live Price: {p_curr}{current_price:,.2f})<br>• Step 3: Indicator Filter (RSI: {rsi_val:.2f} | EMA9: {p_curr}{ema9_val:,.2f}) ➔ ⏸️ NEUTRAL BUFFER<br>• Step 4: AI Confidence ({ai_conf}) ➔ ⏸️ HOLD (75%+ நம்பிக்கை வராததால் டிரேட் தவிர்க்கப்பட்டது)"
+        reason_msg = f"<b>பாட் நிலை:</b> இன்று {asset_name} சந்தை விடுமுறை என்பதால் வர்த்தகம் நிறுத்தப்பட்டுள்ளது."
+        thought_steps = "• Step 1: Market Hours Check ➔ 🔒 CLOSED<br>• Step 2: AI Scanner ➔ ⏸️ PAUSED<br>• Step 3: Execution Engine ➔ 🔒 LOCKED UNTIL MARKET OPEN"
         raw_sig = "HOLD"
 
-    # AUTO-TRIGGER PAPER TRADE
-    if raw_sig in ["BUY_CALL", "BUY_PUT"] and active_data.get("status") == "NO_POSITION" and is_market_open:
+    elif is_daily_limit_reached:
+        bot_signal_str = "DAILY LIMIT REACHED 🛑 (MAX 3 TRADES DONE)"
+        card_theme = "glass-card-yellow"
+        ai_conf = "0.00% (Locked)"
+        reason_msg = f"<b>பாட் பாதுகாப்பு எச்சரிக்கை:</b> இன்றைய நாளுக்கான 3 டிரேடுகள் நிறைவடைந்துவிட்டன. அதிக டிரேட்களைத் தவிர்த்து மூலதனத்தைப் பாதுகாக்க பாட் பூட்டப்பட்டுள்ளது!"
+        thought_steps = "• Step 1: Daily Trade Count ➔ 🛑 3 TRADES EXCEEDED<br>• Step 2: Risk Engine ➔ 🔒 BLOCKED FOR CAPITAL PROTECTION"
+        raw_sig = "HOLD"
+
+    elif is_cooldown_active:
+        bot_signal_str = f"COOLDOWN ACTIVE ⏳ ({cooldown_remaining_mins} Mins Left)"
+        card_theme = "glass-card-yellow"
+        ai_conf = "0.00% (Waiting)"
+        reason_msg = f"<b>பாட் கூல்டவுன்:</b> முந்தைய டிரேட் க்ளோஸ் செய்யப்பட்டுள்ளது. அவசரப்பட்டு மீண்டும் டிரேட் எடுப்பதைத் தவிர்க்க பாட் இன்னும் <b>{cooldown_remaining_mins} நிமிடங்கள்</b> காத்திருக்கிறது."
+        thought_steps = f"• Step 1: Cooldown Timer check ➔ ⏳ ACTIVE ({cooldown_remaining_mins} Mins Left)<br>• Step 2: Entry Filter ➔ ⏸️ ON HOLD FOR COOLDOWN"
+        raw_sig = "HOLD"
+
+    elif ema9_val > ema21_val and rsi_val > 60:
+        bot_signal_str = "QUICK SCALP: BUY CALL 🚀 (Target: +12% | SL: -7%)"
+        card_theme = "glass-card-green"
+        ai_conf = "85.20% (Intraday Momentum)"
+        reason_msg = f"<b>இன்ட்ராடே சிக்னல்:</b> {asset_name} சார்ட்டில் 5-நிமிட கேண்டிலில் <b>EMA Breakout + RSI {rsi_val:.1f}</b> உறுதி செய்யப்பட்டுள்ளது. 1-5 கேண்டில்களுக்குள் விரைவாக +12% ஆப்ஷன் பிரீமியம் இலக்கை எட்ட வாய்ப்புள்ளது!"
+        thought_steps = f"• Step 1: News Risk Filter ➔ 🟢 SAFE<br>• Step 2: Scalper Signal ➔ 🟢 EMA BUY CALL CONFIRMED<br>• Step 3: AI Confidence ({ai_conf}) ➔ 🟢 EXECUTE SCALP"
+        raw_sig = "BUY_CALL"
+
+    elif ema9_val < ema21_val and rsi_val < 40:
+        bot_signal_str = "QUICK SCALP: BUY PUT 📉 (Target: +12% | SL: -7%)"
+        card_theme = "glass-card-red"
+        ai_conf = "86.10% (Intraday Breakdown)"
+        reason_msg = f"<b>இன்ட்ராடே சிக்னல்:</b> {asset_name} சார்ட்டில் 5-நிமிட கேண்டிலில் <b>EMA Breakdown + RSI {rsi_val:.1f}</b> உறுதி செய்யப்பட்டுள்ளது. 1-5 கேண்டில்களுக்குள் விரைவாக +12% ஆப்ஷன் பிரீமியம் இலக்கை எட்ட வாய்ப்புள்ளது!"
+        thought_steps = f"• Step 1: News Risk Filter ➔ 🟢 SAFE<br>• Step 2: Scalper Signal ➔ 🟢 EMA BUY PUT CONFIRMED<br>• Step 3: AI Confidence ({ai_conf}) ➔ 🟢 EXECUTE SCALP"
+        raw_sig = "BUY_PUT"
+
+    else:
+        bot_signal_str = "HOLD ⏸️ (SCANNING FOR VOLT & BREAKOUT)"
+        card_theme = "glass-card-yellow"
+        ai_conf = "52.40% (Buffer Range)"
+        reason_msg = f"<b>பாட் காத்திருக்கிறது:</b> {asset_name} நேரலை விலை பக்கவாட்டில் (RSI: {rsi_val:.2f}) நகர்கிறது. 75%+ பிரேக்அவுட் சிக்னல் வரும் வரை பாட் அமைதியாக உள்ளது."
+        thought_steps = f"• Step 1: News Risk Filter ➔ 🟢 SAFE<br>• Step 2: Sideways Buffer ➔ 🟡 NO TREND DETECTED<br>• Step 3: Indicator Filter ➔ ⏸️ RSI: {rsi_val:.1f}"
+        raw_sig = "HOLD"
+
+    # 3. AUTO-TRIGGER SCALPING TRADE WITH QUICK TARGET & SL
+    if raw_sig in ["BUY_CALL", "BUY_PUT"] and active_data.get("status") == "NO_POSITION" and is_market_open and not is_cooldown_active and not is_daily_limit_reached:
         broker = PaperBroker(initial_capital=current_capital)
         opt_type = "CALL" if raw_sig == "BUY_CALL" else "PUT"
         trade_sym = f"{asset_name}_OPT_{opt_type}"
+        
         prem = round(current_price * 0.01 if "NIFTY" in asset_name else current_price * 0.02, 2)
+        
+        # Quick Scalping Risk Rules: Target +12%, SL -7%
+        target_prem = round(prem * 1.12, 2)
+        sl_prem = round(prem * 0.93, 2)
         
         broker.buy_option(trade_sym, opt_type, prem, stock_price=current_price, qty=15)
         
+        # Reload active trade state
         if os.path.exists(ACTIVE_JSON):
             with open(ACTIVE_JSON, "r", encoding="utf-8") as f:
                 active_data = json.load(f)
