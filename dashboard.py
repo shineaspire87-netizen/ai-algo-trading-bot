@@ -105,6 +105,16 @@ WATCHLIST = {
 TELEGRAM_BOT_TOKEN = "7864817112:AAFq2c4N3M055W6u1g0wY6q0P5bBqY"
 TELEGRAM_CHAT_ID = "1388656143"
 
+# 🟢 PERMANENT GOOGLE SHEETS CLOUD DATABASE WEBHOOK URL
+GOOGLE_SHEET_URL = "https://script.google.com/macros/s/AKfycbxI5Z7HQ_2G6eMZWs1NqwHswxqtaxQtN31dE0rersU55p2E_SiV0xg-dUeNV9Z8gMn_/exec"
+
+def sync_trade_to_google_sheet(trade_record):
+    """Syncs trade log to Google Sheets Permanent Database"""
+    try:
+        requests.post(GOOGLE_SHEET_URL, json=trade_record, timeout=3)
+    except Exception as e:
+        pass
+
 def send_telegram_alert(msg):
     """Instant Telegram HTML Alert Sender"""
     try:
@@ -229,6 +239,9 @@ def log_trade_to_csv_and_update(active_data, exit_price, exit_reason, live_pnl, 
         else:
             df_updated = pd.DataFrame([new_trade_record])
         df_updated.to_csv(CSV_FILE, index=False)
+        
+        # 🟢 SYNC TO GOOGLE SHEETS PERMANENT DATABASE
+        sync_trade_to_google_sheet(new_trade_record)
     except Exception as e:
         pass
 
