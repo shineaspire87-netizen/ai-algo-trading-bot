@@ -1,0 +1,2 @@
+Timestamp,Symbol,Option_Type,Entry_Price,Exit_Price,Quantity,Exit_Reason,PnL,Capital_Balance
+2026-08-14 13:09:26,2026-08-14 15:15:00,RELIANCE_OPT_CE,CALL,26.14,27.64,22.22,33.99,15,3:15_PM_MARKET_CLOSE,22.50,100022.50
