@@ -729,7 +729,7 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
             exit_reason_str = "STOP_LOSS_HIT (-7%)"
         elif elapsed_mins >= 5.0: # Hard Exit at the End of 1 Single Candle (5 Mins)
             auto_exit_triggered = True
-            exit_reason_str = "SINGLE_CANDLE_TIMEOUT_EXIT (1-Candle Complete)"
+            exit_reason_str = "SINGLE_CANDLE_TIMEOUT_EXIT (1 Candle Complete)"
         elif not is_crypto_selected and now_time >= datetime.time(15, 15):
             auto_exit_triggered = True
             exit_reason_str = "AUTO_315_PM_SQUAREOFF"
