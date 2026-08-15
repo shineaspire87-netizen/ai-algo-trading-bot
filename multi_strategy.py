@@ -16,15 +16,15 @@ if os.path.exists(MODEL_FILE):
 
 # 24/7 Multi-Asset Watchlist (Includes Bitcoin & Ethereum)
 WATCHLIST = {
-    "BANKNIFTY": "^NSEBANK",
-    "NIFTY50": "^NSEI",
-    "RELIANCE": "RELIANCE.NS",
-    "HDFCBANK": "HDFCBANK.NS",
-    "ICICIBANK": "ICICIBANK.NS",
-    "INFY": "INFY.NS",
-    "SBIN": "SBIN.NS",
-    "BITCOIN": "BTC-USD",
-    "ETHEREUM": "ETH-USD"
+    'BANKNIFTY': '^NSEBANK',
+    'NIFTY50': '^NSEI',
+    'RELIANCE': 'RELIANCE.NS',
+    'HDFCBANK': 'HDFCBANK.NS',
+    'ICICIBANK': 'ICICIBANK.NS',
+    'INFY': 'INFY.NS',
+    'SBIN': 'SBIN.NS',
+    'BITCOIN': 'BTC-USD',
+    'ETHEREUM': 'ETH-USD'
 }
 
 def detect_candlestick_patterns(df):

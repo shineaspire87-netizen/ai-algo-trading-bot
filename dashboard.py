@@ -35,15 +35,15 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 WATCHLIST = {
-    "BANKNIFTY": "^NSEBANK",
-    "NIFTY50": "^NSEI",
-    "RELIANCE": "RELIANCE.NS",
-    "HDFCBANK": "HDFCBANK.NS",
-    "ICICIBANK": "ICICIBANK.NS",
-    "INFY": "INFY.NS",
-    "SBIN": "SBIN.NS",
-    "BITCOIN": "BTC-USD",
-    "ETHEREUM": "ETH-USD"
+    'BANKNIFTY': '^NSEBANK',
+    'NIFTY50': '^NSEI',
+    'RELIANCE': 'RELIANCE.NS',
+    'HDFCBANK': 'HDFCBANK.NS',
+    'ICICIBANK': 'ICICIBANK.NS',
+    'INFY': 'INFY.NS',
+    'SBIN': 'SBIN.NS',
+    'BITCOIN': 'BTC-USD',
+    'ETHEREUM': 'ETH-USD'
 }
 
 def fetch_real_today_news_rss():
