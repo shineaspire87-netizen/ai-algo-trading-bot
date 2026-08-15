@@ -1,4 +1,4 @@
-# multi_strategy.py - 100% Institutional 19-Feature AI Multi-Asset Strategy
+# multi_strategy.py - With Direct Telegram Mobile Alerts
 import os
 import datetime
 import yfinance as yf
@@ -6,6 +6,7 @@ import pandas as pd
 import ta
 import numpy as np
 from xgboost import XGBClassifier
+from notifier import send_telegram_alert
 
 MODEL_FILE = "xgboost_model.json"
 model = None
@@ -26,15 +27,7 @@ WATCHLIST = {
     "ETHEREUM": "ETH-USD"
 }
 
-def calculate_daily_reset_vwap(df: pd.DataFrame) -> pd.Series:
-    typical_price = (df['High'] + df['Low'] + df['Close']) / 3.0
-    vol = df['Volume'].replace(0, np.nan).fillna(1)
-    vol_price = typical_price * vol
-    dates = df.index.date
-    cum_vol_price = vol_price.groupby(dates).cumsum()
-    cum_vol = vol.groupby(dates).cumsum()
-    vwap = cum_vol_price / cum_vol
-    return vwap.fillna(typical_price)
+last_notified_signal = {}
 
 def detect_candlestick_patterns(df: pd.DataFrame) -> pd.DataFrame:
     open_p, high_p, low_p, close_p = df['Open'], df['High'], df['Low'], df['Close']
@@ -50,6 +43,16 @@ def detect_candlestick_patterns(df: pd.DataFrame) -> pd.DataFrame:
     df['Pattern_BullishEngulfing'] = ((close_p > open_p) & (close_p.shift(1) < open_p.shift(1)) & (close_p >= open_p.shift(1))).astype(int)
     df['Pattern_BearishEngulfing'] = ((close_p < open_p) & (close_p.shift(1) > open_p.shift(1)) & (close_p <= open_p.shift(1))).astype(int)
     return df
+
+def calculate_daily_reset_vwap(df: pd.DataFrame) -> pd.Series:
+    typical_price = (df['High'] + df['Low'] + df['Close']) / 3.0
+    vol = df['Volume'].replace(0, np.nan).fillna(1)
+    vol_price = typical_price * vol
+    dates = df.index.date
+    cum_vol_price = vol_price.groupby(dates).cumsum()
+    cum_vol = vol.groupby(dates).cumsum()
+    vwap = cum_vol_price / cum_vol
+    return vwap.fillna(typical_price)
 
 def calculate_yang_zhang_volatility(df: pd.DataFrame, window: int = 14) -> pd.Series:
     log_ho = np.log(df['High'] / df['Open'])
@@ -83,12 +86,6 @@ def scan_all_assets():
         if not is_market_open:
             continue
 
-        if not is_crypto and (datetime.time(9, 15) <= now_time < datetime.time(9, 30)):
-            continue
-
-        if not is_crypto and today_weekday == 3 and now_time >= datetime.time(13, 30):
-            continue
-
         try:
             df = yf.download(tickers=symbol, period="5d", interval="5m", progress=False)
             if isinstance(df.columns, pd.MultiIndex):
@@ -97,7 +94,6 @@ def scan_all_assets():
             if df.empty or len(df) < 25:
                 continue
 
-            # Compute 19 Institutional Features
             df['RSI'] = ta.momentum.rsi(df['Close'], window=14)
             df['EMA_9'] = ta.trend.ema_indicator(df['Close'], window=9)
             df['EMA_21'] = ta.trend.ema_indicator(df['Close'], window=21)
@@ -162,6 +158,12 @@ def scan_all_assets():
                     signal = "HOLD"
             else:
                 signal = "BUY_CALL" if (latest['EMA_9'] > latest['EMA_21'] and latest['RSI'] > 58) else ("BUY_PUT" if (latest['EMA_9'] < latest['EMA_21'] and latest['RSI'] < 42) else "HOLD")
+
+            # TELEGRAM INSTANT SIGNAL ALERT TRIGGER
+            if signal != "HOLD" and last_notified_signal.get(name) != signal:
+                last_notified_signal[name] = signal
+                alert_msg = f"🚨 <b>AI TRADE SIGNAL DETECTED!</b>\n\n<b>Asset:</b> {name}\n<b>Signal:</b> {signal}\n<b>Live Price:</b> {latest['Close']:,.2f}\n<b>RSI:</b> {latest['RSI']:.1f}\n<b>Time:</b> {now_dt.strftime('%H:%M:%S IST')}"
+                send_telegram_alert(alert_msg)
 
             scanned_results.append({
                 "Name": name, "Symbol": symbol, "Price": latest['Close'], "RSI": latest['RSI'], "Signal": signal
