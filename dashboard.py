@@ -1,4 +1,4 @@
-# dashboard.py - Fixed NameError total_pnl & Live AI Reason Box
+# dashboard.py - Market Closed Awareness Fix for AI Intelligence Box
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
@@ -29,6 +29,7 @@ st.markdown("""
     .reason-box-yellow { background: #2d2a13; border-left: 5px solid #ffd600; padding: 18px; border-radius: 8px; color: #fef08a; margin-bottom: 20px; font-size: 16px; line-height: 1.6; }
     .reason-box-green { background: #132d22; border-left: 5px solid #00c853; padding: 18px; border-radius: 8px; color: #a3e635; margin-bottom: 20px; font-size: 16px; line-height: 1.6; }
     .reason-box-red { background: #2d1313; border-left: 5px solid #ff1744; padding: 18px; border-radius: 8px; color: #fca5a5; margin-bottom: 20px; font-size: 16px; line-height: 1.6; }
+    .reason-box-closed { background: #1f2937; border-left: 5px solid #6b7280; padding: 18px; border-radius: 8px; color: #9ca3af; margin-bottom: 20px; font-size: 16px; line-height: 1.6; }
 
     .highlight-entry { font-size: 18px; font-weight: bold; color: #00e5ff; background: #0f172a; padding: 3px 8px; border-radius: 5px; }
     .highlight-target { font-size: 18px; font-weight: bold; color: #34d399; background: #064e3b; padding: 3px 8px; border-radius: 5px; }
@@ -114,7 +115,7 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
     head_col1, head_col2 = st.columns([0.6, 0.4])
     with head_col1:
         st.title("⚡ NSE & Crypto AI Algo Trading Terminal")
-        st.caption("Real-Time Multi-Asset Scanner, Live AI Reason & 24/7 Crypto Control")
+        st.caption("Real-Time Multi-Asset Scanner, Market-Aware AI Intelligence & 24/7 Crypto Control")
     with head_col2:
         st.markdown(f"""
         <div class="clock-banner">
@@ -155,7 +156,6 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
 
     total_trades = len(trades_df)
     
-    # Safe KeyError Fallback for PnL & Name Fix
     if total_trades > 0:
         if 'Net_PnL' in trades_df.columns:
             total_pnl = float(trades_df['Net_PnL'].sum())
@@ -194,10 +194,15 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
         except:
             pass
 
-    # 2. LIVE BOT INTELLIGENCE & REASON CARD
+    # 2. MARKET-AWARE LIVE AI INTELLIGENCE & REASON CARD
     st.subheader(f"🧠 Live AI Intelligence & Reason: {asset_name}")
 
-    if ema9_val > ema21_val and rsi_val > 58:
+    if not is_market_open and not is_crypto_selected:
+        bot_signal_str = "MARKET CLOSED 🔒 (TRADING PAUSED)"
+        card_theme = "reason-box-closed"
+        ai_conf = "0.0% (Market Offline)"
+        reason_msg = f"<b>பாட் நிலை:</b> இன்று {asset_name} இந்தியப் பங்குச் சந்தை விடுமுறை நாள் என்பதால் சந்தை முடிவடைந்துள்ளது (Market Closed). {next_unlock_msg}"
+    elif ema9_val > ema21_val and rsi_val > 58:
         bot_signal_str = "BUY CALL 🚀"
         card_theme = "reason-box-green"
         ai_conf = "78.5% (High Confidence)"
