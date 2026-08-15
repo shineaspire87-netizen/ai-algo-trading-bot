@@ -1,15 +1,3 @@
 {
-    "entry_time": "2026-08-15 14:39:01",
-    "symbol": "ETHEREUM_OPT_PUT",
-    "type": "PUT",
-    "entry_price": 37.51,
-    "entry_stock_price": 1875.72,
-    "target_stock_price": 1853.21,
-    "sl_stock_price": 1886.97,
-    "qty": 15,
-    "stop_loss": 31.88,
-    "initial_stop_loss": 31.88,
-    "target": 48.76,
-    "trailed_to_breakeven": false,
-    "status": "ACTIVE"
+    "status": "NO_POSITION"
 }
