@@ -105,8 +105,20 @@ WATCHLIST = {
 TELEGRAM_BOT_TOKEN = "7864817112:AAFq2c4N3M055W6u1g0wY6q0P5bBqY"
 TELEGRAM_CHAT_ID = "1388656143"
 
-# 🟢 BULLETPROOF GOOGLE SHEETS CLOUD SYNC
-GOOGLE_SHEET_URL = "https://script.google.com/macros/s/AKfycbxI5Z7HQ_2G6eMZWs1NqwHswxqtaxQtN31dE0rersU55p2E_SiV0xg-dUeNV9Z8gMn_/exec"
+# 🟢 PERMANENT GOOGLE SHEETS CLOUD DATABASE WEBHOOK URL (Version 2 Read & Write)
+GOOGLE_SHEET_URL = "https://script.google.com/macros/s/AKfycbyavkzC8zCDG0gR274a3EiusQ1ji72mMi6_Ot5dT0L0r0uXfxDHfEnF87NVniJXyybg/exec"
+
+def fetch_trades_from_google_sheet():
+    """Reads permanent trade history directly from Google Sheets"""
+    try:
+        resp = requests.get(GOOGLE_SHEET_URL, timeout=5, allow_redirects=True)
+        if resp.status_code == 200:
+            data = resp.json()
+            if isinstance(data, list) and len(data) > 0:
+                return pd.DataFrame(data)
+    except Exception as e:
+        print(f"Google Sheet Fetch Error: {e}")
+    return pd.DataFrame()
 
 def sync_trade_to_google_sheet(trade_record):
     """Bulletproof Sync to Google Sheets Permanent Database"""
@@ -122,18 +134,6 @@ def sync_trade_to_google_sheet(trade_record):
         print(f"Google Sheet Sync Status: {response.status_code}")
     except Exception as e:
         print(f"Google Sheet Sync Error: {e}")
-
-# 🟢 FETCH TRADES FROM GOOGLE SHEETS CLOUD DATABASE
-def fetch_trades_from_google_sheet():
-    try:
-        resp = requests.get(GOOGLE_SHEET_URL, timeout=5, allow_redirects=True)
-        if resp.status_code == 200:
-            data = resp.json()
-            if isinstance(data, list) and len(data) > 0:
-                return pd.DataFrame(data)
-    except:
-        pass
-    return pd.DataFrame()
 
 # 🟢 FAIL-SAFE TELEGRAM NOTIFIER INTEGRATION
 try:
