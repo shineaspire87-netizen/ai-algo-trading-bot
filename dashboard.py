@@ -4,7 +4,7 @@ import streamlit.components.v1 as components
 import pandas as pd
 
 def render_tradingview_live_chart(asset_name):
-    """Embeds Official TradingView Real-Time Live WebSocket Chart (0ms Latency)"""
+    """Embeds Official TradingView Real-Time Chart with Pre-loaded Indicators"""
     tv_map = {
         "BANKNIFTY": "NSE:BANKNIFTY",
         "NIFTY50": "NSE:NIFTY",
@@ -19,8 +19,8 @@ def render_tradingview_live_chart(asset_name):
     tv_symbol = tv_map.get(asset_name, "NSE:NIFTY")
 
     widget_code = f"""
-    <div class="tradingview-widget-container" style="height:540px;width:100%">
-      <div id="tradingview_live_chart" style="height:540px;width:100%"></div>
+    <div class="tradingview-widget-container" style="height:520px;width:100%">
+      <div id="tradingview_live_chart" style="height:520px;width:100%"></div>
       <script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
       <script type="text/javascript">
       new TradingView.widget({{
@@ -34,12 +34,17 @@ def render_tradingview_live_chart(asset_name):
         "toolbar_bg": "#0f172a",
         "enable_publishing": false,
         "allow_symbol_change": true,
-        "container_id": "tradingview_live_chart"
+        "container_id": "tradingview_live_chart",
+        "studies": [
+          "STD;EMA",
+          "STD;VWAP",
+          "STD;RSI"
+        ]
       }});
       </script>
     </div>
     """
-    components.html(widget_code, height=550)
+    components.html(widget_code, height=530)
 import numpy as np
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
