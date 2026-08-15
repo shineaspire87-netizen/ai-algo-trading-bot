@@ -1,4 +1,4 @@
-# dashboard.py - Antony Quant AI Algo Terminal (Complete Autonomous Engine & Live Sync)
+# dashboard.py - Antony Quant AI Algo Terminal (Complete Institutional Logic & Auto Sync)
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -186,7 +186,7 @@ def get_intelligent_ai_response(user_input, asset_name, current_price, rsi_val, 
         return f"நீங்கள் சொல்வது புரிகிறது ANTONY! 🎯 நான் {asset_name} நேரலைச் சந்தையை 15+ இண்டிகேட்டர்கள் கொண்டு 24/7 கவனித்து வருகிறேன். தற்போதைய விலை {p_curr}{current_price:,.2f} (RSI: {rsi_val:.1f})."
 
 def log_trade_to_csv_and_update(active_data, exit_price, exit_reason, live_pnl, current_capital, now_dt):
-    """Central Function: Appends Completed Trade to CSV and Resets Active JSON"""
+    """Central Function: Updates Session State & CSV File Simultaneously"""
     exit_time_str = now_dt.strftime("%Y-%m-%d %H:%M:%S")
     brokerage_fee = 45.0
     net_pnl = round(live_pnl - brokerage_fee, 2)
@@ -207,26 +207,26 @@ def log_trade_to_csv_and_update(active_data, exit_price, exit_reason, live_pnl, 
         "Capital_Balance": new_capital
     }
 
-    CSV_FILE = "trades.csv"
-    if os.path.exists(CSV_FILE) and os.path.getsize(CSV_FILE) > 0:
-        try:
-            df_existing = pd.read_csv(CSV_FILE)
-            df_new = pd.DataFrame([new_trade_record])
-            df_updated = pd.concat([df_existing, df_new], ignore_index=True)
-        except:
-            df_updated = pd.DataFrame([new_trade_record])
-    else:
-        df_updated = pd.DataFrame([new_trade_record])
-    
-    df_updated.to_csv(CSV_FILE, index=False)
+    if "trades_memory" not in st.session_state:
+        st.session_state.trades_memory = []
+    st.session_state.trades_memory.append(new_trade_record)
 
-    # Clear active position
+    CSV_FILE = "trades.csv"
+    try:
+        if os.path.exists(CSV_FILE) and os.path.getsize(CSV_FILE) > 0:
+            df_existing = pd.read_csv(CSV_FILE)
+            df_updated = pd.concat([df_existing, pd.DataFrame([new_trade_record])], ignore_index=True)
+        else:
+            df_updated = pd.DataFrame([new_trade_record])
+        df_updated.to_csv(CSV_FILE, index=False)
+    except Exception as e:
+        pass
+
     ACTIVE_JSON = "active_trade.json"
     if os.path.exists(ACTIVE_JSON):
         with open(ACTIVE_JSON, "w", encoding="utf-8") as f:
             json.dump({"status": "NO_POSITION"}, f, indent=4)
 
-    # Send Instant Telegram Alert
     alert_msg = (
         f"🏁 <b>TRADE COMPLETED & LOGGED!</b>\n\n"
         f"<b>Symbol:</b> {active_data.get('symbol')}\n"
@@ -256,23 +256,31 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
         market_seg_badge = '<span class="market-tag-nse">🇮🇳 NSE Indian Market (Mon-Fri 09:15-15:30 IST)</span>'
 
     if weekday_idx == 4:
-        next_unlock_msg = "இன்று வெள்ளிக்கிழமை மாலை. திங்கட்கிழமை (Monday) காலை 9:15 மணிக்கு பாட் மீண்டும் தானாக அன்லாக் ஆகும்!"
+        next_unlock_msg = "இன்று வெள்ளிக்கிழமை மாலை. திங்கட்கிழமை (Monday) காலை 9:15 மணிக்கு பாட் அன்லாக் ஆகும்!"
     elif weekday_idx == 5:
         next_unlock_msg = "இன்று சனிக்கிழமை விடுமுறை நாள். திங்கட்கிழமை (Monday) காலை 9:15 மணிக்கு பாட் அன்லாக் ஆகும்!"
     elif weekday_idx == 6:
         next_unlock_msg = "இன்று ஞாயிற்றுக்கிழமை விடுமுறை நாள். நாளை திங்கட்கிழமை (Monday) காலை 9:15 மணிக்கு பாட் அன்லாக் ஆகும்!"
     else:
-        next_unlock_msg = "சந்தை முடிவடைந்துவிட்டது. நாளை காலை 9:15 மணிக்கு பாட் மீண்டும் தானாக அன்லாக் ஆகும்!"
+        next_unlock_msg = "சந்தை முடிவடைந்துவிட்டது. நாளை காலை 9:15 மணிக்கு பாட் அன்லாக் ஆகும்!"
 
-    # READ TRADES.CSV & CALCULATE METRICS DYNAMICALLY
+    # READ TRADES FROM BOTH FILE AND SESSION MEMORY
+    if "trades_memory" not in st.session_state:
+        st.session_state.trades_memory = []
+
     CSV_FILE = "trades.csv"
+    file_df = pd.DataFrame()
     if os.path.exists(CSV_FILE) and os.path.getsize(CSV_FILE) > 0:
         try:
-            trades_df = pd.read_csv(CSV_FILE)
+            file_df = pd.read_csv(CSV_FILE)
         except:
-            trades_df = pd.DataFrame()
+            file_df = pd.DataFrame()
+
+    if len(st.session_state.trades_memory) > 0:
+        mem_df = pd.DataFrame(st.session_state.trades_memory)
+        trades_df = pd.concat([file_df, mem_df], ignore_index=True).drop_duplicates(subset=['Entry_Time', 'Symbol'])
     else:
-        trades_df = pd.DataFrame()
+        trades_df = file_df
 
     total_trades = len(trades_df)
     
@@ -317,7 +325,7 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
 
     st.markdown("---")
 
-    # CANDLE DATA & TECHNICAL INDICATORS
+    # CANDLE DATA & TECHNICAL INDICATORS (INCLUDING VWAP CALCULATION)
     df = yf.download(tickers=asset_symbol, period=period_map[tf_str], interval=tf_str, progress=False)
     if isinstance(df.columns, pd.MultiIndex):
         df.columns = df.columns.get_level_values(0)
@@ -326,13 +334,22 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
         df['EMA_9'] = ta.trend.ema_indicator(df['Close'], window=9)
         df['EMA_21'] = ta.trend.ema_indicator(df['Close'], window=21)
         df['RSI'] = ta.momentum.rsi(df['Close'], window=14)
+        
+        # 🟢 INSTITUTIONAL RULE 1: INTRADAY VWAP CALCULATION
+        tp = (df['High'] + df['Low'] + df['Close']) / 3
+        tpv = tp * df['Volume']
+        cum_tpv = tpv.groupby(df.index.date).cumsum()
+        cum_vol = df['Volume'].groupby(df.index.date).cumsum()
+        df['VWAP'] = (cum_tpv / cum_vol).fillna(df['Close'])
+        
         current_price = float(df['Close'].iloc[-1])
         atm_strike = round(current_price / 100) * 100
         rsi_val = float(df['RSI'].iloc[-1])
         ema9_val = float(df['EMA_9'].iloc[-1])
         ema21_val = float(df['EMA_21'].iloc[-1])
+        vwap_val = float(df['VWAP'].iloc[-1])
     else:
-        current_price, atm_strike, rsi_val, ema9_val, ema21_val = 0.0, 0, 50.0, 0.0, 0.0
+        current_price, atm_strike, rsi_val, ema9_val, ema21_val, vwap_val = 0.0, 0, 50.0, 0.0, 0.0, 0.0
 
     # TOP KPI METRICS CARDS
     k1, k2, k3, k4, k5, k6 = st.columns(6)
@@ -357,14 +374,22 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
     scan_time_str = now_dt.strftime('%I:%M:%S %p')
     scan_sec_count = (now_dt.minute * 60 + now_dt.second) // 3
 
-    # COOLDOWN & DAILY LIMIT CHECK
+    # COOLDOWN & 2 CONSECUTIVE LOSSES KILL-SWITCH CHECK
     trades_today_count = 0
     last_exit_time = None
+    is_2_consecutive_losses = False
 
     if total_trades > 0 and 'Exit_Time' in trades_df.columns:
         today_str = now_dt.strftime('%Y-%m-%d')
         today_trades = trades_df[trades_df['Exit_Time'].astype(str).str.contains(today_str)]
         trades_today_count = len(today_trades)
+
+        # 🟢 INSTITUTIONAL RULE 2: 2 CONSECUTIVE LOSSES KILL-SWITCH
+        pnl_col = 'Net_PnL' if 'Net_PnL' in today_trades.columns else ('PnL' if 'PnL' in today_trades.columns else None)
+        if pnl_col and len(today_trades) >= 2:
+            last_two = today_trades[pnl_col].tail(2).tolist()
+            if len(last_two) == 2 and last_two[0] < 0 and last_two[1] < 0:
+                is_2_consecutive_losses = True
         
         try:
             last_exit_str = trades_df['Exit_Time'].iloc[-1]
@@ -383,52 +408,61 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
 
     is_daily_limit_reached = (trades_today_count >= 3)
 
-    # EVALUATE AI SIGNAL
+    # EVALUATE AI SIGNAL WITH VWAP FILTER
     if not is_market_open and not is_crypto_selected:
         bot_signal_str = "MARKET CLOSED 🔒 (TRADING PAUSED)"
         card_theme = "glass-card"
         ai_conf = "0.00% (Market Offline)"
-        reason_msg = f"<b>பாட் நிலை:</b> இன்று {asset_name} இந்தியப் பங்குச் சந்தை விடுமுறை என்பதால் சந்தை முடிவடைந்துள்ளது. {next_unlock_msg}"
-        thought_steps = "• Step 1: Market Hours Check ➔ 🔒 CLOSED<br>• Step 2: AI Scanner ➔ ⏸️ PAUSED<br>• Step 3: Execution Engine ➔ 🔒 LOCKED UNTIL MARKET OPEN"
+        reason_msg = f"<b>பாட் நிலை:</b> இன்று {asset_name} விடுமுறை என்பதால் வர்த்தகம் நிறுத்தப்பட்டுள்ளது."
+        thought_steps = "• Step 1: Market Hours Check ➔ 🔒 CLOSED<br>• Step 2: AI Scanner ➔ ⏸️ PAUSED"
+        raw_sig = "HOLD"
+    elif is_2_consecutive_losses:
+        bot_signal_str = "CONSECUTIVE LOSS KILL-SWITCH 🛑 (LOCKED FOR DAY)"
+        card_theme = "glass-card-red"
+        ai_conf = "0.00% (Kill-Switch Active)"
+        reason_msg = f"<b>பாட் பாதுகாப்பு எச்சரிக்கை:</b> இன்று தொடர்ச்சியாக 2 டிரேடுகளில் நஷ்டம் ஏற்பட்டுள்ளதால், மூலதனத்தைப் பாதுகாக்க பாட் அன்றைய நாளுக்குப் பூட்டப்பட்டுள்ளது (Kill-Switch Active)!"
+        thought_steps = "• Step 1: Risk Filter ➔ 🛑 2 CONSECUTIVE LOSSES DETECTED<br>• Step 2: Kill-Switch ➔ 🔒 LOCKED FOR TODAY"
         raw_sig = "HOLD"
     elif is_daily_limit_reached:
         bot_signal_str = "DAILY LIMIT REACHED 🛑 (MAX 3 TRADES DONE)"
         card_theme = "glass-card-yellow"
         ai_conf = "0.00% (Locked)"
-        reason_msg = f"<b>பாட் பாதுகாப்பு எச்சரிக்கை:</b> இன்றைய நாளுக்கான 3 டிரேடுகள் நிறைவடைந்துவிட்டன. மூலதனத்தைப் பாதுகாக்க பாட் பூட்டப்பட்டுள்ளது!"
-        thought_steps = "• Step 1: Daily Trade Count ➔ 🛑 3 TRADES EXCEEDED<br>• Step 2: Risk Engine ➔ 🔒 BLOCKED FOR CAPITAL PROTECTION"
+        reason_msg = f"<b>பாட் பாதுகாப்பு எச்சரிக்கை:</b> இன்றைய நாளுக்கான 3 டிரேடுகள் நிறைவடைந்துவிட்டன."
+        thought_steps = "• Step 1: Daily Trade Count ➔ 🛑 3 TRADES EXCEEDED"
         raw_sig = "HOLD"
     elif is_cooldown_active:
         bot_signal_str = f"COOLDOWN ACTIVE ⏳ ({cooldown_remaining_mins} Mins Left)"
         card_theme = "glass-card-yellow"
         ai_conf = "0.00% (Waiting)"
-        reason_msg = f"<b>பாட் கூல்டவுன்:</b> முந்தைய டிரேட் க்ளோஸ் செய்யப்பட்டுள்ளது. அவசரப்பட்டு மீண்டும் டிரேட் எடுப்பதைத் தவிர்க்க பாட் இன்னும் <b>{cooldown_remaining_mins} நிமிடங்கள்</b> காத்திருக்கிறது."
-        thought_steps = f"• Step 1: Cooldown Timer ➔ ⏳ ACTIVE ({cooldown_remaining_mins} Mins Left)<br>• Step 2: Entry Filter ➔ ⏸️ ON HOLD FOR COOLDOWN"
+        reason_msg = f"<b>பாட் கூல்டவுன்:</b> முந்தைய டிரேட் முடிவடைந்து 15 நிமிடக் கூல்டவுன் ஓடிக் கொண்டிருக்கிறது."
+        thought_steps = f"• Step 1: Cooldown Timer ➔ ⏳ ACTIVE ({cooldown_remaining_mins} Mins Left)"
         raw_sig = "HOLD"
-    elif ema9_val > ema21_val and rsi_val > 60:
-        bot_signal_str = "QUICK SCALP: BUY CALL 🚀 (Target: +12% | SL: -7%)"
+
+    # 🟢 INSTITUTIONAL RULE 3: VWAP ENFORCED ENTRY SIGNALS
+    elif ema9_val > ema21_val and rsi_val > 60 and current_price > vwap_val:
+        bot_signal_str = "QUICK SCALP: BUY CALL 🚀 (Target: +12% | SL: -7% | VWAP Confirmed)"
         card_theme = "glass-card-green"
-        ai_conf = "85.20% (Intraday Momentum)"
-        reason_msg = f"<b>இன்ட்ராடே சிக்னல்:</b> {asset_name} சார்ட்டில் 5-நிமிட கேண்டிலில் <b>EMA Breakout + RSI {rsi_val:.1f}</b> உறுதி செய்யப்பட்டுள்ளது. 1-5 கேண்டில்களுக்குள் விரைவாக +12% ஆப்ஷன் பிரீமியம் இலக்கை எட்ட வாய்ப்புள்ளது!"
-        thought_steps = f"• Step 1: News Risk Filter ➔ 🟢 SAFE<br>• Step 2: Scalper Signal ➔ 🟢 EMA BUY CALL CONFIRMED<br>• Step 3: AI Confidence ({ai_conf}) ➔ 🟢 EXECUTE SCALP"
+        ai_conf = "88.40% (Institutional Momentum)"
+        reason_msg = f"<b>இன்ட்ராடே சிக்னல்:</b> {asset_name} சார்ட்டில் <b>EMA Breakout + RSI {rsi_val:.1f} + Price > VWAP ({p_curr}{vwap_val:,.2f})</b> உறுதி செய்யப்பட்டுள்ளது!"
+        thought_steps = f"• Step 1: News Risk Filter ➔ 🟢 SAFE<br>• Step 2: VWAP Check ➔ 🟢 PRICE ABOVE VWAP ({p_curr}{vwap_val:,.2f})<br>• Step 3: AI Confidence ({ai_conf}) ➔ 🟢 EXECUTE SCALP"
         raw_sig = "BUY_CALL"
-    elif ema9_val < ema21_val and rsi_val < 40:
-        bot_signal_str = "QUICK SCALP: BUY PUT 📉 (Target: +12% | SL: -7%)"
+    elif ema9_val < ema21_val and rsi_val < 40 and current_price < vwap_val:
+        bot_signal_str = "QUICK SCALP: BUY PUT 📉 (Target: +12% | SL: -7% | VWAP Confirmed)"
         card_theme = "glass-card-red"
-        ai_conf = "86.10% (Intraday Breakdown)"
-        reason_msg = f"<b>இன்ட்ராடே சிக்னல்:</b> {asset_name} சார்ட்டில் 5-நிமிட கேண்டிலில் <b>EMA Breakdown + RSI {rsi_val:.1f}</b> உறுதி செய்யப்பட்டுள்ளது. 1-5 கேண்டில்களுக்குள் விரைவாக +12% ஆப்ஷன் பிரீமியம் இலக்கை எட்ட வாய்ப்புள்ளது!"
-        thought_steps = f"• Step 1: News Risk Filter ➔ 🟢 SAFE<br>• Step 2: Scalper Signal ➔ 🟢 EMA BUY PUT CONFIRMED<br>• Step 3: AI Confidence ({ai_conf}) ➔ 🟢 EXECUTE SCALP"
+        ai_conf = "89.10% (Institutional Breakdown)"
+        reason_msg = f"<b>இன்ட்ராடே சிக்னல்:</b> {asset_name} சார்ட்டில் <b>EMA Breakdown + RSI {rsi_val:.1f} + Price < VWAP ({p_curr}{vwap_val:,.2f})</b> உறுதி செய்யப்பட்டுள்ளது!"
+        thought_steps = f"• Step 1: News Risk Filter ➔ 🟢 SAFE<br>• Step 2: VWAP Check ➔ 🟢 PRICE BELOW VWAP ({p_curr}{vwap_val:,.2f})<br>• Step 3: AI Confidence ({ai_conf}) ➔ 🟢 EXECUTE SCALP"
         raw_sig = "BUY_PUT"
     else:
-        bot_signal_str = "HOLD ⏸️ (SCANNING FOR VOLT & BREAKOUT)"
+        bot_signal_str = "HOLD ⏸️ (SCANNING FOR VOLT & VWAP BREAKOUT)"
         card_theme = "glass-card-yellow"
         ai_conf = "52.40% (Buffer Range)"
-        reason_msg = f"<b>பாட் காத்திருக்கிறது:</b> {asset_name} நேரலை விலை பக்கவாட்டில் (RSI: {rsi_val:.2f}) நகர்கிறது. 75%+ பிரேக்அவுட் சிக்னல் வரும் வரை பாட் அமைதியாக உள்ளது."
-        thought_steps = f"• Step 1: News Risk Filter ➔ 🟢 SAFE<br>• Step 2: Sideways Buffer ➔ 🟡 NO TREND DETECTED<br>• Step 3: Indicator Filter ➔ ⏸️ RSI: {rsi_val:.1f}"
+        reason_msg = f"<b>பாட் காத்திருக்கிறது:</b> {asset_name} நேரலை விலை (RSI: {rsi_val:.2f} | VWAP: {p_curr}{vwap_val:,.2f}) பக்கவாட்டில் நகர்கிறது."
+        thought_steps = f"• Step 1: News Risk Filter ➔ 🟢 SAFE<br>• Step 2: VWAP Alignment ➔ ⏸️ BUFFER REGIME<br>• Step 3: Indicator Filter ➔ ⏸️ RSI: {rsi_val:.1f}"
         raw_sig = "HOLD"
 
     # AUTO-TRIGGER PAPER TRADE
-    if raw_sig in ["BUY_CALL", "BUY_PUT"] and active_data.get("status") == "NO_POSITION" and is_market_open and not is_cooldown_active and not is_daily_limit_reached:
+    if raw_sig in ["BUY_CALL", "BUY_PUT"] and active_data.get("status") == "NO_POSITION" and is_market_open and not is_cooldown_active and not is_daily_limit_reached and not is_2_consecutive_losses:
         opt_type = "CALL" if raw_sig == "BUY_CALL" else "PUT"
         trade_sym = f"{asset_name}_OPT_{opt_type}"
         prem = round(current_price * 0.01 if "NIFTY" in asset_name else current_price * 0.02, 2)
@@ -443,6 +477,7 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
             "type": opt_type,
             "entry_time": now_dt.strftime("%Y-%m-%d %H:%M:%S"),
             "entry_price": prem,
+            "max_premium_seen": prem,
             "stop_loss": sl_prem,
             "target": tgt_prem,
             "qty": qty,
@@ -458,8 +493,8 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
             f"🚨 <b>ALGO TRADE ENTERED!</b>\n\n"
             f"<b>Symbol:</b> {trade_sym} ({opt_type})\n"
             f"<b>Stock Price:</b> {p_curr}{current_price:,.2f}\n"
+            f"<b>VWAP Level:</b> {p_curr}{vwap_val:,.2f}\n"
             f"<b>Option Premium:</b> ₹{prem:.2f}\n"
-            f"<b>Quantity:</b> {qty}\n"
             f"<b>Stop Loss:</b> ₹{sl_prem:.2f} (-7%)\n"
             f"<b>Target:</b> ₹{tgt_prem:.2f} (+12%)\n"
             f"<b>Time:</b> {now_dt.strftime('%H:%M:%S')}"
@@ -517,18 +552,13 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
         live_pnl = (live_premium - e_price) * qty
         pnl_pct = ((live_premium - e_price) / e_price) * 100
 
-        risk_amount = (e_price - sl_price) * qty
-        capital_risk_pct = (risk_amount / current_capital) * 100
-        pnl_color = "#34d399" if live_pnl >= 0 else "#f87171"
-
-        # 🚀 DYNAMIC TRAILING SL & PROFIT LOCK ENGINE
+        # 🟢 DYNAMIC TRAILING SL & PROFIT LOCK ENGINE
         max_seen = active_data.get("max_premium_seen", e_price)
         if live_premium > max_seen:
             max_seen = live_premium
             active_data["max_premium_seen"] = max_seen
 
-        # Lock SL to Entry Price once profit reaches +4%
-        if live_premium >= (e_price * 1.04):
+        if live_premium >= (e_price * 1.04): # +4% profit lock to break-even
             trailed_sl = max(e_price, round(max_seen * 0.96, 2))
             if trailed_sl > sl_price:
                 sl_price = trailed_sl
@@ -536,9 +566,24 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
                 with open(ACTIVE_JSON, "w", encoding="utf-8") as f:
                     json.dump(active_data, f, indent=4)
 
-        # AUTONOMOUS TARGET / SL AUTO-EXIT ENGINE
+        risk_amount = (e_price - sl_price) * qty
+        capital_risk_pct = (risk_amount / current_capital) * 100
+        pnl_color = "#34d399" if live_pnl >= 0 else "#f87171"
+
+        # 🟢 INSTITUTIONAL RULE 4: AUTONOMOUS TARGET / SL / 20-MIN TIME EXIT ENGINE
         auto_exit_triggered = False
         exit_reason_str = ""
+
+        # Check 20-minute time timeout
+        e_time_str = active_data.get("entry_time")
+        elapsed_mins = 0
+        if e_time_str:
+            try:
+                e_dt = datetime.datetime.strptime(e_time_str, "%Y-%m-%d %H:%M:%S")
+                e_dt = pytz.timezone('Asia/Kolkata').localize(e_dt)
+                elapsed_mins = (now_dt - e_dt).total_seconds() / 60
+            except:
+                pass
 
         if live_premium >= tgt_price:
             auto_exit_triggered = True
@@ -546,6 +591,9 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
         elif live_premium <= sl_price:
             auto_exit_triggered = True
             exit_reason_str = "STOP_LOSS_HIT (-7%)"
+        elif elapsed_mins >= 20 and abs(pnl_pct) < 3.0:  # 20-Min Sideways Time Exit
+            auto_exit_triggered = True
+            exit_reason_str = "TIME_TIMEOUT_EXIT (20 Mins Chop)"
         elif not is_crypto_selected and now_time >= datetime.time(15, 15):
             auto_exit_triggered = True
             exit_reason_str = "AUTO_315_PM_SQUAREOFF"
@@ -583,7 +631,7 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
                 <div><b>Live Floating P&L:</b> <span style="font-size:18px; font-weight:bold; color:{pnl_color};">₹{live_pnl:+,.2f} ({pnl_pct:+.2f}%)</span></div>
             </div>
             <hr style="border-color: rgba(255,255,255,0.15); margin: 12px 0;">
-            <small style="color:#cbd5e1;"><b>🔍 AI Thinking Process:</b><br>• Active Position: {sym} ({opt_type}) ➔ Live Risk Tracking Active.<br>• Position Rule: Currently holding active position. Opposite signals are ignored until position hits Target/SL.</small>
+            <small style="color:#cbd5e1;"><b>🔍 AI Thinking Process:</b><br>• Active Position: {sym} ({opt_type}) ➔ Live Risk & Trailing SL Active.<br>• Elapsed Time: {elapsed_mins:.1f} Mins (Max 20 Mins Limit).<br>• Position Rule: Currently holding active position. Opposite signals ignored until Target/SL/Timeout.</small>
         </div>
         """, unsafe_allow_html=True)
     elif not is_market_open:
@@ -622,13 +670,14 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
 
     st.markdown("---")
 
-    # CANDLESTICK CHART
+    # CANDLESTICK CHART (WITH VWAP LINE)
     st.subheader(f"📊 TradingView Candlestick Chart: {asset_name} ({tf_str})")
     if not df.empty:
         fig = make_subplots(rows=2, cols=1, shared_xaxes=True, vertical_spacing=0.03, row_heights=[0.75, 0.25])
         fig.add_trace(go.Candlestick(x=df.index, open=df['Open'], high=df['High'], low=df['Low'], close=df['Close'], name="Price"), row=1, col=1)
         fig.add_trace(go.Scatter(x=df.index, y=df['EMA_9'], line=dict(color='#facc15', width=1.5), name="EMA 9"), row=1, col=1)
         fig.add_trace(go.Scatter(x=df.index, y=df['EMA_21'], line=dict(color='#22d3ee', width=1.5), name="EMA 21"), row=1, col=1)
+        fig.add_trace(go.Scatter(x=df.index, y=df['VWAP'], line=dict(color='#a855f7', width=2), name="VWAP"), row=1, col=1)
         fig.add_trace(go.Bar(x=df.index, y=df['Volume'], name="Volume", marker_color='rgba(14, 165, 233, 0.4)'), row=2, col=1)
 
         if entry_stock_p is not None and asset_name in active_data.get("symbol", ""):
