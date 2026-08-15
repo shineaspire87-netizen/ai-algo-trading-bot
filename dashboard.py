@@ -117,8 +117,6 @@ WATCHLIST = {
     "ETHEREUM": "ETH-USD"
 }
 
-TELEGRAM_BOT_TOKEN = "7864817112:AAFq2c4N3M055W6u1g0wY6q0P5bBqY"
-TELEGRAM_CHAT_ID = "1388656143"
 
 # 🟢 PERMANENT GOOGLE SHEETS CLOUD DATABASE WEBHOOK URL (Version 2 Read & Write)
 GOOGLE_SHEET_URL = "https://script.google.com/macros/s/AKfycbyavkzC8zCDG0gR274a3EiusQ1ji72mMi6_Ot5dT0L0r0uXfxDHfEnF87NVniJXyybg/exec"
@@ -150,25 +148,22 @@ def sync_trade_to_google_sheet(trade_record):
     except Exception as e:
         print(f"Google Sheet Sync Error: {e}")
 
-# 🟢 FAIL-SAFE TELEGRAM NOTIFIER INTEGRATION
-try:
-    from notifier import send_telegram_message
-    def send_telegram_alert(msg):
-        try:
-            send_telegram_message(msg)
-        except:
-            pass
-except:
-    def send_telegram_alert(msg):
-        try:
-            # Fallback direct Telegram API request
-            token = "7864817112:AAFq2c4N3M055W6u1g0wY6q0P5bBqY" # Replace with exact full token if needed
-            chat_id = "1388656143"
-            url = f"https://api.telegram.org/bot{token}/sendMessage"
-            payload = {"chat_id": chat_id, "text": msg, "parse_mode": "HTML"}
-            requests.post(url, json=payload, timeout=5)
-        except:
-            pass
+TELEGRAM_BOT_TOKEN = "7864817112:AAFq2c4N3M055W6u1g0wY6q0P5bBqY"
+TELEGRAM_CHAT_ID = "1388656143"
+
+def send_telegram_alert(msg):
+    """Bulletproof Dual-Route Telegram Notifier"""
+    try:
+        url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+        payload = {"chat_id": TELEGRAM_CHAT_ID, "text": msg, "parse_mode": "HTML"}
+        resp = requests.post(url, json=payload, timeout=5)
+        if resp.status_code != 200:
+            import urllib.parse
+            encoded_msg = urllib.parse.quote(msg)
+            get_url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage?chat_id={TELEGRAM_CHAT_ID}&text={encoded_msg}&parse_mode=HTML"
+            requests.get(get_url, timeout=5)
+    except Exception as e:
+        print(f"Telegram Alert Error: {e}")
 
 def fetch_real_today_news_rss():
     """Parses Google News RSS Feed for past 24h market sentiment"""
@@ -217,6 +212,25 @@ def calculate_hurst_exponent(ts: pd.Series, max_lag: int = 20) -> float:
         return 0.50
 
 st.sidebar.header("🕹️ Control Panel")
+
+# 🟢 SIDEBAR ACTIVE TRADE GLOW INDICATOR
+ACTIVE_JSON = "active_trade.json"
+if os.path.exists(ACTIVE_JSON):
+    try:
+        with open(ACTIVE_JSON, "r", encoding="utf-8") as f:
+            side_active = json.load(f)
+            if side_active.get("status") == "ACTIVE":
+                act_sym = side_active.get("symbol", "").split("_")[0]
+                act_type = side_active.get("type", "CALL")
+                st.sidebar.markdown(f"""
+                <div style="background: rgba(225, 29, 72, 0.25); border: 2px solid #f43f5e; border-radius: 10px; padding: 12px; margin-bottom: 15px; color: white;">
+                    <h4 style="margin:0; color:#f43f5e;">🚨 ACTIVE TRADE RUNNING!</h4>
+                    <p style="margin:5px 0 0 0; font-size:15px; font-weight:bold;">Asset: {act_sym} ({act_type})</p>
+                    <small style="color:#cbd5e1;">Select <b>{act_sym}</b> in chart to manage position.</small>
+                </div>
+                """, unsafe_allow_html=True)
+    except:
+        pass
 selected_name = st.sidebar.selectbox("Select Asset Chart to View:", list(WATCHLIST.keys()), index=0)
 selected_symbol = WATCHLIST[selected_name]
 timeframe = st.sidebar.selectbox("Select Candle Timeframe:", ["1m", "5m", "15m", "1h", "1d"], index=1)
