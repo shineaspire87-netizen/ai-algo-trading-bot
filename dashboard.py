@@ -1,4 +1,4 @@
-# dashboard.py - Pro Terminal with 24/7 Crypto Watchlist Support
+# dashboard.py - Fixed Exact IST Timezone & 24/7 Crypto Watchlist Support
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
@@ -6,6 +6,7 @@ from plotly.subplots import make_subplots
 import os
 import json
 import datetime
+import pytz
 import requests
 import xml.etree.ElementTree as ET
 import yfinance as yf
@@ -35,15 +36,15 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 WATCHLIST = {
-    'BANKNIFTY': '^NSEBANK',
-    'NIFTY50': '^NSEI',
-    'RELIANCE': 'RELIANCE.NS',
-    'HDFCBANK': 'HDFCBANK.NS',
-    'ICICIBANK': 'ICICIBANK.NS',
-    'INFY': 'INFY.NS',
-    'SBIN': 'SBIN.NS',
-    'BITCOIN': 'BTC-USD',
-    'ETHEREUM': 'ETH-USD'
+    "BANKNIFTY": "^NSEBANK",
+    "NIFTY50": "^NSEI",
+    "RELIANCE": "RELIANCE.NS",
+    "HDFCBANK": "HDFCBANK.NS",
+    "ICICIBANK": "ICICIBANK.NS",
+    "INFY": "INFY.NS",
+    "SBIN": "SBIN.NS",
+    "BITCOIN": "BTC-USD",
+    "ETHEREUM": "ETH-USD"
 }
 
 def fetch_real_today_news_rss():
@@ -70,12 +71,12 @@ def fetch_real_today_news_rss():
                 high_risk = True
 
         if high_risk:
-            status = "🔴 HIGH RISK NEWS DETECTED (அபாயகரமான செய்திகள் கண்டறியப்பட்டுள்ளன!)"
-            advice = "⚠️ **பாட் முடிவெடுத்தல்:** உலகளாவிய செய்திகளில் பெரிய பேரபாயச் செய்திகள் கண்டறியப்பட்டுள்ளன. அசாதாரண நஷ்டங்களைத் தவிர்க்க பாட் இன்று டிரேடிங்கைத் தவிர்க்கிறது (Trading Skipped Today)."
+            status = "🔴 HIGH RISK NEWS DETECTED (இன்றைய செய்திகளில் அபாயம்!)"
+            advice = "⚠️ **பாட் முடிவெடுத்தல்:** இன்றைய செய்திகளில் சந்தை வீழ்ச்சி / போர்ப் பதற்றம் சுட்டிக்காட்டப்பட்டுள்ளது. அசாதாரண நஷ்டத்தைத் தவிர்க்க பாட் இன்று டிரேடிங்கைத் தவிர்க்கிறது (Trading Skipped Today)."
             theme = "news-box-red"
         else:
-            status = "🟢 TODAY'S NEWS SENTIMENT STABLE (செய்திகள் நிலவரம் சாதகமாக உள்ளது)"
-            advice = "✅ **பாட் முடிவெடுத்தல்:** சந்தையைப் பாதிக்கக்கூடிய பேரபாயங்கள் எதுவும் செய்திகளில் இல்லை. பாட் வழக்கம் போல் டிரேடிங் செய்ய அனுமதி அளிக்கிறது."
+            status = "🟢 TODAY'S NEWS SENTIMENT STABLE (இன்றைய செய்திகள் சாதகமாக உள்ளன)"
+            advice = "✅ **பாட் முடிவெடுத்தல்:** இன்றைய செய்திகளில் சந்தையைப் பாதிக்கக்கூடிய பேராபத்துகள் எதுவும் இல்லை. பாட் வழக்கம்போல் டிரேடிங் செய்ய அனுமதி அளிக்கிறது."
             theme = "news-box-green"
 
         if not headlines:
@@ -94,7 +95,9 @@ period_map = {"1m": "1d", "5m": "5d", "15m": "5d", "1h": "1mo", "1d": "3mo"}
 
 @st.fragment(run_every="3s")
 def render_dashboard_main(asset_name, asset_symbol, tf_str):
-    now_dt = datetime.datetime.now()
+    # EXACT IST TIMEZONE FIX
+    ist_tz = pytz.timezone('Asia/Kolkata')
+    now_dt = datetime.datetime.now(ist_tz)
     now_time = now_dt.time()
     weekday_idx = now_dt.weekday()
 
@@ -118,7 +121,7 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
         st.markdown(f"""
         <div class="clock-banner">
             📅 {now_dt.strftime('%A, %d %B %Y')}<br>
-            ⏰ {now_dt.strftime('%H:%M:%S IST')}
+            ⏰ {now_dt.strftime('%I:%M:%S %p IST')}
         </div>
         """, unsafe_allow_html=True)
 
@@ -329,7 +332,6 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
         last_dt = df.index[-1]
         padding_dt = last_dt + pd.Timedelta(minutes=30)
 
-        # Apply Rangebreaks only for stock charts (Crypto runs 24/7)
         rb = [] if is_crypto_selected else [dict(bounds=["sat", "mon"]), dict(bounds=[15.5, 9.15], pattern="hour")]
 
         fig.update_xaxes(
