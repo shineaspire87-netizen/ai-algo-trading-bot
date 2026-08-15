@@ -1,4 +1,4 @@
-# dashboard.py - Natural Conversational AI Partner Chatbot Fix
+# dashboard.py - Antony Quant AI Algo Terminal (Complete Autonomous Engine & Live Sync)
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -14,8 +14,14 @@ import yfinance as yf
 import ta
 from paper_broker import PaperBroker
 
-st.set_page_config(page_title="ANTONY Quant AI Terminal", page_icon="antonypic.png" if os.path.exists("antonypic.png") else "⚡", layout="wide", initial_sidebar_state="collapsed")
+st.set_page_config(
+    page_title="ANTONY Quant AI Terminal", 
+    page_icon="antonypic.png" if os.path.exists("antonypic.png") else "⚡", 
+    layout="wide", 
+    initial_sidebar_state="collapsed"
+)
 
+# Custom Glassmorphism Theme Styling
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap');
@@ -96,7 +102,20 @@ WATCHLIST = {
     "ETHEREUM": "ETH-USD"
 }
 
+TELEGRAM_BOT_TOKEN = "7864817112:AAFq2c4N3M055W6u1g0wY6q0P5bBqY"
+TELEGRAM_CHAT_ID = "1388656143"
+
+def send_telegram_alert(msg):
+    """Instant Telegram HTML Alert Sender"""
+    try:
+        url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+        payload = {"chat_id": TELEGRAM_CHAT_ID, "text": msg, "parse_mode": "HTML"}
+        requests.post(url, json=payload, timeout=3)
+    except:
+        pass
+
 def fetch_real_today_news_rss():
+    """Parses Google News RSS Feed for past 24h market sentiment"""
     rss_url = "https://news.google.com/rss/search?q=NSE+India+stock+market+Nifty+when:1d&hl=en-IN&gl=IN&ceid=IN:en"
     try:
         headers = {'User-Agent': 'Mozilla/5.0'}
@@ -117,11 +136,11 @@ def fetch_real_today_news_rss():
 
         if high_risk:
             status = "🔴 HIGH RISK NEWS DETECTED (இன்றைய செய்திகளில் அபாயம்!)"
-            advice = "⚠️ **பாட் முடிவெடுத்தல்:** இன்றைய செய்திகளில் சந்தை வீழ்ச்சி / போர்ப் பதற்றம் சுட்டிக்காட்டப்பட்டுள்ளது. பாட் இன்று டிரேடிங்கைத் தவிர்க்கிறது (Trading Skipped Today)."
+            advice = "⚠️ **பாட் முடிவெடுத்தல்:** இன்றைய செய்திகளில் சந்தை வீழ்ச்சி சுட்டிக்காட்டப்பட்டுள்ளது. பாட் இன்று டிரேடிங்கைத் தவிர்க்கிறது."
             theme = "glass-card-red"
         else:
             status = "🟢 TODAY'S NEWS SENTIMENT STABLE (செய்திகள் நிலவரம் சாதகமாக உள்ளது)"
-            advice = "✅ **பாட் முடிவெடுத்தல்:** இன்றைய செய்திகளில் சந்தையைப் பாதிக்கக்கூடிய பேராபத்துகள் எதுவும் இல்லை. பாட் வழக்கம்போல் டிரேடிங் செய்ய அனுமதி அளிக்கிறது."
+            advice = "✅ **பாட் முடிவெடுத்தல்:** இன்றைய செய்திகளில் பேராபத்துகள் எதுவும் இல்லை. பாட் வழக்கம்போல் டிரேடிங் செய்ய அனுமதி அளிக்கிறது."
             theme = "glass-card-green"
 
         if not headlines:
@@ -129,7 +148,7 @@ def fetch_real_today_news_rss():
 
         return status, advice, theme, headlines
     except Exception as e:
-        return "🟢 TODAY'S NEWS SENTIMENT STABLE", "✅ இன்றைய செய்திகள் நிலவரம் சாதகமாக உள்ளது.", "news-box-green", ["• Today's live news feed connected."]
+        return "🟢 TODAY'S NEWS SENTIMENT STABLE", "✅ இன்றைய செய்திகள் நிலவரம் சாதகமாக உள்ளது.", "glass-card-green", ["• Today's live news feed connected."]
 
 st.sidebar.header("🕹️ Control Panel")
 selected_name = st.sidebar.selectbox("Select Asset Chart to View:", list(WATCHLIST.keys()), index=0)
@@ -143,43 +162,82 @@ def get_intelligent_ai_response(user_input, asset_name, current_price, rsi_val, 
     prompt = user_input.lower().strip()
     p_curr = "$" if "USD" in asset_name or "BITCOIN" in asset_name or "ETHEREUM" in asset_name else "₹"
 
-    # 1. Market Holiday / Weekend Questions
     if any(w in prompt for w in ["leave", "holiday", "closed", "மூடி", "விடுமுறை", "சனிக்கிழமை", "ஞாயிறு", "saturday", "sunday"]):
         if not is_market_open:
-            return f"ஆமாம் ANTONY! 🎯 இன்று சனிக்கிழமை (ஆகஸ்ட் 15) சுதந்திர தின விடுமுறை என்பதால் இந்தியப் பங்குச் சந்தை ({asset_name}) முடிவடைந்துள்ளது! திங்கட்கிழமை காலை 09:15 மணிக்குத் தான் சந்தை திறக்கும். நீங்கள் இப்போது விடுமுறை நாளில் 24/7 இயங்கும் **BITCOIN** அல்லது **ETHEREUM** கிரிப்டோ சந்தையைச் சோதிக்கலாம்!"
+            return f"ஆமாம் ANTONY! 🎯 இன்று சுதந்திர தின விடுமுறை என்பதால் இந்தியப் பங்குச் சந்தை ({asset_name}) முடிவடைந்துள்ளது! திங்கட்கிழமை காலை 09:15 மணிக்குத் தான் சந்தை திறக்கும். நீங்கள் இப்போது 24/7 இயங்கும் **BITCOIN** அல்லது **ETHEREUM** கிரிப்டோ சந்தையைச் சோதிக்கலாம்!"
         else:
             return f"இல்லை ANTONY, இப்போது சந்தை நேரலையில் திறந்துள்ளது! {asset_name} நேரலை விலை {p_curr}{current_price:,.2f}."
-
-    # 2. Asset Selection Clarification ("banknifty ah?", "ethirium ah?")
     elif any(w in prompt for w in ["banknifty", "nifty", "reliance", "bitcoin", "ethereum", "hdfc", "icici", "sbin", "infy"]):
-        return f"ஆமாம் ANTONY! நீங்கள் தற்போது இடதுபக்க பட்டியலிலிருந்து **{asset_name}** சார்ட்டைத் தேர்வு செய்துள்ளீர்கள். தற்போதைய நேரலை விலை: {p_curr}{current_price:,.2f} (RSI: {rsi_val:.1f}). விருப்பப்பட்டால் இடதுபக்க Control Panel-ல் வேறு பங்கைத் தேர்வு செய்து பார்க்கலாம்!"
-
-    # 3. Name / Identity Questions ("unnoda name ena?", "who are you?")
-    elif any(w in prompt for w in ["name", "பெயர்", "யாரு", "who", "என்னா ஆளு"]):
+        return f"ஆமாம் ANTONY! நீங்கள் தற்போது இடதுபக்க பட்டியலிலிருந்து **{asset_name}** சார்ட்டைத் தேர்வு செய்துள்ளீர்கள். தற்போதைய நேரலை விலை: {p_curr}{current_price:,.2f} (RSI: {rsi_val:.1f})."
+    elif any(w in prompt for w in ["name", "பெயர்", "யாரு", "who"]):
         return "என் பெயர் **Antony's Quant AI**! 🤖 நான் உங்களுக்கான பிரத்யேக அல்கோ டிரேடிங் பார்ட்னர் ANTONY! 24 மணிநேரமும் சந்தையைக் கவனித்து உங்களுக்கு லாபகரமான சிக்னல்களைத் தருவது தான் என் வேலை!"
-
-    # 4. Greetings ("hi", "hello", "வணக்கம்", "hey")
-    elif any(w in prompt for w in ["hi", "hello", "hey", "வணக்கம்", "எப்படி இருக்கிறாய்"]):
+    elif any(w in prompt for w in ["hi", "hello", "hey", "வணக்கம்"]):
         return f"ஹாய் ANTONY! 👋 எப்படி இருக்கீங்க? இன்று நமது பாட் 89.36% AI துல்லியத்துடன் {asset_name} சந்தையைக் கவனித்துக் கொண்டிருக்கிறது!"
-
-    # 5. P&L / Capital Questions ("profit", "pnl", "capital", "லாபம்")
-    elif any(w in prompt for w in ["profit", "pnl", "capital", "லாபம்", "பணம்", "money"]):
+    elif any(w in prompt for w in ["profit", "pnl", "capital", "லாபம்", "பணம்"]):
         return f"ANTONY, நமது கணக்கின் தற்போதைய மொத்த மூலதனம் ₹{current_capital:,.2f}. இதுவரை நிறைவடைந்த டிரேடுகளின் நிகர லாபம் ₹{total_pnl:,.2f} ஆகும் (வெற்றி சதவீதம்: {win_rate:.1f}%)."
-
-    # 6. Active Trade Questions ("active", "trade", "position", "டிரேட்")
-    elif any(w in prompt for w in ["active", "trade", "position", "டிரேட்", "வாங்கியிருக்கா"]):
+    elif any(w in prompt for w in ["active", "trade", "position", "டிரேட்"]):
         if active_data.get("status") == "ACTIVE":
-            return f"ஆமா ANTONY, தற்போது நேரலையில் **{active_data.get('symbol')}** டிரேட் ஓடிக் கொண்டிருக்கிறது! வாங்கிய நேரம்: {active_data.get('entry_time')}, வாங்கிய விலை: {p_curr}{active_data.get('entry_price'):.2f}."
+            return f"ஆமா ANTONY, தற்போது நேரலையில் **{active_data.get('symbol')}** டிரேட் ஓடிக் கொண்டிருக்கிறது! வாங்கிய விலை: {p_curr}{active_data.get('entry_price'):.2f}."
         else:
             return "தற்போது நேரலையில் திறந்திருக்கும் டிரேடுகள் எதுவும் இல்லை ANTONY! நமது பாட் அடுத்த 75%+ உயர் துல்லிய வாய்ப்பிற்காகச் சந்தையை ஸ்கேன் செய்து கொண்டிருக்கிறது."
-
-    # 7. Reason for Waiting / Hold Questions ("why", "ஏன்", "wait", "hold")
-    elif any(w in prompt for w in ["why", "ஏன்", "wait", "hold", "காத்திருக்கு"]):
+    elif any(w in prompt for w in ["why", "ஏன்", "wait", "hold"]):
         return f"தற்போது {asset_name} நேரலை விலை {p_curr}{current_price:,.2f}-ல் பக்கவாட்டில் (RSI: {rsi_val:.2f}) நகர்கிறது. 75%+ நம்பிக்கை வராததால் தேவையில்லாத நஷ்டத்தைத் தவிர்க்க பாட் அமைதியாகக் காத்திருக்கிறது ANTONY!"
-
-    # Default Natural Conversational Response
     else:
-        return f"நீங்கள் சொல்வது புரிகிறது ANTONY! 🎯 நான் {asset_name} நேரலைச் சந்தையை 15+ இண்டிகேட்டர்கள் கொண்டு 24/7 கவனித்து வருகிறேன். தற்போதைய விலை {p_curr}{current_price:,.2f} (RSI: {rsi_val:.1f}). உங்களுக்குக் குறிப்பிட்ட ஏதேனும் சந்தை வழிகாட்டுதல் தேவைப்பட்டாலும் என்னிடம் கேட்கலாம்!"
+        return f"நீங்கள் சொல்வது புரிகிறது ANTONY! 🎯 நான் {asset_name} நேரலைச் சந்தையை 15+ இண்டிகேட்டர்கள் கொண்டு 24/7 கவனித்து வருகிறேன். தற்போதைய விலை {p_curr}{current_price:,.2f} (RSI: {rsi_val:.1f})."
+
+def log_trade_to_csv_and_update(active_data, exit_price, exit_reason, live_pnl, current_capital, now_dt):
+    """Central Function: Appends Completed Trade to CSV and Resets Active JSON"""
+    exit_time_str = now_dt.strftime("%Y-%m-%d %H:%M:%S")
+    brokerage_fee = 45.0
+    net_pnl = round(live_pnl - brokerage_fee, 2)
+    new_capital = round(current_capital + net_pnl, 2)
+
+    new_trade_record = {
+        "Entry_Time": active_data.get("entry_time", exit_time_str),
+        "Exit_Time": exit_time_str,
+        "Symbol": active_data.get("symbol", "UNKNOWN"),
+        "Option_Type": active_data.get("type", "CALL"),
+        "Entry_Price": active_data.get("entry_price", 0.0),
+        "Exit_Price": round(exit_price, 2),
+        "Stop_Loss": active_data.get("stop_loss", 0.0),
+        "Target": active_data.get("target", 0.0),
+        "Quantity": active_data.get("qty", 15),
+        "Exit_Reason": exit_reason,
+        "Net_PnL": net_pnl,
+        "Capital_Balance": new_capital
+    }
+
+    CSV_FILE = "trades.csv"
+    if os.path.exists(CSV_FILE) and os.path.getsize(CSV_FILE) > 0:
+        try:
+            df_existing = pd.read_csv(CSV_FILE)
+            df_new = pd.DataFrame([new_trade_record])
+            df_updated = pd.concat([df_existing, df_new], ignore_index=True)
+        except:
+            df_updated = pd.DataFrame([new_trade_record])
+    else:
+        df_updated = pd.DataFrame([new_trade_record])
+    
+    df_updated.to_csv(CSV_FILE, index=False)
+
+    # Clear active position
+    ACTIVE_JSON = "active_trade.json"
+    if os.path.exists(ACTIVE_JSON):
+        with open(ACTIVE_JSON, "w", encoding="utf-8") as f:
+            json.dump({"status": "NO_POSITION"}, f, indent=4)
+
+    # Send Instant Telegram Alert
+    alert_msg = (
+        f"🏁 <b>TRADE COMPLETED & LOGGED!</b>\n\n"
+        f"<b>Symbol:</b> {active_data.get('symbol')}\n"
+        f"<b>Exit Reason:</b> {exit_reason}\n"
+        f"<b>Entry Premium:</b> ₹{active_data.get('entry_price'):.2f}\n"
+        f"<b>Exit Premium:</b> ₹{exit_price:.2f}\n"
+        f"<b>Net P&L:</b> ₹{net_pnl:+,.2f}\n"
+        f"<b>Account Capital:</b> ₹{new_capital:,.2f}"
+    )
+    send_telegram_alert(alert_msg)
+    return new_capital
 
 @st.fragment(run_every="3s")
 def render_dashboard_main(asset_name, asset_symbol, tf_str):
@@ -198,60 +256,23 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
         market_seg_badge = '<span class="market-tag-nse">🇮🇳 NSE Indian Market (Mon-Fri 09:15-15:30 IST)</span>'
 
     if weekday_idx == 4:
-        next_unlock_msg = "இன்று வெள்ளிக்கிழமை மாலை. சனி/ஞாயிறு விடுமுறை கழித்து திங்கட்கிழமை (Monday) காலை 9:15 மணிக்கு பாட் மீண்டும் தானாக அன்லாக் ஆகும்!"
+        next_unlock_msg = "இன்று வெள்ளிக்கிழமை மாலை. திங்கட்கிழமை (Monday) காலை 9:15 மணிக்கு பாட் மீண்டும் தானாக அன்லாக் ஆகும்!"
     elif weekday_idx == 5:
-        next_unlock_msg = "இன்று சனிக்கிழமை விடுமுறை நாள். திங்கட்கிழமை (Monday) காலை 9:15 மணிக்கு பாட் மீண்டும் தானாக அன்லாக் ஆகும்!"
+        next_unlock_msg = "இன்று சனிக்கிழமை விடுமுறை நாள். திங்கட்கிழமை (Monday) காலை 9:15 மணிக்கு பாட் அன்லாக் ஆகும்!"
     elif weekday_idx == 6:
         next_unlock_msg = "இன்று ஞாயிற்றுக்கிழமை விடுமுறை நாள். நாளை திங்கட்கிழமை (Monday) காலை 9:15 மணிக்கு பாட் அன்லாக் ஆகும்!"
     else:
         next_unlock_msg = "சந்தை முடிவடைந்துவிட்டது. நாளை காலை 9:15 மணிக்கு பாட் மீண்டும் தானாக அன்லாக் ஆகும்!"
 
-    head_col1, head_col2 = st.columns([0.65, 0.35])
-    with head_col1:
-        st.title("⚡ ANTONY Quant AI Algo Terminal")
-        st.markdown(f'<div class="sub-caption">Institutional Metrics | {market_seg_badge} | Live Latency: 38 ms</div>', unsafe_allow_html=True)
-    with head_col2:
-        st.markdown(f"""
-        <div class="clock-badge">
-            👤 <b>Trader: ANTONY</b><br>
-            📅 {now_dt.strftime('%A, %d %B %Y')}<br>
-            ⏰ {now_dt.strftime('%I:%M:%S %p IST')}
-        </div>
-        """, unsafe_allow_html=True)
-
-    st.markdown("---")
-
-    df = yf.download(tickers=asset_symbol, period=period_map[tf_str], interval=tf_str, progress=False)
-    if isinstance(df.columns, pd.MultiIndex):
-        df.columns = df.columns.get_level_values(0)
-
-    if not df.empty:
-        df['EMA_9'] = ta.trend.ema_indicator(df['Close'], window=9)
-        df['EMA_21'] = ta.trend.ema_indicator(df['Close'], window=21)
-        df['RSI'] = ta.momentum.rsi(df['Close'], window=14)
-        current_price = float(df['Close'].iloc[-1])
-        atm_strike = round(current_price / 100) * 100
-        rsi_val = float(df['RSI'].iloc[-1])
-        ema9_val = float(df['EMA_9'].iloc[-1])
-        ema21_val = float(df['EMA_21'].iloc[-1])
-    else:
-        current_price, atm_strike, rsi_val, ema9_val, ema21_val = 0.0, 0, 50.0, 0.0, 0.0
-
-    range_low = round(current_price * 0.995, 2)
-    range_high = round(current_price * 1.005, 2)
-
+    # READ TRADES.CSV & CALCULATE METRICS DYNAMICALLY
     CSV_FILE = "trades.csv"
-    
-    # Safe CSV Loading with Error Handling
-    try:
-        if os.path.exists(CSV_FILE) and os.path.getsize(CSV_FILE) > 0:
+    if os.path.exists(CSV_FILE) and os.path.getsize(CSV_FILE) > 0:
+        try:
             trades_df = pd.read_csv(CSV_FILE)
-        else:
-            # ஃபைல் காலியாக இருந்தால் அல்லது இல்லை என்றால் எம்டி டேட்டாபிரேம் உருவாக்கும்
-            trades_df = pd.DataFrame(columns=['Timestamp', 'Symbol', 'Option_Type', 'Entry_Price', 'Exit_Price', 'Quantity', 'Exit_Reason', 'PnL', 'Capital_Balance'])
-    except Exception as e:
-        # கரப்ட் ஆகியிருந்தால் ஆப் கிராஷ் ஆகாமல் தடுக்க
-        trades_df = pd.DataFrame(columns=['Timestamp', 'Symbol', 'Option_Type', 'Entry_Price', 'Exit_Price', 'Quantity', 'Exit_Reason', 'PnL', 'Capital_Balance'])
+        except:
+            trades_df = pd.DataFrame()
+    else:
+        trades_df = pd.DataFrame()
 
     total_trades = len(trades_df)
     
@@ -281,6 +302,39 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
         profit_factor = 1.00
         current_capital = 100022.50
 
+    head_col1, head_col2 = st.columns([0.65, 0.35])
+    with head_col1:
+        st.title("⚡ ANTONY Quant AI Algo Terminal")
+        st.markdown(f'<div class="sub-caption">Institutional Metrics | {market_seg_badge} | Live Latency: 38 ms</div>', unsafe_allow_html=True)
+    with head_col2:
+        st.markdown(f"""
+        <div class="clock-badge">
+            👤 <b>Trader: ANTONY</b><br>
+            📅 {now_dt.strftime('%A, %d %B %Y')}<br>
+            ⏰ {now_dt.strftime('%I:%M:%S %p IST')}
+        </div>
+        """, unsafe_allow_html=True)
+
+    st.markdown("---")
+
+    # CANDLE DATA & TECHNICAL INDICATORS
+    df = yf.download(tickers=asset_symbol, period=period_map[tf_str], interval=tf_str, progress=False)
+    if isinstance(df.columns, pd.MultiIndex):
+        df.columns = df.columns.get_level_values(0)
+
+    if not df.empty:
+        df['EMA_9'] = ta.trend.ema_indicator(df['Close'], window=9)
+        df['EMA_21'] = ta.trend.ema_indicator(df['Close'], window=21)
+        df['RSI'] = ta.momentum.rsi(df['Close'], window=14)
+        current_price = float(df['Close'].iloc[-1])
+        atm_strike = round(current_price / 100) * 100
+        rsi_val = float(df['RSI'].iloc[-1])
+        ema9_val = float(df['EMA_9'].iloc[-1])
+        ema21_val = float(df['EMA_21'].iloc[-1])
+    else:
+        current_price, atm_strike, rsi_val, ema9_val, ema21_val = 0.0, 0, 50.0, 0.0, 0.0
+
+    # TOP KPI METRICS CARDS
     k1, k2, k3, k4, k5, k6 = st.columns(6)
     k1.metric(f"{asset_name} Price", f"{p_curr}{current_price:,.2f}", delta=f"ATM: {atm_strike}")
     k2.metric("Total Capital", f"₹{current_capital:,.2f}")
@@ -303,67 +357,54 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
     scan_time_str = now_dt.strftime('%I:%M:%S %p')
     scan_sec_count = (now_dt.minute * 60 + now_dt.second) // 3
 
-    # ==========================================
-    # 🚀 FIX: COOLDOWN & INTRADAY QUICK SCALPER LOGIC
-    # ==========================================
-
-    # 1. Read Trades History to check Cooldown & Daily Limit
+    # COOLDOWN & DAILY LIMIT CHECK
     trades_today_count = 0
     last_exit_time = None
 
-    if os.path.exists("trades.csv"):
+    if total_trades > 0 and 'Exit_Time' in trades_df.columns:
+        today_str = now_dt.strftime('%Y-%m-%d')
+        today_trades = trades_df[trades_df['Exit_Time'].astype(str).str.contains(today_str)]
+        trades_today_count = len(today_trades)
+        
         try:
-            t_df = pd.read_csv("trades.csv")
-            if not t_df.empty and 'Exit_Time' in t_df.columns:
-                # Get today's trades count
-                today_str = now_dt.strftime('%Y-%m-%d')
-                today_trades = t_df[t_df['Exit_Time'].astype(str).str.contains(today_str)]
-                trades_today_count = len(today_trades)
-                
-                # Get last exit timestamp for 15-min cooldown
-                last_exit_str = t_df['Exit_Time'].iloc[-1]
-                last_exit_time = datetime.datetime.strptime(last_exit_str, "%Y-%m-%d %H:%M:%S")
-                last_exit_time = pytz.timezone('Asia/Kolkata').localize(last_exit_time)
-        except Exception as e:
+            last_exit_str = trades_df['Exit_Time'].iloc[-1]
+            last_exit_time = datetime.datetime.strptime(last_exit_str, "%Y-%m-%d %H:%M:%S")
+            last_exit_time = pytz.timezone('Asia/Kolkata').localize(last_exit_time)
+        except:
             pass
 
-    # Check if Cooldown Period (15 Minutes) is Active
     is_cooldown_active = False
     cooldown_remaining_mins = 0
     if last_exit_time is not None:
         time_diff_sec = (now_dt - last_exit_time).total_seconds()
-        if time_diff_sec < 900:  # 900 seconds = 15 minutes
+        if time_diff_sec < 900:  # 15 minutes cooldown
             is_cooldown_active = True
             cooldown_remaining_mins = int((900 - time_diff_sec) // 60) + 1
 
-    # Check Daily Trade Limit (Max 3 Trades)
     is_daily_limit_reached = (trades_today_count >= 3)
 
-    # 2. EVALUATE INTRA DAY SCALPING SIGNALS (1-5 Candles Exit)
+    # EVALUATE AI SIGNAL
     if not is_market_open and not is_crypto_selected:
         bot_signal_str = "MARKET CLOSED 🔒 (TRADING PAUSED)"
         card_theme = "glass-card"
         ai_conf = "0.00% (Market Offline)"
-        reason_msg = f"<b>பாட் நிலை:</b> இன்று {asset_name} சந்தை விடுமுறை என்பதால் வர்த்தகம் நிறுத்தப்பட்டுள்ளது."
+        reason_msg = f"<b>பாட் நிலை:</b> இன்று {asset_name} இந்தியப் பங்குச் சந்தை விடுமுறை என்பதால் சந்தை முடிவடைந்துள்ளது. {next_unlock_msg}"
         thought_steps = "• Step 1: Market Hours Check ➔ 🔒 CLOSED<br>• Step 2: AI Scanner ➔ ⏸️ PAUSED<br>• Step 3: Execution Engine ➔ 🔒 LOCKED UNTIL MARKET OPEN"
         raw_sig = "HOLD"
-
     elif is_daily_limit_reached:
         bot_signal_str = "DAILY LIMIT REACHED 🛑 (MAX 3 TRADES DONE)"
         card_theme = "glass-card-yellow"
         ai_conf = "0.00% (Locked)"
-        reason_msg = f"<b>பாட் பாதுகாப்பு எச்சரிக்கை:</b> இன்றைய நாளுக்கான 3 டிரேடுகள் நிறைவடைந்துவிட்டன. அதிக டிரேட்களைத் தவிர்த்து மூலதனத்தைப் பாதுகாக்க பாட் பூட்டப்பட்டுள்ளது!"
+        reason_msg = f"<b>பாட் பாதுகாப்பு எச்சரிக்கை:</b> இன்றைய நாளுக்கான 3 டிரேடுகள் நிறைவடைந்துவிட்டன. மூலதனத்தைப் பாதுகாக்க பாட் பூட்டப்பட்டுள்ளது!"
         thought_steps = "• Step 1: Daily Trade Count ➔ 🛑 3 TRADES EXCEEDED<br>• Step 2: Risk Engine ➔ 🔒 BLOCKED FOR CAPITAL PROTECTION"
         raw_sig = "HOLD"
-
     elif is_cooldown_active:
         bot_signal_str = f"COOLDOWN ACTIVE ⏳ ({cooldown_remaining_mins} Mins Left)"
         card_theme = "glass-card-yellow"
         ai_conf = "0.00% (Waiting)"
         reason_msg = f"<b>பாட் கூல்டவுன்:</b> முந்தைய டிரேட் க்ளோஸ் செய்யப்பட்டுள்ளது. அவசரப்பட்டு மீண்டும் டிரேட் எடுப்பதைத் தவிர்க்க பாட் இன்னும் <b>{cooldown_remaining_mins} நிமிடங்கள்</b> காத்திருக்கிறது."
-        thought_steps = f"• Step 1: Cooldown Timer check ➔ ⏳ ACTIVE ({cooldown_remaining_mins} Mins Left)<br>• Step 2: Entry Filter ➔ ⏸️ ON HOLD FOR COOLDOWN"
+        thought_steps = f"• Step 1: Cooldown Timer ➔ ⏳ ACTIVE ({cooldown_remaining_mins} Mins Left)<br>• Step 2: Entry Filter ➔ ⏸️ ON HOLD FOR COOLDOWN"
         raw_sig = "HOLD"
-
     elif ema9_val > ema21_val and rsi_val > 60:
         bot_signal_str = "QUICK SCALP: BUY CALL 🚀 (Target: +12% | SL: -7%)"
         card_theme = "glass-card-green"
@@ -371,7 +412,6 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
         reason_msg = f"<b>இன்ட்ராடே சிக்னல்:</b> {asset_name} சார்ட்டில் 5-நிமிட கேண்டிலில் <b>EMA Breakout + RSI {rsi_val:.1f}</b> உறுதி செய்யப்பட்டுள்ளது. 1-5 கேண்டில்களுக்குள் விரைவாக +12% ஆப்ஷன் பிரீமியம் இலக்கை எட்ட வாய்ப்புள்ளது!"
         thought_steps = f"• Step 1: News Risk Filter ➔ 🟢 SAFE<br>• Step 2: Scalper Signal ➔ 🟢 EMA BUY CALL CONFIRMED<br>• Step 3: AI Confidence ({ai_conf}) ➔ 🟢 EXECUTE SCALP"
         raw_sig = "BUY_CALL"
-
     elif ema9_val < ema21_val and rsi_val < 40:
         bot_signal_str = "QUICK SCALP: BUY PUT 📉 (Target: +12% | SL: -7%)"
         card_theme = "glass-card-red"
@@ -379,7 +419,6 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
         reason_msg = f"<b>இன்ட்ராடே சிக்னல்:</b> {asset_name} சார்ட்டில் 5-நிமிட கேண்டிலில் <b>EMA Breakdown + RSI {rsi_val:.1f}</b> உறுதி செய்யப்பட்டுள்ளது. 1-5 கேண்டில்களுக்குள் விரைவாக +12% ஆப்ஷன் பிரீமியம் இலக்கை எட்ட வாய்ப்புள்ளது!"
         thought_steps = f"• Step 1: News Risk Filter ➔ 🟢 SAFE<br>• Step 2: Scalper Signal ➔ 🟢 EMA BUY PUT CONFIRMED<br>• Step 3: AI Confidence ({ai_conf}) ➔ 🟢 EXECUTE SCALP"
         raw_sig = "BUY_PUT"
-
     else:
         bot_signal_str = "HOLD ⏸️ (SCANNING FOR VOLT & BREAKOUT)"
         card_theme = "glass-card-yellow"
@@ -388,29 +427,49 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
         thought_steps = f"• Step 1: News Risk Filter ➔ 🟢 SAFE<br>• Step 2: Sideways Buffer ➔ 🟡 NO TREND DETECTED<br>• Step 3: Indicator Filter ➔ ⏸️ RSI: {rsi_val:.1f}"
         raw_sig = "HOLD"
 
-    # 3. AUTO-TRIGGER SCALPING TRADE WITH QUICK TARGET & SL
+    # AUTO-TRIGGER PAPER TRADE
     if raw_sig in ["BUY_CALL", "BUY_PUT"] and active_data.get("status") == "NO_POSITION" and is_market_open and not is_cooldown_active and not is_daily_limit_reached:
-        broker = PaperBroker(initial_capital=current_capital)
         opt_type = "CALL" if raw_sig == "BUY_CALL" else "PUT"
         trade_sym = f"{asset_name}_OPT_{opt_type}"
-        
         prem = round(current_price * 0.01 if "NIFTY" in asset_name else current_price * 0.02, 2)
         
-        # Quick Scalping Risk Rules: Target +12%, SL -7%
-        target_prem = round(prem * 1.12, 2)
+        tgt_prem = round(prem * 1.12, 2)
         sl_prem = round(prem * 0.93, 2)
-        
-        broker.buy_option(trade_sym, opt_type, prem, stock_price=current_price, qty=15)
-        
-        # Reload active trade state
-        if os.path.exists(ACTIVE_JSON):
-            with open(ACTIVE_JSON, "r", encoding="utf-8") as f:
-                active_data = json.load(f)
+        qty = 15
+
+        active_data = {
+            "status": "ACTIVE",
+            "symbol": trade_sym,
+            "type": opt_type,
+            "entry_time": now_dt.strftime("%Y-%m-%d %H:%M:%S"),
+            "entry_price": prem,
+            "stop_loss": sl_prem,
+            "target": tgt_prem,
+            "qty": qty,
+            "entry_stock_price": current_price,
+            "target_stock_price": round(current_price * (1.006 if opt_type == "CALL" else 0.994), 2),
+            "sl_stock_price": round(current_price * (0.996 if opt_type == "CALL" else 1.004), 2)
+        }
+
+        with open(ACTIVE_JSON, "w", encoding="utf-8") as f:
+            json.dump(active_data, f, indent=4)
+
+        alert_msg = (
+            f"🚨 <b>ALGO TRADE ENTERED!</b>\n\n"
+            f"<b>Symbol:</b> {trade_sym} ({opt_type})\n"
+            f"<b>Stock Price:</b> {p_curr}{current_price:,.2f}\n"
+            f"<b>Option Premium:</b> ₹{prem:.2f}\n"
+            f"<b>Quantity:</b> {qty}\n"
+            f"<b>Stop Loss:</b> ₹{sl_prem:.2f} (-7%)\n"
+            f"<b>Target:</b> ₹{tgt_prem:.2f} (+12%)\n"
+            f"<b>Time:</b> {now_dt.strftime('%H:%M:%S')}"
+        )
+        send_telegram_alert(alert_msg)
+        st.rerun()
 
     # NEWS PANEL
     st.subheader("📰 Today's Live Market News Sentiment AI (Past 24h Feed)")
     news_status, news_advice, news_theme, news_list = fetch_real_today_news_rss()
-    
     st.markdown(f"""
     <div class="{news_theme}">
         <h4 style="margin:0;">{news_status}</h4>
@@ -430,16 +489,14 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
     if active_data.get("status") == "ACTIVE" and is_market_open:
         sym = active_data.get("symbol")
         opt_type = active_data.get("type", "CALL")
-        e_time = active_data.get("entry_time")
         e_price = float(active_data.get("entry_price", 0))
         sl_price = float(active_data.get("stop_loss", 0))
         tgt_price = float(active_data.get("target", 0))
         qty = int(active_data.get("qty", 15))
 
         e_stock_p = float(active_data.get("entry_stock_price", current_price))
-        target_stock_p = float(active_data.get("target_stock_price", e_stock_p * 1.01))
-        sl_stock_p = float(active_data.get("sl_stock_price", e_stock_p * 0.99))
-
+        target_stock_p = float(active_data.get("target_stock_price", e_stock_p * 1.006))
+        sl_stock_p = float(active_data.get("sl_stock_price", e_stock_p * 0.996))
         entry_stock_p = e_stock_p
 
         trade_asset_name = sym.split("_")[0]
@@ -451,14 +508,10 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
                 active_df.columns = active_df.columns.get_level_values(0)
             curr_active_stock_p = float(active_df['Close'].iloc[-1])
         except:
-            curr_active_stock_p = e_stock_p
+            curr_active_stock_p = current_price
 
         stock_diff = curr_active_stock_p - e_stock_p
-
-        if opt_type == "CALL":
-            premium_change = stock_diff * 0.5
-        else:
-            premium_change = -stock_diff * 0.5
+        premium_change = (stock_diff * 0.5) if opt_type == "CALL" else (-stock_diff * 0.5)
 
         live_premium = max(1.0, e_price + premium_change)
         live_pnl = (live_premium - e_price) * qty
@@ -466,35 +519,40 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
 
         risk_amount = (e_price - sl_price) * qty
         capital_risk_pct = (risk_amount / current_capital) * 100
-
         pnl_color = "#34d399" if live_pnl >= 0 else "#f87171"
 
-        is_viewing_active_asset = (asset_name == trade_asset_name)
+        # AUTONOMOUS TARGET / SL AUTO-EXIT ENGINE
+        auto_exit_triggered = False
+        exit_reason_str = ""
 
-        if is_viewing_active_asset:
-            box_class = "glass-card-green"
-            badge_html = f'<span class="badge-tag" style="background:#10b981;">🔓 ACTIVE TRADE IN VIEW ({trade_asset_name})</span>'
-        else:
-            box_class = "locked-trade-box"
-            badge_html = f'<span class="badge-tag" style="background:#475569;">🔒 LOCKED GLOBAL TRADE ({trade_asset_name})</span>'
+        if live_premium >= tgt_price:
+            auto_exit_triggered = True
+            exit_reason_str = "TARGET_HIT (+12%)"
+        elif live_premium <= sl_price:
+            auto_exit_triggered = True
+            exit_reason_str = "STOP_LOSS_HIT (-7%)"
+        elif not is_crypto_selected and now_time >= datetime.time(15, 15):
+            auto_exit_triggered = True
+            exit_reason_str = "AUTO_315_PM_SQUAREOFF"
 
-        active_thought_msg = f"• Active Position: {sym} ({opt_type}) ➔ Live Risk Tracking Active.<br>• Position Rule: Currently holding active position. Opposite signals are ignored until position hits Target/SL."
+        if auto_exit_triggered:
+            log_trade_to_csv_and_update(active_data, live_premium, exit_reason_str, live_pnl, current_capital, now_dt)
+            st.success(f"🎉 AUTO EXIT EXECUTED: {exit_reason_str}! CSV & Capital Updated.")
+            st.rerun()
 
+        # MANUAL FORCE CLOSE BUTTON
         col_title, col_force = st.columns([0.75, 0.25])
         with col_force:
             if st.button("🔴 FORCE CLOSE POSITION NOW", use_container_width=True):
-                broker = PaperBroker(initial_capital=current_capital)
-                broker.position = active_data
-                broker._log_trade(live_premium, "MANUAL_FORCE_CLOSE", live_pnl, 45.0, live_pnl - 45.0, now_dt.strftime("%Y-%m-%d %H:%M:%S"))
-                broker._clear_active_json()
-                st.success("✅ பொசிஷன் கையாலாகிய முறையில் க்ளோஸ் செய்யப்பட்டது!")
+                log_trade_to_csv_and_update(active_data, live_premium, "MANUAL_FORCE_CLOSE", live_pnl, current_capital, now_dt)
+                st.success("✅ பொசிஷன் க்ளோஸ் செய்யப்பட்டு, trades.csv & Capital கணக்கில் அப்ளிகேட் செய்யப்பட்டது!")
                 st.rerun()
 
         st.markdown(f"""
-        <div class="{box_class}">
+        <div class="glass-card-green">
             <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap:wrap; gap:10px;">
                 <h3 style="margin:0; color:#38bdf8;">🚨 ACTIVE POSITION: {sym} ({opt_type})</h3>
-                {badge_html}
+                <span class="badge-tag" style="background:#10b981;">🔓 ACTIVE LIVE TRADE</span>
             </div>
             <hr style="border-color: rgba(255,255,255,0.15); margin: 12px 0;">
             <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; font-size: 15px;">
@@ -505,16 +563,16 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
             </div>
             <hr style="border-color: rgba(255,255,255,0.15); margin: 12px 0;">
             <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; font-size: 15px;">
-                <div><b>Entry Premium:</b> {p_curr}{e_price:.2f} ➔ <b>Live Premium:</b> {p_curr}{live_premium:.2f}</div>
-                <div><b>Capital at Risk:</b> <span style="color:#f87171;">{capital_risk_pct:.2f}% ({p_curr}{risk_amount:,.2f})</span></div>
-                <div><b>Live Floating P&L:</b> <span style="font-size:18px; font-weight:bold; color:{pnl_color};">{p_curr}{live_pnl:+,.2f} ({pnl_pct:+.2f}%)</span></div>
+                <div><b>Entry Premium:</b> ₹{e_price:.2f} ➔ <b>Live Premium:</b> ₹{live_premium:.2f}</div>
+                <div><b>Capital at Risk:</b> <span style="color:#f87171;">{capital_risk_pct:.2f}% (₹{risk_amount:,.2f})</span></div>
+                <div><b>Live Floating P&L:</b> <span style="font-size:18px; font-weight:bold; color:{pnl_color};">₹{live_pnl:+,.2f} ({pnl_pct:+.2f}%)</span></div>
             </div>
             <hr style="border-color: rgba(255,255,255,0.15); margin: 12px 0;">
-            <small style="color:#cbd5e1;"><b>🔍 AI Thinking Process:</b><br>{active_thought_msg}</small>
+            <small style="color:#cbd5e1;"><b>🔍 AI Thinking Process:</b><br>• Active Position: {sym} ({opt_type}) ➔ Live Risk Tracking Active.<br>• Position Rule: Currently holding active position. Opposite signals are ignored until position hits Target/SL.</small>
         </div>
         """, unsafe_allow_html=True)
     elif not is_market_open:
-        st.markdown(f"<div class='market-closed-box'>🔒 MARKET CLOSED - NO ACTIVE POSITIONS<br><small>{next_unlock_msg}</small></div>", unsafe_allow_html=True)
+        st.markdown(f"<div class='glass-card'>🔒 MARKET CLOSED - NO ACTIVE POSITIONS<br><small>{next_unlock_msg}</small></div>", unsafe_allow_html=True)
     else:
         st.markdown(f"""
         <div class="{card_theme}">
@@ -534,7 +592,7 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
 
     st.markdown("---")
 
-    # Radar Bar
+    # RADAR SPEED BAR
     st.subheader("📡 Bot Live Status Radar & Execution Speed")
     r1, r2, r3, r4 = st.columns(4)
     r1.markdown("<div class='glass-card'>🟢 <b>1. Data Feed:</b> Connected</div>", unsafe_allow_html=True)
@@ -549,65 +607,37 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
 
     st.markdown("---")
 
-    # Candlestick Chart
+    # CANDLESTICK CHART
     st.subheader(f"📊 TradingView Candlestick Chart: {asset_name} ({tf_str})")
-    
     if not df.empty:
         fig = make_subplots(rows=2, cols=1, shared_xaxes=True, vertical_spacing=0.03, row_heights=[0.75, 0.25])
-
-        fig.add_trace(go.Candlestick(
-            x=df.index, open=df['Open'], high=df['High'], low=df['Low'], close=df['Close'], name="Price"
-        ), row=1, col=1)
-
+        fig.add_trace(go.Candlestick(x=df.index, open=df['Open'], high=df['High'], low=df['Low'], close=df['Close'], name="Price"), row=1, col=1)
         fig.add_trace(go.Scatter(x=df.index, y=df['EMA_9'], line=dict(color='#facc15', width=1.5), name="EMA 9"), row=1, col=1)
         fig.add_trace(go.Scatter(x=df.index, y=df['EMA_21'], line=dict(color='#22d3ee', width=1.5), name="EMA 21"), row=1, col=1)
-
         fig.add_trace(go.Bar(x=df.index, y=df['Volume'], name="Volume", marker_color='rgba(14, 165, 233, 0.4)'), row=2, col=1)
 
-        if entry_stock_p is not None and asset_name in sym:
+        if entry_stock_p is not None and asset_name in active_data.get("symbol", ""):
             fig.add_hline(y=entry_stock_p, line_dash="dash", line_color="#00e5ff", annotation_text="📍 ENTRY POINT", annotation_position="top right", row=1, col=1)
             if target_stock_p:
-                fig.add_hline(y=target_stock_p, line_dash="dash", line_color="#10b981", annotation_text="🎯 TARGET (30%)", annotation_position="top right", row=1, col=1)
+                fig.add_hline(y=target_stock_p, line_dash="dash", line_color="#10b981", annotation_text="🎯 TARGET (+12%)", annotation_position="top right", row=1, col=1)
             if sl_stock_p:
-                fig.add_hline(y=sl_stock_p, line_dash="dash", line_color="#ef4444", annotation_text="❌ STOP LOSS (15%)", annotation_position="bottom right", row=1, col=1)
-
-        last_dt = df.index[-1]
-        padding_dt = last_dt + pd.Timedelta(minutes=30)
+                fig.add_hline(y=sl_stock_p, line_dash="dash", line_color="#ef4444", annotation_text="❌ STOP LOSS (-7%)", annotation_position="bottom right", row=1, col=1)
 
         rb = [] if is_crypto_selected else [dict(bounds=["sat", "mon"]), dict(bounds=[15.5, 9.15], pattern="hour")]
-
-        fig.update_xaxes(
-            rangebreaks=rb,
-            range=[df.index[0], padding_dt]
-        )
-
-        fig.update_layout(
-            height=580, 
-            template="plotly_dark",
-            dragmode="pan",
-            uirevision=f"{asset_symbol}_{tf_str}_USER_ZOOM_LOCK",
-            xaxis_rangeslider_visible=False,
-            yaxis=dict(side="right", tickformat=".2f", autorange=True, fixedrange=False),
-            margin=dict(l=10, r=30, t=20, b=10)
-        )
-
-        st.plotly_chart(
-            fig, 
-            key="interactive_candlestick_chart", 
-            use_container_width=True, 
-            config={'scrollZoom': True, 'displayModeBar': True, 'responsive': True}
-        )
+        fig.update_xaxes(rangebreaks=rb)
+        fig.update_layout(height=520, template="plotly_dark", dragmode="pan", uirevision=f"{asset_symbol}_{tf_str}", xaxis_rangeslider_visible=False, yaxis=dict(side="right", tickformat=".2f"), margin=dict(l=10, r=30, t=20, b=10))
+        st.plotly_chart(fig, key="candlestick_chart", use_container_width=True, config={'scrollZoom': True, 'displayModeBar': True, 'responsive': True})
 
     st.markdown("---")
 
-    # Trade History Log
+    # DETAILED TRADE LOG HISTORY (EXCEL TABLE)
     col_h, col_d = st.columns([0.8, 0.2])
     with col_h:
         st.subheader("📋 Detailed Trade Execution Log History")
     with col_d:
         if total_trades > 0:
             csv_bytes = trades_df.to_csv(index=False).encode('utf-8')
-            st.download_button("📥 Download CSV Report", csv_bytes, "trades_report.csv", "text/csv")
+            st.download_button("📥 Download Excel/CSV Report", csv_bytes, "trades_report.csv", "text/csv")
 
     if total_trades > 0:
         st.dataframe(trades_df, use_container_width=True)
@@ -616,7 +646,7 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
 
     st.markdown("---")
 
-    # 8. FLOATING WHATSAPP-STYLE LIVE AI CHATBOT WIDGET
+    # FLOATING LIVE AI CHATBOT WIDGET
     with st.popover("💬 Chat with Antony's AI Trading Partner", use_container_width=False):
         st.caption("ஆண்டனியின் பிரத்யேக AI டிரேடிங் பார்ட்னருடன் நேரலையில் உரையாடுங்கள்!")
 
