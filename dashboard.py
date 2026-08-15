@@ -720,15 +720,16 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
             except:
                 pass
 
-        if live_premium >= tgt_price:
+        # 🚀 SINGLE CANDLE SCALPER ENGINE (1-Candle Exit / 5-Mins Max Limit)
+        if live_premium >= (e_price * 1.06): # Quick +6% Profit in 1 Candle
             auto_exit_triggered = True
-            exit_reason_str = "TARGET_HIT (+12%)"
+            exit_reason_str = "SINGLE_CANDLE_TARGET_HIT (+6%)"
         elif live_premium <= sl_price:
             auto_exit_triggered = True
             exit_reason_str = "STOP_LOSS_HIT (-7%)"
-        elif elapsed_mins >= 20 and abs(pnl_pct) < 3.0: # 20-Min Sideways Time Exit
+        elif elapsed_mins >= 5.0: # Hard Exit at the End of 1 Single Candle (5 Mins)
             auto_exit_triggered = True
-            exit_reason_str = "TIME_TIMEOUT_EXIT (20 Mins Chop)"
+            exit_reason_str = "SINGLE_CANDLE_TIMEOUT_EXIT (1-Candle Complete)"
         elif not is_crypto_selected and now_time >= datetime.time(15, 15):
             auto_exit_triggered = True
             exit_reason_str = "AUTO_315_PM_SQUAREOFF"
