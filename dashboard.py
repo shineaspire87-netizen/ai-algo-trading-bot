@@ -236,6 +236,7 @@ def log_trade_to_csv_and_update(active_data, exit_price, exit_reason, live_pnl, 
     if os.path.exists(ACTIVE_JSON):
         with open(ACTIVE_JSON, "w", encoding="utf-8") as f:
             json.dump({"status": "NO_POSITION"}, f, indent=4)
+    st.session_state.active_trade_memory = {"status": "NO_POSITION"}
 
     alert_msg = (
         f"🏁 <b>TRADE COMPLETED & LOGGED!</b>\n\n"
@@ -402,14 +403,21 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
 
     st.markdown("---")
 
+    # 🟢 CLOUD SESSION MEMORY FALLBACK (Prevents trade wipe on code deploy)
+    if "active_trade_memory" not in st.session_state:
+        st.session_state.active_trade_memory = {"status": "NO_POSITION"}
+
     ACTIVE_JSON = "active_trade.json"
-    active_data = {"status": "NO_POSITION"}
     if os.path.exists(ACTIVE_JSON):
         try:
             with open(ACTIVE_JSON, "r", encoding="utf-8") as f:
-                active_data = json.load(f)
+                file_active = json.load(f)
+                if file_active.get("status") == "ACTIVE":
+                    st.session_state.active_trade_memory = file_active
         except:
             pass
+
+    active_data = st.session_state.active_trade_memory
 
     scan_time_str = now_dt.strftime('%I:%M:%S %p')
     scan_sec_count = (now_dt.minute * 60 + now_dt.second) // 3
@@ -560,6 +568,7 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
 
         with open(ACTIVE_JSON, "w", encoding="utf-8") as f:
             json.dump(active_data, f, indent=4)
+        st.session_state.active_trade_memory = active_data
 
         alert_msg = (
             f"🚨 <b>ALGO TRADE ENTERED!</b>\n\n"
@@ -641,6 +650,7 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
                 active_data["stop_loss"] = sl_price
                 with open(ACTIVE_JSON, "w", encoding="utf-8") as f:
                     json.dump(active_data, f, indent=4)
+                st.session_state.active_trade_memory = active_data
 
         # 🟢 STRATEGY C: 50% PARTIAL PROFIT BOOKING & BREAKEVEN SL SHIFT
         is_partial_booked = active_data.get("is_partial_booked", False)
@@ -653,6 +663,7 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
             # Save updated active trade state
             with open(ACTIVE_JSON, "w", encoding="utf-8") as f:
                 json.dump(active_data, f, indent=4)
+            st.session_state.active_trade_memory = active_data
                 
             partial_pnl = round((live_premium - e_price) * (qty / 2), 2)
             send_telegram_alert(
