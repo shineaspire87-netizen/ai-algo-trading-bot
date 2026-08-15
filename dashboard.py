@@ -245,7 +245,7 @@ def fetch_real_today_news_rss():
     except Exception as e:
         return "🟢 TODAY'S NEWS SENTIMENT STABLE", "✅ இன்றைய செய்திகள் நிலவரம் சாதகமாக உள்ளது.", "glass-card-green", ["• Today's live news feed connected."]
 
-# 🟢 INSTANT BINANCE LIVE CRYPTO PRICE SYNC (Matches TradingView Chart Exactly)
+# 🟢 INSTANT BINANCE LIVE CRYPTO PRICE SYNC
 def get_realtime_crypto_price(symbol_name):
     """Fetches instant 0ms Binance live price for Crypto assets"""
     try:
@@ -253,9 +253,10 @@ def get_realtime_crypto_price(symbol_name):
         pair = binance_map.get(symbol_name)
         if pair:
             url = f"https://api.binance.com/api/v3/ticker/price?symbol={pair}"
-            res = requests.get(url, timeout=2).json()
-            return float(res['price'])
-    except:
+            resp = requests.get(url, timeout=3)
+            if resp.status_code == 200:
+                return float(resp.json()['price'])
+    except Exception as e:
         pass
     return None
 
@@ -531,6 +532,13 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
         current_price, atm_strike, rsi_val, ema9_val, ema21_val, vwap_val = 0.0, 0, 50.0, 0.0, 0.0, 0.0
         is_bullish_engulfing, is_bearish_engulfing, is_vol_spike, is_hurst_sideways = False, False, False, False
         hurst_val = 0.50
+
+    # 🟢 OVERRIDE CURRENT PRICE WITH INSTANT BINANCE LIVE PRICE BEFORE METRICS CARD
+    if is_crypto_selected:
+        binance_price = get_realtime_crypto_price(asset_name)
+        if binance_price and binance_price > 0:
+            current_price = binance_price
+            atm_strike = round(current_price / 100) * 100
 
     # TOP KPI METRICS CARDS
     k1, k2, k3, k4, k5, k6 = st.columns(6)
