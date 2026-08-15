@@ -240,6 +240,20 @@ def fetch_real_today_news_rss():
     except Exception as e:
         return "🟢 TODAY'S NEWS SENTIMENT STABLE", "✅ இன்றைய செய்திகள் நிலவரம் சாதகமாக உள்ளது.", "glass-card-green", ["• Today's live news feed connected."]
 
+# 🟢 INSTANT BINANCE LIVE CRYPTO PRICE SYNC (Matches TradingView Chart Exactly)
+def get_realtime_crypto_price(symbol_name):
+    """Fetches instant 0ms Binance live price for Crypto assets"""
+    try:
+        binance_map = {"BITCOIN": "BTCUSDT", "ETHEREUM": "ETHUSDT"}
+        pair = binance_map.get(symbol_name)
+        if pair:
+            url = f"https://api.binance.com/api/v3/ticker/price?symbol={pair}"
+            res = requests.get(url, timeout=2).json()
+            return float(res['price'])
+    except:
+        pass
+    return None
+
 def calculate_hurst_exponent(ts: pd.Series, max_lag: int = 20) -> float:
     """Calculates Hurst Exponent (H < 0.45 indicates mean-reverting sideways chop)"""
     try:
@@ -479,6 +493,13 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
         df['VWAP'] = (cum_tpv / cum_vol).fillna(df['Close'])
         
         current_price = float(df['Close'].iloc[-1])
+        
+        # 🟢 OVERRIDE WITH INSTANT BINANCE LIVE PRICE FOR CRYPTO
+        if is_crypto_selected:
+            binance_live_p = get_realtime_crypto_price(asset_name)
+            if binance_live_p and binance_live_p > 0:
+                current_price = binance_live_p
+
         atm_strike = round(current_price / 100) * 100
         rsi_val = float(df['RSI'].iloc[-1])
         ema9_val = float(df['EMA_9'].iloc[-1])
