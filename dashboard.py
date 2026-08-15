@@ -1,7 +1,6 @@
-# dashboard.py - Pro Quant Terminal with Drawdown, Latency & Market Segregation
+# dashboard.py - ANTONY Quant AI Algo Trading Terminal
 import streamlit as st
 import pandas as pd
-import numpy as np
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import os
@@ -13,8 +12,17 @@ import xml.etree.ElementTree as ET
 import yfinance as yf
 import ta
 
-st.set_page_config(page_title="Pro Quant Trading Terminal", page_icon="⚡", layout="wide", initial_sidebar_state="collapsed")
+# 1. Custom Favicon Setup using antonypic.png
+favicon_img = "antonypic.png" if os.path.exists("antonypic.png") else "⚡"
 
+st.set_page_config(
+    page_title="ANTONY Quant AI Terminal", 
+    page_icon=favicon_img, 
+    layout="wide", 
+    initial_sidebar_state="collapsed"
+)
+
+# 2. Custom Styling
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap');
@@ -70,7 +78,7 @@ st.markdown("""
         border: 1px solid #38bdf8;
         color: #38bdf8;
         padding: 10px 18px;
-        border-radius: 30px;
+        border-radius: 20px;
         font-weight: 600;
         text-align: right;
         box-shadow: 0 0 10px rgba(56, 189, 248, 0.2);
@@ -85,8 +93,10 @@ st.markdown("""
         font-weight: bold;
     }
 
-    .market-tag-nse { background: #1e3a8a; color: #93c5fd; padding: 4px 10px; border-radius: 15px; font-size: 12px; font-weight: bold; border: 1px solid #3b82f6; }
-    .market-tag-crypto { background: #581c87; color: #f472b6; padding: 4px 10px; border-radius: 15px; font-size: 12px; font-weight: bold; border: 1px solid #c084fc; }
+    .market-tag-nse { background: #1e3a8a; color: #93c5fd; padding: 4px 10px; border-radius: 15px; font-size: 12px; font-weight: bold; border: 1px solid #3b82f6; display: inline-block; }
+    .market-tag-crypto { background: #581c87; color: #f472b6; padding: 4px 10px; border-radius: 15px; font-size: 12px; font-weight: bold; border: 1px solid #c084fc; display: inline-block; }
+
+    .sub-caption { color: #94a3b8; font-size: 14px; margin-top: -8px; margin-bottom: 15px; }
 
     .highlight-entry { font-size: 18px; font-weight: bold; color: #00e5ff; background: #0f172a; padding: 3px 8px; border-radius: 5px; }
     .highlight-target { font-size: 18px; font-weight: bold; color: #34d399; background: #064e3b; padding: 3px 8px; border-radius: 5px; }
@@ -140,7 +150,7 @@ def fetch_real_today_news_rss():
 
         return status, advice, theme, headlines
     except Exception as e:
-        return "🟢 TODAY'S NEWS SENTIMENT STABLE", "✅ இன்றைய செய்திகள் நிலவரம் சாதகமாக உள்ளது.", "glass-card-green", ["• Today's live news feed connected."]
+        return "🟢 TODAY'S NEWS SENTIMENT STABLE", "✅ இன்றைய செய்திகள் நிலவரம் சாதகமாக உள்ளது.", "news-box-green", ["• Today's live news feed connected."]
 
 st.sidebar.header("🕹️ Control Panel")
 selected_name = st.sidebar.selectbox("Select Asset Chart to View:", list(WATCHLIST.keys()), index=0)
@@ -174,13 +184,15 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
     else:
         next_unlock_msg = "சந்தை முடிவடைந்துவிட்டது. நாளை காலை 9:15 மணிக்கு பாட் மீண்டும் தானாக அன்லாக் ஆகும்!"
 
+    # Header with ANTONY Title & Avatar
     head_col1, head_col2 = st.columns([0.65, 0.35])
     with head_col1:
-        st.title("⚡ Pro Quant AI Algo Terminal")
-        st.caption(f"Institutional Metrics | {market_seg_badge} | Live Latency: 38 ms")
+        st.title("⚡ ANTONY Quant AI Algo Terminal")
+        st.markdown(f'<div class="sub-caption">Institutional Metrics | {market_seg_badge} | Live Latency: 38 ms</div>', unsafe_allow_html=True)
     with head_col2:
         st.markdown(f"""
         <div class="clock-badge">
+            👤 <b>Trader: ANTONY</b><br>
             📅 {now_dt.strftime('%A, %d %B %Y')}<br>
             ⏰ {now_dt.strftime('%I:%M:%S %p IST')}
         </div>
@@ -208,7 +220,7 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
     range_low = round(current_price * 0.995, 2)
     range_high = round(current_price * 1.005, 2)
 
-    # Read Trades CSV & Calculate Quant Metrics
+    # Read Trades CSV
     CSV_FILE = "trades.csv"
     if os.path.exists(CSV_FILE):
         trades_df = pd.read_csv(CSV_FILE)
@@ -228,7 +240,6 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
         win_rate = (win_trades / total_trades * 100)
         current_capital = float(trades_df['Capital_Balance'].iloc[-1]) if 'Capital_Balance' in trades_df.columns else 100022.50
         
-        # Calculate Max Drawdown %
         if 'Capital_Balance' in trades_df.columns:
             cap_series = trades_df['Capital_Balance']
             peak = cap_series.cummax()
@@ -237,7 +248,6 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
         else:
             max_drawdown = 0.0
 
-        # Calculate Profit Factor
         gross_wins = trades_df[trades_df[pnl_col] > 0][pnl_col].sum() if pnl_col else 0.0
         gross_losses = abs(trades_df[trades_df[pnl_col] < 0][pnl_col].sum()) if pnl_col else 0.0
         profit_factor = round(gross_wins / gross_losses, 2) if gross_losses > 0 else (2.50 if gross_wins > 0 else 1.00)
@@ -334,7 +344,7 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
 
     st.markdown("---")
 
-    # Radar Bar with Speed Latency
+    # Radar Bar
     st.subheader("📡 Bot Live Status Radar & Execution Speed")
     r1, r2, r3, r4 = st.columns(4)
     r1.markdown("<div class='glass-card'>🟢 <b>1. Data Feed:</b> Connected</div>", unsafe_allow_html=True)
@@ -349,7 +359,7 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
 
     st.markdown("---")
 
-    # ACTIVE TRADE MONITOR WITH CAPITAL RISK %
+    # ACTIVE TRADE MONITOR
     st.subheader("🚨 LIVE ACTIVE TRADE MONITOR")
     
     entry_stock_p, target_stock_p, sl_stock_p = None, None, None
@@ -434,7 +444,7 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
 
     st.markdown("---")
 
-    # Responsive Candlestick Chart
+    # Candlestick Chart
     st.subheader(f"📊 TradingView Candlestick Chart: {asset_name} ({tf_str})")
     
     if not df.empty:
