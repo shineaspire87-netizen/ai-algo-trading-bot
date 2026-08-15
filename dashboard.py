@@ -608,12 +608,25 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
         reason_msg = f"<b>இன்ட்ராடே சிக்னல்:</b> {asset_name} சார்ட்டில் <b>EMA Breakdown + RSI {rsi_val:.1f} + Price < VWAP ({p_curr}{vwap_val:,.2f}) + Engulfing/Vol Spike</b> உறுதி செய்யப்பட்டுள்ளது!"
         thought_steps = f"• Step 1: News Risk Filter ➔ 🟢 SAFE<br>• Step 2: VWAP Alignment ➔ 🟢 PRICE BELOW VWAP ({p_curr}{vwap_val:,.2f})<br>• Step 3: Candle & Vol Pattern ➔ 🟢 ENGULFING / VOL SPIKE DETECTED<br>• Step 4: AI Confidence ({ai_conf}) ➔ 🟢 EXECUTE SCALP"
         raw_sig = "BUY_PUT"
+    # 🟢 EXACT REASON DIAGNOSTIC ENGINE FOR HOLD SIGNAL
     else:
-        bot_signal_str = "HOLD ⏸️ (SCANNING FOR VOLT, VWAP & BREAKOUT)"
+        missing_reasons = []
+        if rsi_val <= 60 and ema9_val > ema21_val:
+            missing_reasons.append(f"RSI {rsi_val:.1f} is below 60.0 CALL threshold")
+        elif rsi_val >= 40 and ema9_val < ema21_val:
+            missing_reasons.append(f"RSI {rsi_val:.1f} is above 40.0 PUT threshold")
+        if current_price <= vwap_val and ema9_val > ema21_val:
+            missing_reasons.append(f"Price ({p_curr}{current_price:,.2f}) is below VWAP ({p_curr}{vwap_val:,.2f})")
+        if not is_vol_spike:
+            missing_reasons.append("Volume is below 1.2x average breakout threshold")
+
+        reason_str_detail = " | ".join(missing_reasons) if missing_reasons else f"Neutral Buffer Range (RSI: {rsi_val:.1f})"
+
+        bot_signal_str = "HOLD ⏸️ (WAITING FOR SIGNAL CONFIRMATION)"
         card_theme = "glass-card-yellow"
-        ai_conf = "52.40% (Buffer Range)"
-        reason_msg = f"<b>பாட் காத்திருக்கிறது:</b> {asset_name} நேரலை விலை (RSI: {rsi_val:.2f} | VWAP: {p_curr}{vwap_val:,.2f} | H: {hurst_val:.2f}) பக்கவாட்டில் நகர்கிறது."
-        thought_steps = f"• Step 1: News Risk Filter ➔ 🟢 SAFE<br>• Step 2: VWAP Alignment ➔ ⏸️ BUFFER REGIME<br>• Step 3: Indicator Filter ➔ ⏸️ RSI: {rsi_val:.1f}"
+        ai_conf = f"52.40% (Buffer Range)"
+        reason_msg = f"<b>பாட் ஏன் என்ட்ரி எடுக்கவில்லை?:</b> {asset_name} நேரலைச் சந்தையில் <b>{reason_str_detail}</b> என்பதால் தேவையலாத நஷ்டத்தைத் தவிர்க்க பாட் அமைதியாகக் காத்திருக்கிறது!"
+        thought_steps = f"• Step 1: News Risk Filter ➔ 🟢 SAFE<br>• Step 2: VWAP Alignment ➔ ⏸️ VWAP: {p_curr}{vwap_val:,.2f}<br>• Step 3: Diagnostic Reason ➔ ⚠️ {reason_str_detail}"
         raw_sig = "HOLD"
 
     # AUTO-TRIGGER PAPER TRADE
