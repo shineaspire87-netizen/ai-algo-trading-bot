@@ -27,35 +27,77 @@ def slice_order_quantity(symbol, total_qty):
         remaining -= chunk
     return slices
 
-def execute_paper_trade_exit(trade_record: dict, exit_price: float, exit_reason: str) -> dict:
-    """Calculates Gross PnL, Exact Deducted Friction, and Net Realized PnL"""
-    symbol = trade_record.get('Symbol', '')
-    entry_price = float(trade_record.get('Entry_Price', 0.0))
-    quantity = int(trade_record.get('Quantity', 1))
+def get_current_ist_timestamp_str() -> str:
+    """Returns clean formatted Indian Standard Time (IST) String"""
+    ist_now = datetime.datetime.utcnow() + datetime.timedelta(hours=5, minutes=30)
+    return ist_now.strftime('%d-%b-%Y %I:%M:%S %p IST')
 
-    # 1. Gross PnL before fees
-    gross_pnl = (exit_price - entry_price) * quantity
-
-    # 2. Calculate Exact Brokerage + STT + GST Fees
+def execute_paper_trade_entry(symbol: str, option_type: str, entry_price: float, qty: int, target_price: float, sl_price: float):
+    """Executes Paper Entry, Logs IST Time, and Triggers Immediate Telegram Entry Alert"""
+    ist_time_str = get_current_ist_timestamp_str()
+    
+    trade_record = {
+        "Entry_Time": ist_time_str,
+        "Symbol": symbol,
+        "Option_Type": option_type,
+        "Entry_Price": round(entry_price, 2),
+        "Quantity": qty,
+        "Target": round(target_price, 2),
+        "Stop_Loss": round(sl_price, 2),
+        "status": "ACTIVE"
+    }
+    
+    # 🔔 TRIGGER IMMEDIATE TELEGRAM ENTRY ALERT!
     is_crypto = any(k in symbol.upper() for k in ["BITCOIN", "ETHEREUM", "BTC", "ETH"])
-    if is_crypto:
-        currency = "$"
-        deducted_fees = round(abs(gross_pnl * 0.001) + 0.65, 2) # Binance/Crypto Fee ($)
-    else:
-        currency = "₹"
-        # NSE Options: ₹40 Flat Brokerage + 0.15% STT + GST
-        stt_gst = (exit_price * quantity * 0.0015) + 7.50
-        deducted_fees = round(40.00 + stt_gst, 2) # NSE Charges (₹)
+    curr = "$" if is_crypto else "₹"
+    
+    entry_msg = f"""🚀 <b>NEW ACTIVE TRADE ENTERED!</b>
 
-    # 3. Net PnL after friction
-    net_pnl = round(gross_pnl - deducted_fees, 2)
+📌 <b>Asset Symbol:</b> {symbol} ({option_type})
+💵 <b>Entry Premium:</b> {curr}{entry_price:,.2f}
+🎯 <b>Target Price:</b> {curr}{target_price:,.2f}
+🛑 <b>Stop Loss:</b> {curr}{sl_price:,.2f}
+⏰ <b>Entry Time:</b> {ist_time_str}
+"""
+    send_telegram_alert(entry_msg)
+    
+    return trade_record
 
+def execute_paper_trade_exit(trade_record: dict, exit_price: float, exit_reason: str):
+    """Executes Paper Exit, Logs IST Exit Time, and Triggers Telegram Exit Alert"""
+    ist_exit_time_str = get_current_ist_timestamp_str()
+    
+    trade_record['Exit_Time'] = ist_exit_time_str
     trade_record['Exit_Price'] = round(exit_price, 2)
-    trade_record['Gross_PnL'] = f"{currency}{gross_pnl:+,.2f}"
-    trade_record['Brokerage_&_Taxes'] = f"-{currency}{deducted_fees:,.2f}"
-    trade_record['Net_PnL'] = f"{currency}{net_pnl:+,.2f}"
     trade_record['Exit_Reason'] = exit_reason
+    trade_record['status'] = "CLOSED"
+    
+    # Calculate PnL & Friction
+    symbol = trade_record.get('Symbol', '')
+    is_crypto = any(k in symbol.upper() for k in ["BITCOIN", "ETHEREUM", "BTC", "ETH"])
+    curr = "$" if is_crypto else "₹"
+    
+    entry_p = float(trade_record.get('Entry_Price', 0.0))
+    q = int(trade_record.get('Quantity', 1))
+    gross_pnl = (exit_price - entry_p) * q
+    fees = round(abs(gross_pnl * 0.001) + 0.65, 2) if is_crypto else 48.00
+    net_pnl = round(gross_pnl - fees, 2)
+    
+    trade_record['Gross_PnL'] = f"{curr}{gross_pnl:+,.2f}"
+    trade_record['Brokerage_&_Taxes'] = f"-{curr}{fees:,.2f}"
+    trade_record['Net_PnL'] = f"{curr}{net_pnl:+,.2f}"
+    
+    # 🔔 TRIGGER TELEGRAM EXIT ALERT
+    exit_msg = f"""🏁 <b>TRADE COMPLETED & LOGGED!</b>
 
+📌 <b>Asset Symbol:</b> {symbol}
+🔚 <b>Exit Reason:</b> {exit_reason}
+💵 <b>Entry Price:</b> {curr}{entry_p:,.2f} ➔ <b>Exit Price:</b> {curr}{exit_price:,.2f}
+📊 <b>Net Realized P&L:</b> {curr}{net_pnl:+,.2f}
+⏰ <b>Exit Time:</b> {ist_exit_time_str}
+"""
+    send_telegram_alert(exit_msg)
+    
     return trade_record
 
 def execute_paper_exit(trade_record, exit_price, exit_reason):
