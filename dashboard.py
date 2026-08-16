@@ -616,14 +616,23 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
     if "trades_memory" not in st.session_state:
         st.session_state.trades_memory = []
 
-    target_csv = CSV_FILE if 'CSV_FILE' in locals() or 'CSV_FILE' in globals() else "trades.csv"
+    # 1. EXPLICIT INITIALIZATION AT THE VERY TOP OF THE FUNCTION
+    target_csv = "trades.csv"
+    file_df = pd.DataFrame()
 
-    if os.path.exists(target_csv) and os.path.getsize(target_csv) > 0:
-        try:
+    # 2. Safely fetch CSV_FILE from config or fallback
+    try:
+        from config import CSV_FILE
+        if isinstance(CSV_FILE, str) and CSV_FILE.strip():
+            target_csv = CSV_FILE.strip()
+    except Exception:
+        target_csv = "trades.csv"
+
+    # 3. Exception-Safe File Check
+    try:
+        if os.path.exists(target_csv) and os.path.getsize(target_csv) > 0:
             file_df = pd.read_csv(target_csv)
-        except Exception:
-            file_df = pd.DataFrame()
-    else:
+    except Exception as e:
         file_df = pd.DataFrame()
 
     gsheet_df = fetch_trades_from_google_sheet()
