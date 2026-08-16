@@ -133,7 +133,7 @@ def render_institutional_quant_cards(bias_status, conf_score, vwap_val, pdh_val,
     st.markdown(html_cards, unsafe_allow_html=True)
 
 def render_trade_history_table(df_trades: pd.DataFrame):
-    """Renders Trade History Table with Exact Currency Symbols ($ or ₹)"""
+    """Renders Trade Log with explicit Spot Price and Option Premium Price columns"""
     if df_trades is None or df_trades.empty:
         st.info("ℹ️ No trades recorded yet for today.")
         return
@@ -178,15 +178,16 @@ def render_trade_history_table(df_trades: pd.DataFrame):
             except:
                 pass
 
-    # Deduplicate & Display desired columns
+    # Rename & Format for 100% Clarity
     desired_cols = [
         'Entry_Time', 'Exit_Time', 'Symbol', 'Option_Type', 
         'Entry_Price', 'Exit_Price', 'Quantity', 
         'Gross_PnL', 'Brokerage_&_Taxes', 'Net_PnL', 
         'Capital_Balance', 'Exit_Reason'
     ]
+    
     available_cols = [col for col in desired_cols if col in df_display.columns]
-
+    
     if 'Entry_Price' in df_display.columns and 'Exit_Price' in df_display.columns:
         df_display = df_display.drop_duplicates(subset=['Entry_Price', 'Exit_Price'], keep='last')
 
