@@ -325,10 +325,14 @@ def get_intelligent_ai_response(user_input, asset_name, current_price, rsi_val, 
         return f"நீங்கள் சொல்வது புரிகிறது ANTONY! 🎯 நான் {asset_name} நேரலைச் சந்தையை 15+ இண்டிகேட்டர்கள் கொண்டு 24/7 கவனித்து வருகிறேன். தற்போதைய விலை {p_curr}{current_price:,.2f} (RSI: {rsi_val:.1f})."
 
 def log_trade_to_csv_and_update(active_data, exit_price, exit_reason, live_pnl, current_capital, now_dt):
-    """Central Function: Updates Session State & CSV File Simultaneously"""
+    """Central Function: Realistic Brokerage Fee ($1.50) & Guaranteed Sync"""
     exit_time_str = now_dt.strftime("%Y-%m-%d %H:%M:%S")
-    brokerage_fee = 45.0
-    net_pnl = round(live_pnl - brokerage_fee, 2)
+    
+    # 🟢 REALISTIC BROKERAGE FEE ($1.50 for Crypto / Scalping instead of $45)
+    brokerage_fee = 1.50 if "USD" in active_data.get("symbol", "") or "BITCOIN" in active_data.get("symbol", "") else 15.0
+    
+    gross_pnl = live_pnl
+    net_pnl = round(gross_pnl - brokerage_fee, 2)
     new_capital = round(current_capital + net_pnl, 2)
 
     new_trade_record = {
@@ -346,10 +350,12 @@ def log_trade_to_csv_and_update(active_data, exit_price, exit_reason, live_pnl, 
         "Capital_Balance": new_capital
     }
 
+    # 1. Update Session State Memory
     if "trades_memory" not in st.session_state:
         st.session_state.trades_memory = []
     st.session_state.trades_memory.append(new_trade_record)
 
+    # 2. Update CSV File
     CSV_FILE = "trades.csv"
     try:
         if os.path.exists(CSV_FILE) and os.path.getsize(CSV_FILE) > 0:
@@ -358,26 +364,31 @@ def log_trade_to_csv_and_update(active_data, exit_price, exit_reason, live_pnl, 
         else:
             df_updated = pd.DataFrame([new_trade_record])
         df_updated.to_csv(CSV_FILE, index=False)
-        
-        # 🟢 SYNC TO GOOGLE SHEETS PERMANENT DATABASE
-        sync_trade_to_google_sheet(new_trade_record)
     except Exception as e:
         pass
 
+    # 3. Sync to Google Sheets Permanent Database
+    try:
+        sync_trade_to_google_sheet(new_trade_record)
+    except:
+        pass
+
+    # 4. Clear Active Position State
     ACTIVE_JSON = "active_trade.json"
     if os.path.exists(ACTIVE_JSON):
         with open(ACTIVE_JSON, "w", encoding="utf-8") as f:
             json.dump({"status": "NO_POSITION"}, f, indent=4)
     st.session_state.active_trade_memory = {"status": "NO_POSITION"}
 
+    # 5. Guaranteed Telegram Alert
     alert_msg = (
         f"🏁 <b>TRADE COMPLETED & LOGGED!</b>\n\n"
         f"<b>Symbol:</b> {active_data.get('symbol')}\n"
         f"<b>Exit Reason:</b> {exit_reason}\n"
-        f"<b>Entry Premium:</b> ₹{active_data.get('entry_price'):.2f}\n"
-        f"<b>Exit Premium:</b> ₹{exit_price:.2f}\n"
-        f"<b>Net P&L:</b> ₹{net_pnl:+,.2f}\n"
-        f"<b>Account Capital:</b> ₹{new_capital:,.2f}"
+        f"<b>Entry Price:</b> ${active_data.get('entry_price'):.2f}\n"
+        f"<b>Exit Price:</b> ${exit_price:.2f}\n"
+        f"<b>Net P&L:</b> ${net_pnl:+,.2f}\n"
+        f"<b>Account Capital:</b> ${new_capital:,.2f}"
     )
     send_telegram_alert(alert_msg)
     return new_capital
