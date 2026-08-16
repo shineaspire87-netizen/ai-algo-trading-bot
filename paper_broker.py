@@ -27,6 +27,35 @@ def slice_order_quantity(symbol, total_qty):
         remaining -= chunk
     return slices
 
+def execute_paper_exit(trade_record, exit_price, exit_reason):
+    symbol = trade_record['Symbol']
+    entry_price = trade_record['Entry_Price']
+    qty = trade_record['Quantity']
+    
+    # 1. Gross P&L Calculation (Before Fees)
+    gross_pnl = (exit_price - entry_price) * qty
+    
+    # 2. Calculate Exact Deducted Charges (Brokerage + STT + GST)
+    if any(crypto in symbol.upper() for crypto in ["BITCOIN", "ETHEREUM", "BTC", "ETH"]):
+        deducted_charges = round(gross_pnl * 0.001 + 0.65, 2) # Crypto Exchange Fee ($)
+        currency = "$"
+    else:
+        # NSE Options: ₹40 Flat Brokerage + 0.15% STT + GST
+        stt_gst = (exit_price * qty * 0.0015) + 7.50
+        deducted_charges = round(40.00 + stt_gst, 2) # NSE Friction Charges (₹)
+        currency = "₹"
+        
+    # 3. Net P&L (Gross P&L minus Deducted Charges)
+    net_pnl = round(gross_pnl - deducted_charges, 2)
+    
+    trade_record['Gross_PnL'] = f"{currency}{gross_pnl:+,.2f}"
+    trade_record['Brokerage_&_Taxes'] = f"-{currency}{deducted_charges:,.2f}"
+    trade_record['Net_PnL'] = f"{currency}{net_pnl:+,.2f}"
+    
+    return trade_record
+
+
+
 class PaperBroker:
     def __init__(self, initial_capital=100000):
         self.capital = initial_capital
@@ -152,7 +181,6 @@ class PaperBroker:
         qty = self.position["qty"]
         now_time = datetime.datetime.now()
         now_str = now_time.strftime("%Y-%m-%d %H:%M:%S")
-        p_curr = "$" if "USD" in self.position["symbol"] or "BTC" in self.position["symbol"] else "₹"
 
         # Track Max Premium Seen
         max_seen = self.position.get("max_premium_seen", entry)
@@ -167,37 +195,52 @@ class PaperBroker:
                 self.position["trailed_to_breakeven"] = True
                 self._update_active_json()
 
-        # 1. Target Check
+        # Determine trigger exit
+        trigger_exit = False
+        reason = ""
         if current_price >= self.position["target"]:
-            gross_pnl = (current_price - entry) * qty
-            net_pnl = gross_pnl - BROKERAGE_PER_TRADE
-            self.capital += net_pnl
-            self.daily_pnl += net_pnl
-            self._log_trade(current_price, "TARGET_HIT", gross_pnl, BROKERAGE_PER_TRADE, net_pnl, now_str)
-            self._clear_active_json()
-
-        # 2. Stop Loss Check
+            trigger_exit = True
+            reason = "TARGET_HIT"
         elif current_price <= self.position["stop_loss"]:
-            gross_pnl = (current_price - entry) * qty
-            net_pnl = gross_pnl - BROKERAGE_PER_TRADE
-            self.capital += net_pnl
-            self.daily_pnl += net_pnl
+            trigger_exit = True
             reason = "BREAKEVEN_EXIT" if self.position["trailed_to_breakeven"] else "STOP_LOSS_HIT"
-            self._log_trade(current_price, reason, gross_pnl, BROKERAGE_PER_TRADE, net_pnl, now_str)
-            self._clear_active_json()
-
-        # 3. Market Close (3:15 PM) Auto Square-Off Check
         elif now_time.time() >= datetime.time(15, 15) and "USD" not in self.position["symbol"]:
+            trigger_exit = True
+            reason = "3:15_PM_MARKET_CLOSE"
+
+        if trigger_exit:
+            temp_record = {
+                'Symbol': self.position['symbol'],
+                'Entry_Price': self.position['entry_price'],
+                'Quantity': self.position['qty']
+            }
+            res_record = execute_paper_exit(temp_record, current_price, reason)
+            
+            # Extract float values for calculations
             gross_pnl = (current_price - entry) * qty
-            net_pnl = gross_pnl - BROKERAGE_PER_TRADE
+            symbol = self.position['symbol']
+            if any(crypto in symbol.upper() for crypto in ["BITCOIN", "ETHEREUM", "BTC", "ETH"]):
+                deducted_charges = round(gross_pnl * 0.001 + 0.65, 2)
+            else:
+                stt_gst = (current_price * qty * 0.0015) + 7.50
+                deducted_charges = round(40.00 + stt_gst, 2)
+            net_pnl = round(gross_pnl - deducted_charges, 2)
+
             self.capital += net_pnl
             self.daily_pnl += net_pnl
-            self._log_trade(current_price, "3:15_PM_MARKET_CLOSE", gross_pnl, BROKERAGE_PER_TRADE, net_pnl, now_str)
+
+            # Log to CSV using res_record strings
+            self._log_trade(
+                current_price, 
+                reason, 
+                res_record['Gross_PnL'], 
+                res_record['Brokerage_&_Taxes'], 
+                res_record['Net_PnL'], 
+                now_str
+            )
             self._clear_active_json()
 
-    def _log_trade(self, exit_price, reason, gross_pnl, brokerage, net_pnl, exit_time_str):
-        p_curr = "$" if "USD" in self.position["symbol"] or "BTC" in self.position["symbol"] else "₹"
-        
+    def _log_trade(self, exit_price, reason, gross_pnl_str, brokerage_str, net_pnl_str, exit_time_str):
         with open(CSV_FILE, mode="a", newline="", encoding="utf-8") as f:
             writer = csv.writer(f)
             writer.writerow([
@@ -211,19 +254,22 @@ class PaperBroker:
                 f"{self.position['target']:.2f}",
                 self.position["qty"],
                 reason,
-                f"{gross_pnl:.2f}",
-                f"{brokerage:.2f}",
-                f"{net_pnl:.2f}",
+                gross_pnl_str,
+                brokerage_str,
+                net_pnl_str,
                 f"{self.capital:.2f}"
             ])
 
+        p_curr = "$" if "USD" in self.position["symbol"] or "BTC" in self.position["symbol"] or "ETH" in self.position["symbol"] else "₹"
         exit_msg = (
             f"🏁 <b>TRADE COMPLETED & LOGGED!</b>\n\n"
             f"<b>Symbol:</b> {self.position['symbol']} ({self.position['type']})\n"
             f"<b>Exit Reason:</b> {reason}\n"
-            f"<b>Entry Premium:</b> {p_curr}{self.position['entry_price']:.2f}\n"
-            f"<b>Exit Premium:</b> {p_curr}{exit_price:.2f}\n"
-            f"<b>Net P&L:</b> {p_curr}{net_pnl:+.2f}\n"
+            f"<b>Entry Price:</b> {p_curr}{self.position['entry_price']:.2f}\n"
+            f"<b>Exit Price:</b> {p_curr}{exit_price:.2f}\n"
+            f"<b>Gross P&L:</b> {gross_pnl_str}\n"
+            f"<b>Brokerage & Taxes:</b> {brokerage_str}\n"
+            f"<b>Net Realized P&L:</b> {net_pnl_str}\n"
             f"<b>Account Capital:</b> {p_curr}{self.capital:,.2f}"
         )
         send_telegram_alert(exit_msg)
