@@ -178,3 +178,13 @@ def is_daily_limit_reached(completed_trades_count: int) -> bool:
         
     # Default Safe Mode -> Hard Lock at 3 completed trades
     return completed_trades_count >= 3
+
+def is_safe_entry_window_in_candle() -> bool:
+    """Ensure entry happens only between 2nd and 4th minute of the 5-min candle (60s to 240s)"""
+    current_second = datetime.datetime.now().second + (datetime.datetime.now().minute % 5) * 60
+    
+    # 60 seconds <= current_second <= 240 seconds (Safest Entry Zone)
+    if 60 <= current_second <= 240:
+        return True
+        
+    return False # Rejects entry in 1st minute and last 1 minute of the candle
