@@ -3,7 +3,7 @@ import streamlit as st
 from backtester import run_historical_backtest
 from system_health import check_system_integrity
 from config import GOOGLE_SHEET_WEB_APP_URL, TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID
-from multi_strategy import evaluate_soft_kill_switch_position_scaling, calculate_dynamic_atr_levels
+from multi_strategy import evaluate_soft_kill_switch_position_scaling, calculate_dynamic_atr_levels, detect_vcp_squeeze_contraction, detect_liquidity_sweep_trap, evaluate_pyramiding_scaling
 import streamlit.components.v1 as components
 import pandas as pd
 
@@ -61,6 +61,56 @@ import xml.etree.ElementTree as ET
 import yfinance as yf
 import ta
 from paper_broker import PaperBroker
+
+def render_institutional_quant_cards(bias_status, conf_score, vwap_val, pdh_val, pdl_val, atr_val, adx_val, vol_ratio, vcp_status, sweep_status, diagnostic_reason):
+    """Renders Ultra-Premium Dark Glassmorphism Quant Cards with Liquidity Sweep Detector"""
+    
+    bias_color = "#10b981" if "BUY_CALL" in bias_status else ("#ef4444" if "BUY_PUT" in bias_status else "#f59e0b")
+    
+    try:
+        conf_val = float(conf_score)
+    except Exception:
+        conf_val = 50.0
+
+    html_cards = f"""
+    <style>
+        .quant-grid {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; margin: 15px 0; }}
+        .quant-card {{ background: rgba(17, 24, 39, 0.85); backdrop-filter: blur(12px); border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; padding: 16px; }}
+        .quant-title {{ font-size: 12px; font-weight: 700; color: #9ca3af; text-transform: uppercase; margin-bottom: 8px; }}
+        .quant-val-big {{ font-size: 22px; font-weight: 800; color: {bias_color}; }}
+        .quant-row {{ display: flex; justify-content: space-between; font-size: 13px; color: #d1d5db; padding: 3px 0; border-bottom: 1px solid rgba(255,255,255,0.05); }}
+    </style>
+
+    <div class="quant-grid">
+        <div class="quant-card">
+            <div class="quant-title">🎯 Directional Bias & AI Confidence</div>
+            <div class="quant-val-big">{bias_status}</div>
+            <div style="font-size: 13px; color: #e5e7eb;">AI Score: <b>{conf_val:.1f}%</b></div>
+            <div style="font-size: 11px; color: #10b981; margin-top: 4px;">{vcp_status}</div>
+            <div style="font-size: 11px; color: #f59e0b; margin-top: 2px;">{sweep_status}</div>
+        </div>
+
+        <div class="quant-card">
+            <div class="quant-title">📊 Key Quant Levels</div>
+            <div class="quant-row"><span>VWAP Anchor:</span><b>{vwap_val}</b></div>
+            <div class="quant-row"><span>PDH / PDL:</span><b>{pdh_val} / {pdl_val}</b></div>
+            <div class="quant-row"><span>Dynamic ATR (14):</span><b>{atr_val}</b></div>
+        </div>
+
+        <div class="quant-card">
+            <div class="quant-title">🛡️ Volatility & Order Flow Checks</div>
+            <div class="quant-row"><span>ADX Strength:</span><b>{adx_val}</b></div>
+            <div class="quant-row"><span>Volume Spike:</span><b>{vol_ratio}x</b></div>
+            <div class="quant-row"><span>Order Flow Trap:</span><b style="color: #10b981;">{'DETECTED' if 'TRAP' in sweep_status else 'SAFE'}</b></div>
+        </div>
+    </div>
+
+    <div style="background: rgba(30, 41, 59, 0.85); border-left: 4px solid {bias_color}; padding: 12px; border-radius: 6px; margin-bottom: 15px; font-size: 13px; color: #cbd5e1;">
+        <b>⚡ Executive Action Diagnostic:</b> {diagnostic_reason}
+    </div>
+    """
+    st.markdown(html_cards, unsafe_allow_html=True)
+
 
 st.set_page_config(
     page_title="ANTONY Quant AI Terminal", 
@@ -350,14 +400,19 @@ timeframe = st.sidebar.selectbox("Select Candle Timeframe:", ["1m", "5m", "15m",
 st.sidebar.markdown("---")
 st.sidebar.markdown("### 🧪 Testing & Override Controls")
 
-# Temporary Override Toggle Button for Market Analysis Check
-allow_extended_trades = st.sidebar.toggle(
+# Initialize session state if not set
+if 'allow_extended_trades' not in st.session_state:
+    st.session_state['allow_extended_trades'] = False
+
+# Direct Key Binding ensures toggle STAYS ON across auto-refreshes!
+st.sidebar.toggle(
     "🧪 Enable Extended Testing Mode (Unlimited Trades)",
-    value=st.session_state.get('allow_extended_trades', False),
-    help="Turn ON to allow the bot to scan and trade beyond 3 trades for performance evaluation."
+    key="allow_extended_trades", # Direct Streamlit State Key!
+    help="Turn ON to allow the bot to scan beyond 3 trades for performance evaluation."
 )
 
-st.session_state['allow_extended_trades'] = allow_extended_trades
+# Read the persistent value
+allow_extended_trades = st.session_state['allow_extended_trades']
 
 if allow_extended_trades:
     st.sidebar.info("⚡ **Testing Mode Active:** Bot will continue scanning for 70%+ AI Confidence trades beyond the 3-trade daily limit.")
@@ -638,10 +693,27 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
         # 🟢 HURST EXPONENT SIDEWAYS DETECTOR
         hurst_val = calculate_hurst_exponent(df['Close'])
         is_hurst_sideways = (hurst_val < 0.45)
+
+        # 🟢 ADX, ATR & VOLUME RATIO FOR INSTITUTIONAL CARDS
+        try:
+            adx_ind = ta.trend.ADXIndicator(df['High'], df['Low'], df['Close'], window=14)
+            df['ADX'] = adx_ind.adx()
+            adx_val = float(df['ADX'].iloc[-1])
+        except Exception:
+            adx_val = 25.0
+
+        try:
+            df['ATR'] = ta.volatility.average_true_range(df['High'], df['Low'], df['Close'], window=14)
+            atr_val = float(df['ATR'].iloc[-1])
+        except Exception:
+            atr_val = float(df['Close'].iloc[-1] * 0.005)
+
+        vol_ratio = float(round(c_vol / avg_vol, 2)) if avg_vol > 0 else 1.0
     else:
         current_price, atm_strike, rsi_val, ema9_val, ema21_val, vwap_val = 0.0, 0, 50.0, 0.0, 0.0, 0.0
         is_bullish_engulfing, is_bearish_engulfing, is_vol_spike, is_hurst_sideways = False, False, False, False
         hurst_val = 0.50
+        adx_val, atr_val, vol_ratio = 25.0, 0.0, 1.0
 
     # 🟢 OVERRIDE CURRENT PRICE WITH INSTANT BINANCE LIVE PRICE BEFORE METRICS CARD
     if is_crypto_selected:
@@ -821,20 +893,46 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
 
         # SIGNAL EVALUATION WITH ALL EXPERT SECRETS
         elif ema9_val > ema21_val and rsi_val > call_rsi_thresh and current_price > vwap_val and is_daily_uptrend and is_60pct_body:
-            bot_signal_str = "QUICK SCALP: BUY CALL 🚀 (Target: +12% | SL: -7% | 60% Body & Daily Trend Aligned)"
-            card_theme = "glass-card-green"
-            ai_conf = "93.80% (Ezekiel & MR Reddy Expert Confluence)"
-            reason_msg = f"<b>வல்லுநர் சிக்னல்:</b> {asset_name} சார்ட்டில் <b>EMA + RSI {rsi_val:.1f} + Price > VWAP + 60% Solid Candle Body + Daily Uptrend</b> 100% உறுதி செய்யப்பட்டுள்ளது!"
-            thought_steps = f"• Step 1: Ezekiel Chew 60% Body ➔ 🟢 PASSED ({int(candle_body/candle_range*100)}% Body)<br>• Step 2: Daily Trend Alignment ➔ 🟢 UPTREND<br>• Step 3: MR Reddy 1DTE Boost ➔ 🟢 {'MONDAY BOOST ACTIVE' if is_monday else 'NORMAL MODE'}<br>• Step 4: AI Confidence ({ai_conf}) ➔ 🟢 EXECUTE SCALP"
-            raw_sig = "BUY_CALL"
+            from ai_analyst import ask_gemini_trade_validation
+            vwap_dist = ((current_price - vwap_val) / vwap_val) * 100.0 if vwap_val > 0 else 0.0
+            body_ratio = (candle_body / candle_range) if candle_range > 0 else 0.0
+            gemini_res = ask_gemini_trade_validation(asset_name, "CALL", rsi_val, vwap_dist, body_ratio)
+            
+            if gemini_res.get("decision") == "APPROVED":
+                bot_signal_str = "QUICK SCALP: BUY CALL 🚀 (Target: +12% | SL: -7% | 60% Body & Daily Trend Aligned)"
+                card_theme = "glass-card-green"
+                ai_conf = "93.80% (Ezekiel & MR Reddy Expert Confluence)"
+                reason_msg = f"<b>வல்லுநர் சிக்னல்:</b> {asset_name} சார்ட்டில் <b>EMA + RSI {rsi_val:.1f} + Price > VWAP + 60% Solid Candle Body + Daily Uptrend</b> 100% உறுதி செய்யப்பட்டுள்ளது!<br><b>Gemini Validation:</b> {gemini_res.get('reason', '')}"
+                thought_steps = f"• Step 1: Ezekiel Chew 60% Body ➔ 🟢 PASSED ({int(candle_body/candle_range*100) if candle_range > 0 else 0}% Body)<br>• Step 2: Daily Trend Alignment ➔ 🟢 UPTREND<br>• Step 3: MR Reddy 1DTE Boost ➔ 🟢 {'MONDAY BOOST ACTIVE' if is_monday else 'NORMAL MODE'}<br>• Step 4: Gemini Verification ➔ 🟢 APPROVED ({gemini_res.get('reason', '')})<br>• Step 5: AI Confidence ({ai_conf}) ➔ 🟢 EXECUTE SCALP"
+                raw_sig = "BUY_CALL"
+            else:
+                bot_signal_str = "GEMINI REJECTED 🛑 (TRAP GUARD)"
+                card_theme = "glass-card-red"
+                ai_conf = "0.00% (Gemini Blocked)"
+                reason_msg = f"<b>பாட் பாதுகாப்பு:</b> Gemini AI இந்த சிக்னலை நிராகரித்துள்ளது! காரணம்: {gemini_res.get('reason', 'Unknown reason')}"
+                thought_steps = f"• Step 1: Indicator Signals ➔ 🟢 BUY_CALL DETECTED<br>• Step 2: Gemini Verification ➔ 🛑 REJECTED ({gemini_res.get('reason', '')})<br>• Step 3: Risk Engine ➔ 🔒 BLOCKED TO PREVENT TRAP"
+                raw_sig = "HOLD"
 
         elif ema9_val < ema21_val and rsi_val < put_rsi_thresh and current_price < vwap_val and is_daily_downtrend and is_60pct_body:
-            bot_signal_str = "QUICK SCALP: BUY PUT 📉 (Target: +12% | SL: -7% | 60% Body & Daily Trend Aligned)"
-            card_theme = "glass-card-red"
-            ai_conf = "94.10% (Ezekiel & MR Reddy Expert Confluence)"
-            reason_msg = f"<b>வல்லுநர் சிக்னல்:</b> {asset_name} சார்ட்டில் <b>EMA + RSI {rsi_val:.1f} + Price < VWAP + 60% Solid Candle Body + Daily Downtrend</b> 100% உறுதி செய்யப்பட்டுள்ளது!"
-            thought_steps = f"• Step 1: Ezekiel Chew 60% Body ➔ 🟢 PASSED ({int(candle_body/candle_range*100)}% Body)<br>• Step 2: Daily Trend Alignment ➔ 🟢 DOWNTREND<br>• Step 3: MR Reddy 1DTE Boost ➔ 🟢 {'MONDAY BOOST ACTIVE' if is_monday else 'NORMAL MODE'}<br>• Step 4: AI Confidence ({ai_conf}) ➔ 🟢 EXECUTE SCALP"
-            raw_sig = "BUY_PUT"
+            from ai_analyst import ask_gemini_trade_validation
+            vwap_dist = ((current_price - vwap_val) / vwap_val) * 100.0 if vwap_val > 0 else 0.0
+            body_ratio = (candle_body / candle_range) if candle_range > 0 else 0.0
+            gemini_res = ask_gemini_trade_validation(asset_name, "PUT", rsi_val, vwap_dist, body_ratio)
+            
+            if gemini_res.get("decision") == "APPROVED":
+                bot_signal_str = "QUICK SCALP: BUY PUT 📉 (Target: +12% | SL: -7% | 60% Body & Daily Trend Aligned)"
+                card_theme = "glass-card-red"
+                ai_conf = "94.10% (Ezekiel & MR Reddy Expert Confluence)"
+                reason_msg = f"<b>வல்லுநர் சிக்னல்:</b> {asset_name} சார்ட்டில் <b>EMA + RSI {rsi_val:.1f} + Price < VWAP + 60% Solid Candle Body + Daily Downtrend</b> 100% உறுதி செய்யப்பட்டுள்ளது!<br><b>Gemini Validation:</b> {gemini_res.get('reason', '')}"
+                thought_steps = f"• Step 1: Ezekiel Chew 60% Body ➔ 🟢 PASSED ({int(candle_body/candle_range*100) if candle_range > 0 else 0}% Body)<br>• Step 2: Daily Trend Alignment ➔ 🟢 DOWNTREND<br>• Step 3: MR Reddy 1DTE Boost ➔ 🟢 {'MONDAY BOOST ACTIVE' if is_monday else 'NORMAL MODE'}<br>• Step 4: Gemini Verification ➔ 🟢 APPROVED ({gemini_res.get('reason', '')})<br>• Step 5: AI Confidence ({ai_conf}) ➔ 🟢 EXECUTE SCALP"
+                raw_sig = "BUY_PUT"
+            else:
+                bot_signal_str = "GEMINI REJECTED 🛑 (TRAP GUARD)"
+                card_theme = "glass-card-red"
+                ai_conf = "0.00% (Gemini Blocked)"
+                reason_msg = f"<b>பாட் பாதுகாப்பு:</b> Gemini AI இந்த சிக்னலை நிராகரித்துள்ளது! காரணம்: {gemini_res.get('reason', 'Unknown reason')}"
+                thought_steps = f"• Step 1: Indicator Signals ➔ 🟢 BUY_PUT DETECTED<br>• Step 2: Gemini Verification ➔ 🛑 REJECTED ({gemini_res.get('reason', '')})<br>• Step 3: Risk Engine ➔ 🔒 BLOCKED TO PREVENT TRAP"
+                raw_sig = "HOLD"
         # 🟢 EXACT REASON DIAGNOSTIC ENGINE FOR HOLD SIGNAL
         else:
             missing_reasons = []
@@ -967,27 +1065,53 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
                         json.dump(active_data, f, indent=4)
                     st.session_state.active_trade_memory = active_data
 
-            # 🟢 STRATEGY C: 50% PARTIAL PROFIT BOOKING & BREAKEVEN SL SHIFT
+            # 🟢 STRATEGY C: 50% PARTIAL PROFIT BOOKING & BREAKEVEN SL SHIFT OR PYRAMIDING
             is_partial_booked = active_data.get("is_partial_booked", False)
-        
-            # 1. Target 1 (+6% Profit / 1:1 RRR) - Book 50% Quantity
-            if live_premium >= (e_price * 1.06) and not is_partial_booked:
-                active_data["is_partial_booked"] = True
-                active_data["stop_loss"] = e_price # Move SL to Breakeven (Cost-to-Cost)
+            is_pyramided = active_data.get("is_pyramided", False)
             
-                # Save updated active trade state
-                with open(ACTIVE_JSON, "w", encoding="utf-8") as f:
-                    json.dump(active_data, f, indent=4)
-                st.session_state.active_trade_memory = active_data
+            current_gain_pct = (live_premium - e_price) / e_price
+            vcp_res = detect_vcp_squeeze_contraction(df)
+            vcp_active = vcp_res["is_vcp"]
+            pyramid_res = evaluate_pyramiding_scaling(current_gain_pct, vcp_active)
+        
+            # 1. Target 1 (+6% Profit / 1:1 RRR) - Book 50% Quantity OR Pyramid Scale-up
+            if live_premium >= (e_price * 1.06) and not is_partial_booked and not is_pyramided:
+                if pyramid_res["allow_pyramiding"]:
+                    # Pyramiding Scaling (zero risk scale-up)
+                    active_data["is_pyramided"] = True
+                    active_data["qty"] = int(qty * (1 + pyramid_res["additional_qty_pct"]))
+                    active_data["stop_loss"] = e_price  # Move SL to Breakeven
+                    active_data["pyramid_status"] = pyramid_res["status"]
+                    
+                    with open(ACTIVE_JSON, "w", encoding="utf-8") as f:
+                        json.dump(active_data, f, indent=4)
+                    st.session_state.active_trade_memory = active_data
+                    
+                    send_telegram_alert(
+                        f"🔥 <b>PYRAMIDING POSITION SCALE-UP (+50% Qty)!</b>\n\n"
+                        f"<b>Symbol:</b> {sym}\n"
+                        f"<b>New Total Qty:</b> {active_data['qty']} Lots\n"
+                        f"<b>SL Action:</b> Shifted to Entry Price (₹{e_price:.2f}) [ZERO RISK MODE ACTIVE]\n"
+                        f"<b>Reason:</b> {pyramid_res['status']}"
+                    )
+                    st.rerun()
+                else:
+                    # Regular Partial Profit Booking
+                    active_data["is_partial_booked"] = True
+                    active_data["stop_loss"] = e_price # Move SL to Breakeven (Cost-to-Cost)
                 
-                partial_pnl = round((live_premium - e_price) * (qty / 2), 2)
-                send_telegram_alert(
-                    f"🎉 <b>PARTIAL TARGET 1 HIT (+6%)!</b>\n\n"
-                    f"<b>Symbol:</b> {sym}\n"
-                    f"<b>Booked 50% Profit:</b> ₹{partial_pnl:+,.2f}\n"
-                    f"<b>SL Shifted:</b> Moved to Entry Price (₹{e_price:.2f}) [ZERO RISK MODE ACTIVE]"
-                )
-                st.rerun()
+                    with open(ACTIVE_JSON, "w", encoding="utf-8") as f:
+                        json.dump(active_data, f, indent=4)
+                    st.session_state.active_trade_memory = active_data
+                    
+                    partial_pnl = round((live_premium - e_price) * (qty / 2), 2)
+                    send_telegram_alert(
+                        f"🎉 <b>PARTIAL TARGET 1 HIT (+6%)!</b>\n\n"
+                        f"<b>Symbol:</b> {sym}\n"
+                        f"<b>Booked 50% Profit:</b> ₹{partial_pnl:+,.2f}\n"
+                        f"<b>SL Shifted:</b> Moved to Entry Price (₹{e_price:.2f}) [ZERO RISK MODE ACTIVE]"
+                    )
+                    st.rerun()
 
             # 2. Dynamic Trailing SL for Remaining 50% Quantity
             if is_partial_booked:
@@ -1064,18 +1188,48 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
         elif not is_market_open:
             st.markdown(f"<div class='glass-card'>🔒 MARKET CLOSED - NO ACTIVE POSITIONS<br><small>{next_unlock_msg}</small></div>", unsafe_allow_html=True)
         else:
+            # VCP contraction calculation
+            vcp_res = detect_vcp_squeeze_contraction(df)
+            vcp_status = vcp_res["status"]
+
+            # Liquidity Sweep Detector
+            sweep_res = detect_liquidity_sweep_trap(df, pdh_val, pdl_val)
+            sweep_status = sweep_res["status"]
+
+            try:
+                ai_conf_val = float(ai_conf.split("%")[0].strip())
+            except Exception:
+                ai_conf_val = 50.0
+
+            # Boost confidence score by +10% if VCP Squeeze is detected
+            if vcp_res["is_vcp"]:
+                ai_conf_val = min(100.0, ai_conf_val + 10.0)
+
+            # Boost confidence score by +15% if Liquidity Sweep Trap is detected
+            if sweep_res["signal"] != "NONE":
+                ai_conf_val = min(100.0, ai_conf_val + 15.0)
+
+            render_institutional_quant_cards(
+                bias_status=raw_sig,
+                conf_score=ai_conf_val,
+                vwap_val=f"{p_curr}{vwap_val:,.2f}" if vwap_val > 0 else "N/A",
+                pdh_val=f"{p_curr}{pdh_val:,.2f}" if pdh_val > 0 else "N/A",
+                pdl_val=f"{p_curr}{pdl_val:,.2f}" if pdl_val > 0 else "N/A",
+                atr_val=f"{p_curr}{atr_val:,.2f}" if atr_val > 0 else "N/A",
+                adx_val=f"{adx_val:.2f}",
+                vol_ratio=f"{vol_ratio:.2f}",
+                vcp_status=vcp_status,
+                sweep_status=sweep_status,
+                diagnostic_reason=reason_msg
+            )
+
             st.markdown(f"""
-            <div class="{card_theme}">
-                <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
-                    <h3 style="margin:0;">🤖 Active AI Signal: <u>{bot_signal_str}</u></h3>
-                    <div>
-                        <span class="badge-tag">⏱️ Last Scan: {scan_time_str} (Cycle #{scan_sec_count})</span>
-                        <span style="background:rgba(15,23,42,0.8); padding:4px 10px; border-radius:15px; border:1px solid #475569; font-size:13px; color:#e2e8f0; margin-left:6px;">AI Confidence: <b>{ai_conf}</b></span>
-                    </div>
+            <div class="glass-card" style="margin-top:-10px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; font-size:13px; color:#cbd5e1; margin-bottom:10px;">
+                    <span>⏱️ Last Scan: <b>{scan_time_str}</b> (Cycle #{scan_sec_count})</span>
+                    <span>Active AI Signal: <b style="color:#38bdf8;">{bot_signal_str}</b></span>
                 </div>
-                <hr style="border-color: rgba(255,255,255,0.15); margin: 10px 0;">
-                <p style="margin:0;">{reason_msg}</p>
-                <hr style="border-color: rgba(255,255,255,0.15); margin: 10px 0;">
+                <hr style="border-color: rgba(255,255,255,0.1); margin: 8px 0;">
                 <small style="color:#cbd5e1;"><b>🔍 பாட்டின் நேரலை சிந்தனை வரிசை (Step-by-Step AI Thinking Process):</b><br>{thought_steps}</small>
             </div>
             """, unsafe_allow_html=True)

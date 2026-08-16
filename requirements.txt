@@ -8,3 +8,4 @@ pyotp
 requests
 scikit-learn
 streamlit-autorefresh
+google-generativeai

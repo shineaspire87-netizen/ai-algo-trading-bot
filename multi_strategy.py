@@ -16,6 +16,71 @@ if os.path.exists(MODEL_FILE):
     model = XGBClassifier()
     model.load_model(MODEL_FILE)
 
+def detect_vcp_squeeze_contraction(df: pd.DataFrame) -> dict:
+    """Detects Volatility Contraction Pattern (VCP) - Shrinking Range Before Explosive Breakout"""
+    if len(df) < 5:
+        return {"is_vcp": False, "score_boost": 0.0, "status": "NORMAL_RANGE"}
+
+    # Calculate Candle Ranges for last 3 bars
+    r1 = float(df['High'].iloc[-3] - df['Low'].iloc[-3])
+    r2 = float(df['High'].iloc[-2] - df['Low'].iloc[-2])
+    r3 = float(df['High'].iloc[-1] - df['Low'].iloc[-1])
+
+    # VCP Rule: Volatility is shrinking (r3 < r2 < r1)
+    is_contraction = (r3 < r2) and (r2 < r1)
+    
+    # Volume Contraction Check
+    vol_ma20 = df['Volume'].rolling(20).mean().iloc[-1]
+    is_low_vol = df['Volume'].iloc[-1] < vol_ma20
+
+    # If VCP Squeeze is detected, boost AI Confidence score by +10%
+    if is_contraction and is_low_vol:
+        return {"is_vcp": True, "score_boost": 0.10, "status": "🎯 VCP SQUEEZE DETECTED (+10% AI Confidence Boost)"}
+        
+    return {"is_vcp": False, "score_boost": 0.0, "status": "NORMAL_RANGE"}
+
+def detect_liquidity_sweep_trap(df: pd.DataFrame, pdh: float, pdl: float) -> dict:
+    """Detects Institutional Liquidity Sweeps above PDH or below PDL for High-Probability Reversals"""
+    if df is None or len(df) < 2:
+        return {"signal": "NONE", "confidence_boost": 0.0, "status": "NORMAL"}
+
+    last_candle = df.iloc[-1]
+    candle_range = last_candle['High'] - last_candle['Low'] + 1e-6
+
+    # 1. Bearish Liquidity Sweep (Spiked above PDH but closed inside range with long upper wick)
+    if last_candle['High'] > pdh and last_candle['Close'] < pdh:
+        upper_wick = last_candle['High'] - max(last_candle['Open'], last_candle['Close'])
+        if (upper_wick / candle_range) >= 0.40: # Long Upper Wick Trap
+            return {
+                "signal": "BUY_PUT",
+                "confidence_boost": 0.15,
+                "status": "🚨 BEARISH LIQUIDITY SWEEP TRAP AT PDH (+15% AI Boost)"
+            }
+
+    # 2. Bullish Liquidity Sweep (Spiked below PDL but closed inside range with long lower wick)
+    if last_candle['Low'] < pdl and last_candle['Close'] > pdl:
+        lower_wick = min(last_candle['Open'], last_candle['Close']) - last_candle['Low']
+        if (lower_wick / candle_range) >= 0.40: # Long Lower Wick Trap
+            return {
+                "signal": "BUY_CALL",
+                "confidence_boost": 0.15,
+                "status": "🚀 BULLISH LIQUIDITY SWEEP TRAP AT PDL (+15% AI Boost)"
+            }
+
+    return {"signal": "NONE", "confidence_boost": 0.0, "status": "NORMAL"}
+
+def evaluate_pyramiding_scaling(current_gain_pct: float, vcp_active: bool) -> dict:
+    """Zero-Risk Pyramiding Position Scaling Logic"""
+    # Trigger Pyramiding only if Target 1 (+6%) is hit and VCP Momentum is present
+    if current_gain_pct >= 0.06 and vcp_active:
+        return {
+            "allow_pyramiding": True,
+            "additional_qty_pct": 0.50, # Add 50% additional scaling lot
+            "sl_action": "SHIFT_TO_BREAKEVEN",
+            "status": "🔥 PYRAMIDING SCALING ACTIVE (Zero Risk Mode)"
+        }
+    return {"allow_pyramiding": False, "additional_qty_pct": 0.0, "sl_action": "NORMAL", "status": "NORMAL"}
+
 WATCHLIST = {
     "BANKNIFTY": "^NSEBANK",
     "NIFTY50": "^NSEI",
@@ -81,6 +146,17 @@ def scan_all_assets():
             if isinstance(df.columns, pd.MultiIndex):
                 df.columns = df.columns.get_level_values(0)
 
+            # Calculate Previous Day High (PDH) and Low (PDL) for sweep detection
+            try:
+                daily_df = yf.download(tickers=symbol, period="5d", interval="1d", progress=False)
+                if isinstance(daily_df.columns, pd.MultiIndex):
+                    daily_df.columns = daily_df.columns.get_level_values(0)
+                pdh_val = float(daily_df['High'].iloc[-2]) if len(daily_df) >= 2 else float(df['High'].max())
+                pdl_val = float(daily_df['Low'].iloc[-2]) if len(daily_df) >= 2 else float(df['Low'].min())
+            except Exception:
+                pdh_val = float(df['High'].max()) if not df.empty else 0.0
+                pdl_val = float(df['Low'].min()) if not df.empty else 0.0
+
             if df.empty or len(df) < 25:
                 continue
 
@@ -142,6 +218,16 @@ def scan_all_assets():
                 max_prob = np.max(probs)
                 pred = model.predict(features)[0]
 
+                # VCP Contraction Boost
+                vcp_res = detect_vcp_squeeze_contraction(df)
+                if vcp_res["is_vcp"]:
+                    max_prob = min(1.0, max_prob + vcp_res["score_boost"])
+
+                # Liquidity Sweep Boost
+                sweep_res = detect_liquidity_sweep_trap(df, pdh_val, pdl_val)
+                if sweep_res["signal"] != "NONE":
+                    max_prob = min(1.0, max_prob + sweep_res["confidence_boost"])
+
                 if max_prob >= 0.70:
                     signal = "BUY_CALL" if pred == 2 else ("BUY_PUT" if pred == 0 else "HOLD")
                 else:
@@ -149,9 +235,28 @@ def scan_all_assets():
             else:
                 signal = "BUY_CALL" if (latest['EMA_9'] > latest['EMA_21'] and latest['RSI'] > 58) else ("BUY_PUT" if (latest['EMA_9'] < latest['EMA_21'] and latest['RSI'] < 42) else "HOLD")
 
+            gemini_reason = ""
+            if signal != "HOLD":
+                from ai_analyst import ask_gemini_trade_validation
+                opt_type = "CALL" if signal == "BUY_CALL" else "PUT"
+                vwap_dist = float(latest['VWAP_Diff'] * 100.0)
+                body = abs(latest['Close'] - latest['Open'])
+                candle_range = max(0.001, (latest['High'] - latest['Low']))
+                body_ratio = float(body / candle_range)
+                
+                gemini_res = ask_gemini_trade_validation(name, opt_type, float(latest['RSI']), vwap_dist, body_ratio)
+                
+                if gemini_res.get("decision") == "APPROVED":
+                    gemini_reason = gemini_res.get("reason", "Approved by Gemini AI.")
+                    print(f"✅ Gemini Approved {signal} for {name}: {gemini_reason}")
+                else:
+                    gemini_reason = gemini_res.get("reason", "Rejected by Gemini AI.")
+                    print(f"⚠️ Gemini Rejected {signal} for {name}: {gemini_reason}")
+                    signal = "HOLD"
+
             if signal != "HOLD" and last_notified_signal.get(name) != signal:
                 last_notified_signal[name] = signal
-                alert_msg = f"🚨 <b>AI TRADE SIGNAL DETECTED!</b>\n\n<b>Asset:</b> {name}\n<b>Signal:</b> {signal}\n<b>Live Price:</b> {latest['Close']:,.2f}\n<b>RSI:</b> {latest['RSI']:.1f}\n<b>Time:</b> {now_dt.strftime('%H:%M:%S IST')}"
+                alert_msg = f"🚨 <b>AI TRADE SIGNAL DETECTED!</b>\n\n<b>Asset:</b> {name}\n<b>Signal:</b> {signal}\n<b>Live Price:</b> {latest['Close']:,.2f}\n<b>RSI:</b> {latest['RSI']:.1f}\n<b>Gemini Validation:</b> {gemini_reason}\n<b>Time:</b> {now_dt.strftime('%H:%M:%S IST')}"
                 send_telegram_alert(alert_msg)
 
             scanned_results.append({
