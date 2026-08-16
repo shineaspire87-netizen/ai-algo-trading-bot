@@ -1,28 +1,49 @@
-# notifier.py - Telegram Instant Mobile Alert Engine
+# notifier.py - Bulletproof Dual-Route Telegram Notifier
+
 import requests
+import logging
+import html
+from config import TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID
 
-# ⚠️ உங்களின் Telegram விவரங்களை இங்கே போடவும்
-TELEGRAM_BOT_TOKEN = "8939955418:AAFXd58Nwr84uIGeqrvIqvntveWwHjqmenE"  # BotFather தந்த Token
-TELEGRAM_CHAT_ID = "1072750499"      # userinfobot தந்த Chat ID
-
-def send_telegram_alert(message):
-    """டெலிகிராமிற்கு நேரலை எச்சரிக்கை மெசேஜ் அனுப்பும்"""
-    if TELEGRAM_BOT_TOKEN == "your_bot_token_here":
-        print("[TELEGRAM] Token இல்லை. மெசேஜ் அனுப்பப்படவில்லை.")
-        return
+def send_telegram_alert(message: str, parse_mode: str = "HTML") -> bool:
+    """HTML Error Fallback உடன் கூடிய Dual-Route Telegram Alert Engine"""
+    if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
+        logging.warning("⚠️ Telegram Token or Chat ID Missing in Config/Secrets!")
+        return False
 
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+    
+    # Route 1: Try Sending with HTML Parse Mode
     payload = {
         "chat_id": TELEGRAM_CHAT_ID,
         "text": message,
-        "parse_mode": "HTML"
+        "parse_mode": parse_mode
     }
-    try:
-        requests.post(url, json=payload, timeout=5)
-    except Exception as e:
-        print(f"[TELEGRAM ERROR] {e}")
 
-if __name__ == "__main__":
-    # டெஸ்ட் மெசேஜ்
-    send_telegram_alert("🚀 <b>AI ALGO TRADING BOT CONNECTED!</b>\n\nடெலிகிராம் மொபைல் அலர்ட் வெற்றிகரமாக இணைக்கப்பட்டது!")
-    print("✅ டெலிகிராம் டெஸ்ட் மெசேஜ் அனுப்பப்பட்டது. உங்கள் மொபைலைச் சரிபார்க்கவும்!")
+    try:
+        response = requests.post(url, json=payload, timeout=5)
+        if response.status_code == 200:
+            logging.info("✅ Telegram HTML Alert Delivered Successfully.")
+            return True
+        else:
+            logging.warning(f"⚠️ Telegram HTML Route Failed ({response.status_code}): {response.text}")
+    except Exception as e:
+        logging.error(f"❌ Telegram Route 1 Error: {e}")
+
+    # Route 2: Fallback to Clean Plain Text (Strips HTML tags if Route 1 fails)
+    try:
+        clean_text = message.replace("<b>", "").replace("</b>", "").replace("<i>", "").replace("</i>", "").replace("<code>", "").replace("</code>", "")
+        fallback_payload = {
+            "chat_id": TELEGRAM_CHAT_ID,
+            "text": clean_text
+        }
+        fallback_res = requests.post(url, json=fallback_payload, timeout=5)
+        if fallback_res.status_code == 200:
+            logging.info("✅ Telegram Fallback Plain-Text Alert Delivered.")
+            return True
+        else:
+            logging.error(f"❌ Telegram Fallback Route Failed ({fallback_res.status_code}): {fallback_res.text}")
+    except Exception as e:
+        logging.error(f"❌ Telegram Route 2 Error: {e}")
+
+    return False

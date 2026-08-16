@@ -1188,6 +1188,22 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
             st.write(f"- Telegram Alert Bot: {'✅ OK' if health['telegram'] else '❌ Disconnected'}")
             st.success("✅ Credentials stored in cloud session successfully!")
 
+        st.divider()
+        st.markdown("### 📲 Telegram Notifier Live Connection Test")
+        
+        if st.button("🧪 Send Test Telegram Alert Now", use_container_width=True):
+            from notifier import send_telegram_alert
+            
+            test_msg = "🔔 <b>ANTONY Quant AI Algo Terminal</b>\n\n✅ Telegram Notifier Connection Successful!\n⏱️ Live Latency Test: Passed."
+            
+            with st.spinner("Sending Telegram Signal..."):
+                success = send_telegram_alert(test_msg)
+                
+                if success:
+                    st.success("🎉 Telegram Alert Sent Successfully! Check your Telegram App now.")
+                else:
+                    st.error("❌ Telegram Alert Failed! Please check your TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID in secrets/config.")
+
 # Run Cloud State Recovery before scanning
 enforce_cloud_kill_switch_guard()
 
