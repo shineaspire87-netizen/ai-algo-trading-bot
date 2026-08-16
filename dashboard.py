@@ -988,10 +988,19 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
         scan_time_str = now_dt.strftime('%I:%M:%S %p')
         scan_sec_count = (now_dt.minute * 60 + now_dt.second) // 3
 
+        # Read Testing Override Toggle State
+        is_testing_mode = st.session_state.get('allow_extended_trades', False)
+
+        # FORCE UNLOCK KILL-SWITCH IF TESTING MODE IS ON
+        if is_testing_mode:
+            st.session_state['kill_switch_active'] = False
+            st.session_state['kill_switch_reason'] = "🧪 Extended Testing Mode Active (2 Losses Bypassed for Market Analysis)"
+
         # COOLDOWN & 2 CONSECUTIVE LOSSES KILL-SWITCH CHECK
         trades_today_count = 0
         last_exit_time = None
-        is_2_consecutive_losses = True if st.session_state.get('kill_switch_active', False) else False
+        is_consecutive_losses_detected = False
+        is_2_consecutive_losses = False if is_testing_mode else (True if st.session_state.get('kill_switch_active', False) else False)
 
         if total_trades > 0 and 'Exit_Time' in trades_df.columns:
             today_str = now_dt.strftime('%Y-%m-%d')
@@ -1002,7 +1011,9 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
             if pnl_col and len(today_trades) >= 2:
                 last_two = today_trades[pnl_col].tail(2).tolist()
                 if len(last_two) == 2 and last_two[0] < 0 and last_two[1] < 0:
-                    is_2_consecutive_losses = True
+                    is_consecutive_losses_detected = True
+                    if not is_testing_mode:
+                        is_2_consecutive_losses = True
         
             try:
                 last_exit_str = trades_df['Exit_Time'].iloc[-1]
@@ -1082,11 +1093,11 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
             reason_msg = "<b>பாட் பாதுகாப்பு:</b> எக்ஸ்பைரி நாளில் மதியம் 1:30 மணிக்கு மேல் ஆப்ஷன் பிரீமியம் கரையும் என்பதால் புதிய என்ட்ரிகள் தடுக்கப்பட்டுள்ளன!"
             thought_steps = "• Step 1: Expiry Time Check ➔ 🛑 AFTER 1:30 PM EXPIRY CUTOFF<br>• Step 2: Risk Engine ➔ 🔒 BLOCKED FOR THETA PROTECTION"
             raw_sig = "HOLD"
-        elif is_2_consecutive_losses:
+        elif is_2_consecutive_losses and not is_testing_mode:
             bot_signal_str = "CONSECUTIVE LOSS KILL-SWITCH 🛑 (LOCKED FOR DAY)"
             card_theme = "glass-card-red"
             ai_conf = "0.00% (Kill-Switch Active)"
-            reason_msg = "<b>பாட் பாதுகாப்பு எச்சரிக்கை:</b> இன்று தொடர்ச்சியாக 2 டிரேடுகளில் நஷ்டம் ஏற்பட்டுள்ளதால், மூலதனத்தைப் பாதுகாக்க பாட் அன்றைய நாளுக்குப் பூட்டப்பட்டுள்ளது!"
+            reason_msg = "<b>பாட் பாதுகாப்பு எச்சரிக்கை:</b> இன்று தொடர்ச்சியாக 2 டிரேடுகளில் நஷ்டம் ஏற்பட்டுள்ளதால் பாட் பூட்டப்பட்டுள்ளது!"
             thought_steps = "• Step 1: Risk Filter ➔ 🛑 2 CONSECUTIVE LOSSES DETECTED<br>• Step 2: Kill-Switch ➔ 🔒 LOCKED FOR TODAY"
             raw_sig = "HOLD"
         elif is_daily_limit_reached:
@@ -1170,7 +1181,10 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
             bot_signal_str = "HOLD ⏸️ (WAITING FOR SIGNAL CONFIRMATION)"
             card_theme = "glass-card-yellow"
             ai_conf = f"52.40% (Buffer Range)"
-            reason_msg = f"<b>பாட் ஏன் என்ட்ரி எடுக்கவில்லை?:</b> {asset_name} நேரலைச் சந்தையில் <b>{reason_str_detail}</b> என்பதால் தேவையலாத நஷ்டத்தைத் தவிர்க்க பாட் அமைதியாகக் காத்திருக்கிறது!"
+            if is_testing_mode and is_consecutive_losses_detected:
+                reason_msg = "<b>🧪 சோதனைக் கட்டுப்பாடு ஆன் செய்யப்பட்டுள்ளது:</b> 2 நஷ்டப் பூட்டு தவிர்க்கப்பட்டு 75%+ AI Confidence வர்த்தகங்களுக்காக பாட் ஸ்கேன் செய்கிறது."
+            else:
+                reason_msg = f"<b>பாட் ஏன் என்ட்ரி எடுக்கவில்லை?:</b> {asset_name} நேரலைச் சந்தையில் <b>{reason_str_detail}</b> என்பதால் தேவையலாத நஷ்டத்தைத் தவிர்க்க பாட் அமைதியாகக் காத்திருக்கிறது!"
             thought_steps = f"• Step 1: News Risk Filter ➔ 🟢 SAFE<br>• Step 2: VWAP Alignment ➔ ⏸️ VWAP: {p_curr}{vwap_val:,.2f}<br>• Step 3: Diagnostic Reason ➔ ⚠️ {reason_str_detail}"
             raw_sig = "HOLD"
 
