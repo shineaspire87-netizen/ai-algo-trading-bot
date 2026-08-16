@@ -81,6 +81,35 @@ def evaluate_pyramiding_scaling(current_gain_pct: float, vcp_active: bool) -> di
         }
     return {"allow_pyramiding": False, "additional_qty_pct": 0.0, "sl_action": "NORMAL", "status": "NORMAL"}
 
+def check_kill_switch_status(consecutive_losses: int) -> dict:
+    """Checks Kill-Switch status and respects Extended Testing Mode Override"""
+    
+    # Check if user enabled Extended Testing Mode Toggle in Sidebar
+    is_testing_override = False
+    try:
+        if hasattr(st, 'session_state'):
+            is_testing_override = st.session_state.get('allow_extended_trades', False)
+    except Exception:
+        pass
+    
+    if consecutive_losses >= 2:
+        if is_testing_override:
+            # TESTING OVERRIDE: Allow scanning, but raise AI Confidence threshold to 75%
+            return {
+                "is_locked": False,
+                "min_confidence": 0.75, # High Bar for testing after 2 losses
+                "status_msg": "🧪 TESTING OVERRIDE: 2 Losses Bypassed for Market Analysis (Requires 75%+ AI Confidence)"
+            }
+        else:
+            # Production Mode: Hard Shut-off for safety
+            return {
+                "is_locked": True,
+                "min_confidence": 0.70,
+                "status_msg": "🛑 CONSECUTIVE LOSS KILL-SWITCH: Locked for today to protect capital."
+            }
+            
+    return {"is_locked": False, "min_confidence": 0.70, "status_msg": "NORMAL"}
+
 def evaluate_smart_breakout_signals(df: pd.DataFrame, asset_symbol: str) -> dict:
     """Smart ATR Volatility Expansion & Friction Filter Strategy Engine"""
     if df is None or len(df) < 20:
