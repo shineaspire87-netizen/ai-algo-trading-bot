@@ -73,7 +73,7 @@ try:
 except ImportError:
     ACTIVE_TRADE_FILE = "active_trade.json"
 
-ACTIVE_JSON = ACTIVE_TRADE_FILE
+active_json_file = ACTIVE_TRADE_FILE
 
 ACTIVE_FILE_FALLBACK = "active_trade.json"
 
@@ -395,10 +395,10 @@ def calculate_hurst_exponent(ts: pd.Series, max_lag: int = 20) -> float:
 st.sidebar.header("🕹️ Control Panel")
 
 # 🟢 SIDEBAR ACTIVE TRADE GLOW INDICATOR
-ACTIVE_JSON = "active_trade.json"
-if os.path.exists(ACTIVE_JSON):
+active_json_file = get_active_trade_file_path()
+if os.path.exists(active_json_file):
     try:
-        with open(ACTIVE_JSON, "r", encoding="utf-8") as f:
+        with open(active_json_file, "r", encoding="utf-8") as f:
             side_active = json.load(f)
             if side_active.get("status") == "ACTIVE":
                 act_sym = side_active.get("symbol", "").split("_")[0]
@@ -583,9 +583,9 @@ def log_trade_to_csv_and_update(active_data, exit_price, exit_reason, live_pnl, 
         pass
 
     # 4. Clear Active Trade State
-    ACTIVE_JSON = "active_trade.json"
-    if os.path.exists(ACTIVE_JSON):
-        with open(ACTIVE_JSON, "w", encoding="utf-8") as f:
+    active_json_file = get_active_trade_file_path()
+    if os.path.exists(active_json_file):
+        with open(active_json_file, "w", encoding="utf-8") as f:
             json.dump({"status": "NO_POSITION"}, f, indent=4)
     st.session_state.active_trade_memory = {"status": "NO_POSITION"}
 
@@ -606,7 +606,20 @@ def log_trade_to_csv_and_update(active_data, exit_price, exit_reason, live_pnl, 
 
 @st.fragment(run_every="3s")
 def render_dashboard_main(asset_name, asset_symbol, tf_str):
-    global ACTIVE_JSON, ACTIVE_TRADE_FILE, CSV_FILE
+    # 1. Define active_json_file at the VERY FIRST LINE of the function
+    active_json_file = "active_trade.json"
+
+    # 2. Check active trade file using active_json_file
+    try:
+        if os.path.exists(active_json_file) and os.path.getsize(active_json_file) > 0:
+            with open(active_json_file, 'r') as f:
+                active_trade = json.load(f)
+            
+            if active_trade and active_trade.get('status') == 'ACTIVE':
+                st.session_state['has_active_trade'] = True
+    except Exception as e:
+        pass
+
     ist_tz = pytz.timezone('Asia/Kolkata')
     now_dt = datetime.datetime.now(ist_tz)
     now_time = now_dt.time()
@@ -634,16 +647,14 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
     if "trades_memory" not in st.session_state:
         st.session_state.trades_memory = []
 
-    # 1. EXPLICIT INITIALIZATION AT THE VERY TOP OF THE FUNCTION
-    ACTIVE_JSON = get_active_trade_file_path()
-    active_json_file = ACTIVE_JSON
     target_csv = "trades.csv"
     file_df = pd.DataFrame()
 
-    # 2. Safely load from config if available
+    # Safely load config values
     try:
         import config
         target_csv = getattr(config, 'CSV_FILE', 'trades.csv')
+        active_json_file = getattr(config, 'ACTIVE_TRADE_FILE', 'active_trade.json')
     except Exception:
         pass
 
@@ -837,10 +848,10 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
         if "active_trade_memory" not in st.session_state:
             st.session_state.active_trade_memory = {"status": "NO_POSITION"}
 
-        ACTIVE_JSON = get_active_trade_file_path()
-        if os.path.exists(ACTIVE_JSON) and os.path.getsize(ACTIVE_JSON) > 0:
+        active_json_file = get_active_trade_file_path()
+        if os.path.exists(active_json_file) and os.path.getsize(active_json_file) > 0:
             try:
-                with open(ACTIVE_JSON, "r", encoding="utf-8") as f:
+                with open(active_json_file, "r", encoding="utf-8") as f:
                     file_active = json.load(f)
                     if file_active.get("status") == "ACTIVE":
                         st.session_state.active_trade_memory = file_active
@@ -1058,7 +1069,7 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
                 "sl_stock_price": round(current_price * (0.996 if opt_type == "CALL" else 1.004), 2)
             }
 
-            with open(ACTIVE_JSON, "w", encoding="utf-8") as f:
+            with open(active_json_file, "w", encoding="utf-8") as f:
                 json.dump(active_data, f, indent=4)
             st.session_state.active_trade_memory = active_data
 
@@ -1140,7 +1151,7 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
                 if trailed_sl > sl_price:
                     sl_price = trailed_sl
                     active_data["stop_loss"] = sl_price
-                    with open(ACTIVE_JSON, "w", encoding="utf-8") as f:
+                    with open(active_json_file, "w", encoding="utf-8") as f:
                         json.dump(active_data, f, indent=4)
                     st.session_state.active_trade_memory = active_data
 
@@ -1162,7 +1173,7 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
                     active_data["stop_loss"] = e_price  # Move SL to Breakeven
                     active_data["pyramid_status"] = pyramid_res["status"]
                     
-                    with open(ACTIVE_JSON, "w", encoding="utf-8") as f:
+                    with open(active_json_file, "w", encoding="utf-8") as f:
                         json.dump(active_data, f, indent=4)
                     st.session_state.active_trade_memory = active_data
                     
@@ -1179,7 +1190,7 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
                     active_data["is_partial_booked"] = True
                     active_data["stop_loss"] = e_price # Move SL to Breakeven (Cost-to-Cost)
                 
-                    with open(ACTIVE_JSON, "w", encoding="utf-8") as f:
+                    with open(active_json_file, "w", encoding="utf-8") as f:
                         json.dump(active_data, f, indent=4)
                     st.session_state.active_trade_memory = active_data
                     
