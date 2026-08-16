@@ -1423,6 +1423,37 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
                 else:
                     st.error("❌ Telegram Alert Failed! Please check your TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID in secrets/config.")
 
+        st.markdown("---")
+        st.markdown("### 🤖 Google AI Studio (Gemini API) Connection Test")
+        
+        if st.button("🧪 Test Google AI Studio (Gemini API) Connection", use_container_width=True):
+            import google.generativeai as genai
+            import os
+            
+            gemini_key = st.secrets.get("GEMINI_API_KEY", os.getenv("GEMINI_API_KEY", ""))
+            
+            st.write("🔍 **Diagnostic Parameters Check:**")
+            if gemini_key and "YOUR_" not in gemini_key:
+                masked = f"{gemini_key[:6]}...{gemini_key[-4:]}"
+                st.write(f"- API Key Status: `✅ Key Loaded ({masked})`")
+                
+                try:
+                    genai.configure(api_key=gemini_key)
+                    start_time = time.time()
+                    model = genai.GenerativeModel('gemini-2.5-flash')
+                    
+                    with st.spinner("Pinging Google AI Studio (Gemini 2.5 Flash)..."):
+                        res = model.generate_content("Respond in 1 short sentence confirming you are active as the ANTONY Quant AI Algo Terminal Master Sanity Check Engine.")
+                        latency = round((time.time() - start_time) * 1000, 2)
+                        
+                    st.success(f"🎉 **Google Gemini API Connected Successfully!** (Latency: `{latency} ms`)")
+                    st.info(f"🤖 **Gemini Live Response:** {res.text.strip()}")
+                    
+                except Exception as e:
+                    st.error(f"❌ Gemini API Call Failed: {str(e)}")
+            else:
+                st.error("❌ Gemini API Key Missing! Please add `GEMINI_API_KEY` to Streamlit Cloud Secrets.")
+
 # Run Cloud State Recovery before scanning
 enforce_cloud_kill_switch_guard()
 
