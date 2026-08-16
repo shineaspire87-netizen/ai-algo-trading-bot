@@ -27,3 +27,22 @@ VIX_REGIMES = {
 # 🟢 SIDEWAYS REGIME THRESHOLDS
 HURST_THRESHOLD = 0.45   # H < 0.45 indicates mean-reverting sideways chop
 ADX_SIDEWAYS_MAX = 20.0  # ADX < 20 indicates weak trend
+
+# 🟢 UNIFIED BROKER & INTEGRATION ENGINE PARAMETERS
+ACTIVE_BROKER = "ZERODHA"
+PAPER_TRADING_MODE = True
+
+ZERODHA_CONFIG = {
+    "API_KEY": API_KEY,
+    "ACCESS_TOKEN": "your_zerodha_access_token"
+}
+
+DHAN_CONFIG = {
+    "CLIENT_ID": "your_dhan_client_id",
+    "ACCESS_TOKEN": "your_dhan_access_token"
+}
+
+# 🟢 CLOUD SYNC & SYSTEM HEALTH
+GOOGLE_SHEET_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbyavkzC8zCDG0gR274a3EiusQ1ji72mMi6_Ot5dT0L0r0uXfxDHfEnF87NVniJXyybg/exec"
+TELEGRAM_BOT_TOKEN = "7864817112:AAFq2c4N3M055W6u1g0wY6q0P5bBqY"
+TELEGRAM_CHAT_ID = "1388656143"
