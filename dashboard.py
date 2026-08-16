@@ -68,6 +68,13 @@ try:
 except ImportError:
     CSV_FILE = "trades.csv"
 
+try:
+    from config import ACTIVE_TRADE_FILE
+except ImportError:
+    ACTIVE_TRADE_FILE = "active_trade.json"
+
+ACTIVE_JSON = ACTIVE_TRADE_FILE
+
 def render_institutional_quant_cards(bias_status, conf_score, vwap_val, pdh_val, pdl_val, atr_val, adx_val, vol_ratio, vcp_status, sweep_status, diagnostic_reason):
     """Renders Ultra-Premium Dark Glassmorphism Quant Cards using Safe Newline-Free HTML"""
     
@@ -589,6 +596,7 @@ def log_trade_to_csv_and_update(active_data, exit_price, exit_reason, live_pnl, 
 
 @st.fragment(run_every="3s")
 def render_dashboard_main(asset_name, asset_symbol, tf_str):
+    global ACTIVE_JSON, ACTIVE_TRADE_FILE, CSV_FILE
     ist_tz = pytz.timezone('Asia/Kolkata')
     now_dt = datetime.datetime.now(ist_tz)
     now_time = now_dt.time()
@@ -617,19 +625,17 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
         st.session_state.trades_memory = []
 
     # 1. EXPLICIT INITIALIZATION AT THE VERY TOP OF THE FUNCTION
-    target_csv = "trades.csv"
-    active_json_file = "active_trade.json"
     ACTIVE_JSON = "active_trade.json"
+    active_json_file = "active_trade.json"
+    target_csv = "trades.csv"
     file_df = pd.DataFrame()
 
-    # 2. Safely fetch CSV_FILE and ACTIVE_TRADE_FILE from config or fallback
+    # 2. Safely load from config if available
     try:
-        from config import CSV_FILE, ACTIVE_TRADE_FILE
-        if isinstance(CSV_FILE, str) and CSV_FILE.strip():
-            target_csv = CSV_FILE.strip()
-        if isinstance(ACTIVE_TRADE_FILE, str) and ACTIVE_TRADE_FILE.strip():
-            active_json_file = ACTIVE_TRADE_FILE.strip()
-            ACTIVE_JSON = ACTIVE_TRADE_FILE.strip()
+        import config
+        ACTIVE_JSON = getattr(config, 'ACTIVE_TRADE_FILE', 'active_trade.json')
+        active_json_file = ACTIVE_JSON
+        target_csv = getattr(config, 'CSV_FILE', 'trades.csv')
     except Exception:
         pass
 
