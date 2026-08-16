@@ -411,6 +411,8 @@ def enforce_cloud_kill_switch_guard(trades_df=None):
         pass
     return False
 
+enforce_persistent_cloud_kill_switch = enforce_cloud_kill_switch_guard
+
 def get_asset_currency_info(selected_symbol: str):
     crypto_keys = ["BITCOIN", "ETHEREUM", "BTC-USD", "ETH-USD", "BTC", "ETH"]
     is_crypto = any(k in str(selected_symbol).upper() for k in crypto_keys)
@@ -802,9 +804,22 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
     if not trades_df.empty:
         trades_df = trades_df.drop_duplicates(subset=['Net_PnL', 'Entry_Price', 'Exit_Price'], keep='last')
 
-    # Enforce Persistent Kill Switch
-    if enforce_cloud_kill_switch_guard(trades_df):
-        st.error("🛑 பாட் பாதுகாப்பு எச்சரிக்கை: இன்று 2 தொடர் நஷ்டங்கள் பதிவாகியுள்ளதால், கூகுள் ஷீட் தரவுத்தளத்தின் மூலம் பாட் அன்றைய நாளுக்குப் பூட்டப்பட்டுள்ளது!")
+    # 1. Read testing mode state first
+    is_testing_mode = st.session_state.get('allow_extended_trades', False)
+
+    # 2. Check cloud persistent kill switch
+    is_locked_in_cloud = enforce_cloud_kill_switch_guard(trades_df)
+
+    # 3. Handle Header Banner Display conditionally
+    if is_locked_in_cloud:
+        if is_testing_mode:
+            # Override lock for testing mode & show clean blue info banner
+            st.session_state['kill_switch_active'] = False
+            st.info("🧪 **Extended Testing Mode Active:** 2 Consecutive Losses Cloud Lock bypassed for market analysis testing.")
+        else:
+            # Show red error banner for normal production mode
+            st.session_state['kill_switch_active'] = True
+            st.error("🛑 பாட் பாதுகாப்பு எச்சரிக்கை: இன்று 2 தொடர் நஷ்டங்கள் பதிவாகியுள்ளதால், கூகுள் ஷீட் தரவுத்தளத்தின் மூலம் பாட் அன்றைய நாளுக்குப் பூட்டப்பட்டுள்ளது!")
 
     total_trades = len(trades_df)
     
