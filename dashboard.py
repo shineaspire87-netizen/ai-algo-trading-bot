@@ -63,7 +63,10 @@ import yfinance as yf
 import ta
 from paper_broker import PaperBroker
 
-CSV_FILE = "trades.csv"
+try:
+    from config import CSV_FILE
+except ImportError:
+    CSV_FILE = "trades.csv"
 
 def render_institutional_quant_cards(bias_status, conf_score, vwap_val, pdh_val, pdl_val, atr_val, adx_val, vol_ratio, vcp_status, sweep_status, diagnostic_reason):
     """Renders Ultra-Premium Dark Glassmorphism Quant Cards using Safe Newline-Free HTML"""
@@ -613,12 +616,15 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
     if "trades_memory" not in st.session_state:
         st.session_state.trades_memory = []
 
-    file_df = pd.DataFrame()
-    if os.path.exists(CSV_FILE) and os.path.getsize(CSV_FILE) > 0:
+    target_csv = CSV_FILE if 'CSV_FILE' in locals() or 'CSV_FILE' in globals() else "trades.csv"
+
+    if os.path.exists(target_csv) and os.path.getsize(target_csv) > 0:
         try:
-            file_df = pd.read_csv(CSV_FILE)
-        except:
+            file_df = pd.read_csv(target_csv)
+        except Exception:
             file_df = pd.DataFrame()
+    else:
+        file_df = pd.DataFrame()
 
     gsheet_df = fetch_trades_from_google_sheet()
 
