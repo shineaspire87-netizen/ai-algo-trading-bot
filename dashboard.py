@@ -324,21 +324,36 @@ def get_intelligent_ai_response(user_input, asset_name, current_price, rsi_val, 
     else:
         return f"நீங்கள் சொல்வது புரிகிறது ANTONY! 🎯 நான் {asset_name} நேரலைச் சந்தையை 15+ இண்டிகேட்டர்கள் கொண்டு 24/7 கவனித்து வருகிறேன். தற்போதைய விலை {p_curr}{current_price:,.2f} (RSI: {rsi_val:.1f})."
 
+# 🟢 SEPARATE CURRENCY & BROKERAGE FEE CALCULATOR FOR NSE vs CRYPTO
+def calculate_trade_friction(symbol, gross_pnl):
+    """Explicitly separates Currency ($ vs ₹) and Brokerage Fee for NSE vs Crypto"""
+    is_crypto = "USD" in symbol or "BITCOIN" in symbol or "ETHEREUM" in symbol
+    
+    if is_crypto:
+        curr_sym = "$"
+        # Crypto Fee: Flat $1.50 or 0.1%
+        brokerage = round(min(1.50, abs(gross_pnl) * 0.001 + 0.50), 2)
+    else:
+        curr_sym = "₹"
+        # NSE Flat Fee: ₹45.00 (Brokerage + STT + GST + Stamp Duty)
+        brokerage = 45.00
+
+    net_pnl = round(gross_pnl - brokerage, 2)
+    return curr_sym, brokerage, net_pnl
+
 def log_trade_to_csv_and_update(active_data, exit_price, exit_reason, live_pnl, current_capital, now_dt):
-    """Central Function: Realistic Brokerage Fee ($1.50) & Guaranteed Sync"""
+    """Central Function: Log Completed Trade with Correct Currency & Brokerage"""
     exit_time_str = now_dt.strftime("%Y-%m-%d %H:%M:%S")
+    sym = active_data.get("symbol", "UNKNOWN")
     
-    # 🟢 REALISTIC BROKERAGE FEE ($1.50 for Crypto / Scalping instead of $45)
-    brokerage_fee = 1.50 if "USD" in active_data.get("symbol", "") or "BITCOIN" in active_data.get("symbol", "") else 15.0
-    
-    gross_pnl = live_pnl
-    net_pnl = round(gross_pnl - brokerage_fee, 2)
+    # 🟢 DYNAMIC SEPARATION OF CURRENCY & BROKERAGE
+    curr_sym, brokerage_fee, net_pnl = calculate_trade_friction(sym, live_pnl)
     new_capital = round(current_capital + net_pnl, 2)
 
     new_trade_record = {
         "Entry_Time": active_data.get("entry_time", exit_time_str),
         "Exit_Time": exit_time_str,
-        "Symbol": active_data.get("symbol", "UNKNOWN"),
+        "Symbol": sym,
         "Option_Type": active_data.get("type", "CALL"),
         "Entry_Price": active_data.get("entry_price", 0.0),
         "Exit_Price": round(exit_price, 2),
@@ -350,7 +365,7 @@ def log_trade_to_csv_and_update(active_data, exit_price, exit_reason, live_pnl, 
         "Capital_Balance": new_capital
     }
 
-    # 1. Update Session State Memory
+    # 1. Update Session Memory
     if "trades_memory" not in st.session_state:
         st.session_state.trades_memory = []
     st.session_state.trades_memory.append(new_trade_record)
@@ -373,22 +388,24 @@ def log_trade_to_csv_and_update(active_data, exit_price, exit_reason, live_pnl, 
     except:
         pass
 
-    # 4. Clear Active Position State
+    # 4. Clear Active Trade State
     ACTIVE_JSON = "active_trade.json"
     if os.path.exists(ACTIVE_JSON):
         with open(ACTIVE_JSON, "w", encoding="utf-8") as f:
             json.dump({"status": "NO_POSITION"}, f, indent=4)
     st.session_state.active_trade_memory = {"status": "NO_POSITION"}
 
-    # 5. Guaranteed Telegram Alert
+    # 5. Guaranteed Telegram Alert with Correct Currency Symbol
     alert_msg = (
         f"🏁 <b>TRADE COMPLETED & LOGGED!</b>\n\n"
-        f"<b>Symbol:</b> {active_data.get('symbol')}\n"
+        f"<b>Symbol:</b> {sym}\n"
         f"<b>Exit Reason:</b> {exit_reason}\n"
-        f"<b>Entry Price:</b> ${active_data.get('entry_price'):.2f}\n"
-        f"<b>Exit Price:</b> ${exit_price:.2f}\n"
-        f"<b>Net P&L:</b> ${net_pnl:+,.2f}\n"
-        f"<b>Account Capital:</b> ${new_capital:,.2f}"
+        f"<b>Entry Price:</b> {curr_sym}{active_data.get('entry_price'):.2f}\n"
+        f"<b>Exit Price:</b> {curr_sym}{exit_price:.2f}\n"
+        f"<b>Gross P&L:</b> {curr_sym}{live_pnl:+,.2f}\n"
+        f"<b>Brokerage Fee:</b> {curr_sym}{brokerage_fee:.2f}\n"
+        f"<b>Net Realized P&L:</b> {curr_sym}{net_pnl:+,.2f}\n"
+        f"<b>Account Capital:</b> {curr_sym}{new_capital:,.2f}"
     )
     send_telegram_alert(alert_msg)
     return new_capital
