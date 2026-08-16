@@ -132,30 +132,33 @@ def render_institutional_quant_cards(bias_status, conf_score, vwap_val, pdh_val,
     )
     st.markdown(html_cards, unsafe_allow_html=True)
 
-def render_trade_history_table(df_trades: pd.DataFrame):
-    """Renders Trade History Table with Explicit Fee Columns"""
+def render_trade_history_table(df_trades):
     if df_trades is None or df_trades.empty:
         st.info("ℹ️ No trades recorded yet for today.")
         return
 
     df_display = df_trades.copy()
 
-    # Explicit Table Columns Mapping
+    # 1. Safely check which subset columns ACTUALLY exist before drop_duplicates
+    possible_subset = ['Entry_Price', 'Exit_Price', 'Exit_Reason', 'Entry_Time']
+    actual_subset = [col for col in possible_subset if col in df_display.columns]
+
+    if actual_subset:
+        df_display = df_display.drop_duplicates(subset=actual_subset, keep='last')
+
+    # 2. Safely filter available display columns
     desired_cols = [
         'Entry_Time', 'Exit_Time', 'Symbol', 'Option_Type', 
         'Entry_Price', 'Exit_Price', 'Quantity', 
         'Gross_PnL', 'Brokerage_&_Taxes', 'Net_PnL', 
         'Capital_Balance', 'Exit_Reason'
     ]
-
     available_cols = [col for col in desired_cols if col in df_display.columns]
-    df_display = df_display[available_cols]
-
-    # Deduplicate UTC vs IST duplicated rows
-    if 'Entry_Price' in df_display.columns and 'Exit_Price' in df_display.columns:
-        df_display = df_display.drop_duplicates(subset=['Entry_Price', 'Exit_Price', 'Exit_Reason'], keep='last')
-
-    st.dataframe(df_display, use_container_width=True)
+    
+    if available_cols:
+        st.dataframe(df_display[available_cols], use_container_width=True)
+    else:
+        st.dataframe(df_display, use_container_width=True)
 
 def render_system_health_panel():
     """Renders Real-time System Health & Auto-Healing Monitor"""
@@ -961,6 +964,11 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
 
         # 🟢 VIDEO EXPERTS ENGINE: EZEKIEL CHEW (ORB) + MR REDDY (0DTE/1DTE SECRETS)
     
+        # Ensure DataFrame is NOT empty before accessing .iloc[-1]
+        if df is None or df.empty or len(df) == 0:
+            st.warning("⚠️ Waiting for live market data stream...")
+            return # Safely wait for next cycle if data is empty
+
         # 1. Candle Body Percentage Check (>= 60% Solid Body)
         candle_high = float(df['High'].iloc[-1])
         candle_low = float(df['Low'].iloc[-1])
