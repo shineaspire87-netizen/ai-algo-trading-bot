@@ -180,7 +180,7 @@ def fetch_trades_from_google_sheet():
         print(f"Google Sheet Fetch Error: {e}")
     return pd.DataFrame()
 
-def enforce_persistent_cloud_kill_switch(trades_df=None):
+def enforce_cloud_kill_switch_guard(trades_df=None):
     """கூகுள் ஷீட்டில் இருந்து இன்றைய நஷ்டங்களை வாசித்து Kill-Switch-ஐ நிரந்தரமாகப் பூட்டும் வசதி"""
     try:
         if trades_df is None:
@@ -196,40 +196,39 @@ def enforce_persistent_cloud_kill_switch(trades_df=None):
         if not trades:
             return False
 
-        # இன்றைய IST தேதி (YYYY-MM-DD)
+        # Current IST Today Date String
         today_ist = (datetime.datetime.utcnow() + datetime.timedelta(hours=5, minutes=30)).strftime('%Y-%m-%d')
         
-        today_trades = []
-        for t in trades:
-            entry_time = str(t.get('Entry_Time', ''))
-            if today_ist in entry_time:
-                today_trades.append(t)
+        today_trades = [t for t in trades if today_ist in str(t.get('Entry_Time', ''))]
 
-        # தொடர் நஷ்டங்களைக் கணக்கிடுதல் (Trailing Consecutive Losses)
         consecutive_losses = 0
         for trade in reversed(today_trades):
             try:
-                # ₹, $, மற்றும் இடைவெளிகளை நீக்கி சுத்தமான Float எண்ணாக மாற்றுதல்
-                raw_pnl = str(trade.get('Net_PnL', '0')).replace('₹', '').replace('$', '').strip()
-                pnl = float(raw_pnl)
-            except Exception:
+                pnl_str = str(trade.get('Net_PnL', '0')).replace('₹', '').replace('$', '').strip()
+                pnl = float(pnl_str)
+            except:
                 pnl = 0.0
 
             if pnl < 0:
                 consecutive_losses += 1
             elif pnl > 0:
-                break # லாபகரமான வர்த்தகம் வந்தால் தொடர் நஷ்டக் கணக்கு முடியும்
+                break
 
-        # 2 அல்லது அதற்கு மேற்பட்ட நஷ்டங்கள் இருந்தால் பாட்டை நிரந்தரமாகப் பூட்டு!
         if consecutive_losses >= 2:
             st.session_state['kill_switch_active'] = True
-            st.session_state['kill_switch_reason'] = f"🛑 PERMANENT CLOUD LOCK: TODAY ({today_ist}) HAD {consecutive_losses} CONSECUTIVE LOSSES."
+            st.session_state['kill_switch_reason'] = f"🛑 CLOUD LOCK: TODAY ({today_ist}) HAD {consecutive_losses} CONSECUTIVE LOSSES."
             return True
-
     except Exception as e:
-        print(f"Kill Switch Sync Error: {e}")
-        
+        pass
     return False
+
+def get_asset_currency_info(selected_symbol: str):
+    crypto_keys = ["BITCOIN", "ETHEREUM", "BTC-USD", "ETH-USD", "BTC", "ETH"]
+    is_crypto = any(k in str(selected_symbol).upper() for k in crypto_keys)
+    if is_crypto:
+        return "$", 83.5 # Symbol & USD/INR Exchange Rate
+    return "₹", 1.0
+
 
 def sync_trade_to_google_sheet(trade_record):
     """Bulletproof Sync to Google Sheets Permanent Database"""
@@ -514,7 +513,7 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
         trades_df = trades_df.drop_duplicates(subset=['Net_PnL', 'Entry_Price', 'Exit_Price'], keep='last')
 
     # Enforce Persistent Kill Switch
-    if enforce_persistent_cloud_kill_switch(trades_df):
+    if enforce_cloud_kill_switch_guard(trades_df):
         st.error("🛑 பாட் பாதுகாப்பு எச்சரிக்கை: இன்று 2 தொடர் நஷ்டங்கள் பதிவாகியுள்ளதால், கூகுள் ஷீட் தரவுத்தளத்தின் மூலம் பாட் அன்றைய நாளுக்குப் பூட்டப்பட்டுள்ளது!")
 
     total_trades = len(trades_df)
@@ -631,11 +630,23 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
             current_price = binance_price
             atm_strike = round(current_price / 100) * 100
 
+    # Dynamic Symbol Assignment based on Asset
+    curr_symbol, conversion_factor = get_asset_currency_info(asset_name)
+
     # TOP KPI METRICS CARDS
     k1, k2, k3, k4, k5, k6 = st.columns(6)
     k1.metric(f"{asset_name} Price", f"{p_curr}{current_price:,.2f}", delta=f"ATM: {atm_strike}")
-    k2.metric("Total Capital", f"₹{current_capital:,.2f}")
-    k3.metric("Net Realized P&L", f"₹{total_pnl:,.2f}", delta=f"₹{total_pnl:,.2f}")
+    
+    # Render Metric Cards with Dynamic Currency
+    if curr_symbol == "$":
+        display_capital = current_capital / conversion_factor
+        display_pnl = total_pnl / conversion_factor
+        k2.metric("Total Capital", f"${display_capital:,.2f}")
+        k3.metric("Net Realized P&L", f"${display_pnl:,.2f}", delta=f"${display_pnl:,.2f}")
+    else:
+        k2.metric("Total Capital", f"₹{current_capital:,.2f}")
+        k3.metric("Net Realized P&L", f"₹{total_pnl:,.2f}", delta=f"₹{total_pnl:,.2f}")
+
     k4.metric("Completed Trades", f"{total_trades}")
     k5.metric("Max Drawdown", f"{max_drawdown:.2f}%")
     k6.metric("Profit Factor", f"{profit_factor:.2f}", delta="Avg RRR 1:2.0")
@@ -1178,6 +1189,6 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
             st.success("✅ Credentials stored in cloud session successfully!")
 
 # Run Cloud State Recovery before scanning
-enforce_persistent_cloud_kill_switch()
+enforce_cloud_kill_switch_guard()
 
 render_dashboard_main(selected_name, selected_symbol, timeframe)
