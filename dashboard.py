@@ -454,9 +454,13 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
 
     if len(st.session_state.trades_memory) > 0:
         mem_df = pd.DataFrame(st.session_state.trades_memory)
-        trades_df = pd.concat([file_df, gsheet_df, mem_df], ignore_index=True).drop_duplicates(subset=['Entry_Time', 'Symbol'])
+        trades_df = pd.concat([file_df, gsheet_df, mem_df], ignore_index=True)
     else:
-        trades_df = pd.concat([file_df, gsheet_df], ignore_index=True).drop_duplicates(subset=['Entry_Time', 'Symbol'])
+        trades_df = pd.concat([file_df, gsheet_df], ignore_index=True)
+
+    # Remove duplicate rows based on Entry_Time / Net_PnL / Prices
+    if not trades_df.empty:
+        trades_df = trades_df.drop_duplicates(subset=['Net_PnL', 'Entry_Price', 'Exit_Price'], keep='last')
 
     total_trades = len(trades_df)
     
