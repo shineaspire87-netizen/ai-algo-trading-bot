@@ -87,6 +87,39 @@ def enforce_strict_risk_reward_exit(trade_record: dict, current_price: float) ->
 
     return {"should_exit": False, "reason": "HOLDING"}
 
+def apply_multi_asset_trailing_lock(trade_record: dict, current_price: float) -> dict:
+    entry_price = float(trade_record['Entry_Price'])
+    qty = int(trade_record['Quantity'])
+    symbol = trade_record['Symbol']
+    
+    current_pnl = (current_price - entry_price) * qty
+    is_crypto = any(k in symbol.upper() for k in ["BITCOIN", "ETHEREUM", "BTC", "ETH"])
+
+    if is_crypto:
+        # CRYPTO DOLLAR RULES ($)
+        trigger_pnl = 35.00   # +$35.00 Gain Trigger
+        lock_pnl = 15.00      # Lock +$15.00
+        max_sl = -25.00       # Max Loss Cap -$25.00
+    else:
+        # NSE RUPEES RULES (₹)
+        trigger_pnl = 250.00  # +₹250.00 Gain Trigger
+        lock_pnl = 100.00     # Lock +₹100.00 (Covers ₹52 Brokerage)
+        max_sl = -180.00      # Max Loss Cap -₹180.00
+
+    # Max Loss Cut
+    if current_pnl <= max_sl:
+        return {"should_exit": True, "reason": "🛑 STRICT MAX LOSS CAP HIT", "exit_price": current_price}
+
+    # Dynamic Profit Lock Trigger
+    max_pnl = max(trade_record.get('max_pnl_seen', 0.0), current_pnl)
+    trade_record['max_pnl_seen'] = max_pnl
+
+    if max_pnl >= trigger_pnl:
+        if current_pnl <= (max_pnl - lock_pnl):
+            return {"should_exit": True, "reason": "🔒 DYNAMIC TRAILING PROFIT LOCK TRIGGERED", "exit_price": current_price}
+
+    return {"should_exit": False, "reason": "HOLDING"}
+
 
 
 class PaperBroker:
