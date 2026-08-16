@@ -27,32 +27,39 @@ def slice_order_quantity(symbol, total_qty):
         remaining -= chunk
     return slices
 
-def execute_paper_exit(trade_record, exit_price, exit_reason):
-    symbol = trade_record['Symbol']
-    entry_price = trade_record['Entry_Price']
-    qty = trade_record['Quantity']
-    
-    # 1. Gross P&L Calculation (Before Fees)
-    gross_pnl = (exit_price - entry_price) * qty
-    
-    # 2. Calculate Exact Deducted Charges (Brokerage + STT + GST)
-    if any(crypto in symbol.upper() for crypto in ["BITCOIN", "ETHEREUM", "BTC", "ETH"]):
-        deducted_charges = round(gross_pnl * 0.001 + 0.65, 2) # Crypto Exchange Fee ($)
+def execute_paper_trade_exit(trade_record: dict, exit_price: float, exit_reason: str) -> dict:
+    """Calculates Gross PnL, Exact Deducted Friction, and Net Realized PnL"""
+    symbol = trade_record.get('Symbol', '')
+    entry_price = float(trade_record.get('Entry_Price', 0.0))
+    quantity = int(trade_record.get('Quantity', 1))
+
+    # 1. Gross PnL before fees
+    gross_pnl = (exit_price - entry_price) * quantity
+
+    # 2. Calculate Exact Brokerage + STT + GST Fees
+    is_crypto = any(k in symbol.upper() for k in ["BITCOIN", "ETHEREUM", "BTC", "ETH"])
+    if is_crypto:
         currency = "$"
+        deducted_fees = round(abs(gross_pnl * 0.001) + 0.65, 2) # Binance/Crypto Fee ($)
     else:
-        # NSE Options: ₹40 Flat Brokerage + 0.15% STT + GST
-        stt_gst = (exit_price * qty * 0.0015) + 7.50
-        deducted_charges = round(40.00 + stt_gst, 2) # NSE Friction Charges (₹)
         currency = "₹"
-        
-    # 3. Net P&L (Gross P&L minus Deducted Charges)
-    net_pnl = round(gross_pnl - deducted_charges, 2)
-    
+        # NSE Options: ₹40 Flat Brokerage + 0.15% STT + GST
+        stt_gst = (exit_price * quantity * 0.0015) + 7.50
+        deducted_fees = round(40.00 + stt_gst, 2) # NSE Charges (₹)
+
+    # 3. Net PnL after friction
+    net_pnl = round(gross_pnl - deducted_fees, 2)
+
+    trade_record['Exit_Price'] = round(exit_price, 2)
     trade_record['Gross_PnL'] = f"{currency}{gross_pnl:+,.2f}"
-    trade_record['Brokerage_&_Taxes'] = f"-{currency}{deducted_charges:,.2f}"
+    trade_record['Brokerage_&_Taxes'] = f"-{currency}{deducted_fees:,.2f}"
     trade_record['Net_PnL'] = f"{currency}{net_pnl:+,.2f}"
-    
+    trade_record['Exit_Reason'] = exit_reason
+
     return trade_record
+
+def execute_paper_exit(trade_record, exit_price, exit_reason):
+    return execute_paper_trade_exit(trade_record, exit_price, exit_reason)
 
 
 

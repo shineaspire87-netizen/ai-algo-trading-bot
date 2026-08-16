@@ -81,6 +81,64 @@ def evaluate_pyramiding_scaling(current_gain_pct: float, vcp_active: bool) -> di
         }
     return {"allow_pyramiding": False, "additional_qty_pct": 0.0, "sl_action": "NORMAL", "status": "NORMAL"}
 
+def evaluate_smart_breakout_signals(df: pd.DataFrame, asset_symbol: str) -> dict:
+    """Smart ATR Volatility Expansion & Friction Filter Strategy Engine"""
+    if df is None or len(df) < 20:
+        return {"signal": "HOLD", "confidence": 0.50, "reason": "Insufficient candle data for analysis"}
+
+    df = df.copy()
+    last_row = df.iloc[-1]
+
+    # 1. Ezekiel Chew Candle Body Ratio Filter (>= 60%)
+    candle_range = last_row['High'] - last_row['Low'] + 1e-6
+    body_size = abs(last_row['Close'] - last_row['Open'])
+    body_ratio = body_size / candle_range
+
+    if body_ratio < 0.60:
+        return {"signal": "HOLD", "confidence": 0.50, "reason": f"⚠️ Body ratio {body_ratio:.2f} < 0.60 (Weak Wick / Doji Candle Rejected)"}
+
+    # 2. ADX Trend Strength Filter (> 22.0) - Rejects Dead Sideways Chop
+    adx_ind = ta.trend.ADXIndicator(high=df['High'], low=df['Low'], close=df['Close'], window=14)
+    adx_val = adx_ind.adx().iloc[-1]
+    if adx_val < 22.0:
+        return {"signal": "HOLD", "confidence": 0.50, "reason": f"⚠️ ADX {adx_val:.1f} < 22.0 (Dead Sideways Chop - Signal Rejected)"}
+
+    # 3. Volume Spike Filter (>= 1.20x 20-MA)
+    vol_ma20 = df['Volume'].rolling(20).mean().iloc[-1]
+    vol_ratio = last_row['Volume'] / (vol_ma20 + 1e-6)
+    if vol_ratio < 1.20:
+        return {"signal": "HOLD", "confidence": 0.50, "reason": f"⚠️ Volume {vol_ratio:.2f}x < 1.20x Average (Low Institutional Volume)"}
+
+    # 4. Minimum Volatility Threshold (Expected Move > Brokerage Friction ₹50)
+    atr_val = ta.volatility.average_true_range(df['High'], df['Low'], df['Close'], window=14).iloc[-1]
+    min_required_atr = last_row['Close'] * 0.0015 # Minimum 0.15% Move Requirement
+    if atr_val < min_required_atr:
+        return {"signal": "HOLD", "confidence": 0.50, "reason": f"⚠️ ATR {atr_val:.2f} < Volatility Threshold (Potential Brokerage Fee Trap)"}
+
+    # 5. EMA 9/21 Trend & VWAP Direction Alignment
+    ema9 = ta.trend.ema_indicator(df['Close'], window=9).iloc[-1]
+    ema21 = ta.trend.ema_indicator(df['Close'], window=21).iloc[-1]
+    vwap_series = (df['Volume'] * (df['High'] + df['Low'] + df['Close']) / 3).cumsum() / df['Volume'].cumsum()
+    vwap_curr = vwap_series.iloc[-1]
+
+    # BUY CALL Condition
+    if last_row['Close'] > vwap_curr and ema9 > ema21 and last_row['Close'] > last_row['Open']:
+        return {
+            "signal": "BUY_CALL",
+            "confidence": 0.72,
+            "reason": f"🚀 High-Conviction Bullish Breakout: Body {body_ratio:.2f} | ADX {adx_val:.1f} | Vol {vol_ratio:.2f}x | ATR {atr_val:.2f}"
+        }
+
+    # BUY PUT Condition
+    if last_row['Close'] < vwap_curr and ema9 < ema21 and last_row['Close'] < last_row['Open']:
+        return {
+            "signal": "BUY_PUT",
+            "confidence": 0.72,
+            "reason": f"🚨 High-Conviction Bearish Breakdown: Body {body_ratio:.2f} | ADX {adx_val:.1f} | Vol {vol_ratio:.2f}x | ATR {atr_val:.2f}"
+        }
+
+    return {"signal": "HOLD", "confidence": 0.50, "reason": "⏸️ Waiting for clear VWAP/EMA Trend Breakout"}
+
 WATCHLIST = {
     "BANKNIFTY": "^NSEBANK",
     "NIFTY50": "^NSEI",

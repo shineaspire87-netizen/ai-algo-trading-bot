@@ -133,6 +133,31 @@ def render_institutional_quant_cards(bias_status, conf_score, vwap_val, pdh_val,
     )
     st.markdown(html_cards, unsafe_allow_html=True)
 
+def render_trade_history_table(df_trades: pd.DataFrame):
+    """Renders Trade History Table with Explicit Fee Columns"""
+    if df_trades is None or df_trades.empty:
+        st.info("ℹ️ No trades recorded yet for today.")
+        return
+
+    df_display = df_trades.copy()
+
+    # Explicit Table Columns Mapping
+    desired_cols = [
+        'Entry_Time', 'Exit_Time', 'Symbol', 'Option_Type', 
+        'Entry_Price', 'Exit_Price', 'Quantity', 
+        'Gross_PnL', 'Brokerage_&_Taxes', 'Net_PnL', 
+        'Capital_Balance', 'Exit_Reason'
+    ]
+
+    available_cols = [col for col in desired_cols if col in df_display.columns]
+    df_display = df_display[available_cols]
+
+    # Deduplicate UTC vs IST duplicated rows
+    if 'Entry_Price' in df_display.columns and 'Exit_Price' in df_display.columns:
+        df_display = df_display.drop_duplicates(subset=['Entry_Price', 'Exit_Price', 'Exit_Reason'], keep='last')
+
+    st.dataframe(df_display, use_container_width=True)
+
 
 st.set_page_config(
     page_title="ANTONY Quant AI Terminal", 
@@ -558,9 +583,11 @@ def log_trade_to_csv_and_update(active_data, exit_price, exit_reason, live_pnl, 
         "Stop_Loss": active_data.get("stop_loss", 0.0),
         "Target": active_data.get("target", 0.0),
         "Quantity": active_data.get("qty", 15),
-        "Exit_Reason": exit_reason,
+        "Gross_PnL": f"{curr_sym}{live_pnl:+,.2f}",
+        "Brokerage_&_Taxes": f"-{curr_sym}{brokerage_fee:,.2f}",
         "Net_PnL": net_pnl,
-        "Capital_Balance": new_capital
+        "Capital_Balance": new_capital,
+        "Exit_Reason": exit_reason
     }
 
     # 1. Update Session Memory
@@ -1363,10 +1390,7 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
                 csv_bytes = trades_df.to_csv(index=False).encode('utf-8')
                 st.download_button("📥 Download Excel/CSV Report", csv_bytes, "trades_report.csv", "text/csv")
 
-        if total_trades > 0:
-            st.dataframe(trades_df, use_container_width=True)
-        else:
-            st.info("இன்னும் டிரேடுகள் முடிவடையவில்லை.")
+        render_trade_history_table(trades_df)
 
         st.markdown("---")
 
