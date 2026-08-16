@@ -618,15 +618,20 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
 
     # 1. EXPLICIT INITIALIZATION AT THE VERY TOP OF THE FUNCTION
     target_csv = "trades.csv"
+    active_json_file = "active_trade.json"
+    ACTIVE_JSON = "active_trade.json"
     file_df = pd.DataFrame()
 
-    # 2. Safely fetch CSV_FILE from config or fallback
+    # 2. Safely fetch CSV_FILE and ACTIVE_TRADE_FILE from config or fallback
     try:
-        from config import CSV_FILE
+        from config import CSV_FILE, ACTIVE_TRADE_FILE
         if isinstance(CSV_FILE, str) and CSV_FILE.strip():
             target_csv = CSV_FILE.strip()
+        if isinstance(ACTIVE_TRADE_FILE, str) and ACTIVE_TRADE_FILE.strip():
+            active_json_file = ACTIVE_TRADE_FILE.strip()
+            ACTIVE_JSON = ACTIVE_TRADE_FILE.strip()
     except Exception:
-        target_csv = "trades.csv"
+        pass
 
     # 3. Exception-Safe File Check
     try:
