@@ -180,6 +180,57 @@ def fetch_trades_from_google_sheet():
         print(f"Google Sheet Fetch Error: {e}")
     return pd.DataFrame()
 
+def enforce_persistent_cloud_kill_switch(trades_df=None):
+    """கூகுள் ஷீட்டில் இருந்து இன்றைய நஷ்டங்களை வாசித்து Kill-Switch-ஐ நிரந்தரமாகப் பூட்டும் வசதி"""
+    try:
+        if trades_df is None:
+            trades_df = fetch_trades_from_google_sheet()
+        
+        if isinstance(trades_df, pd.DataFrame) and not trades_df.empty:
+            trades = trades_df.to_dict(orient='records')
+        elif isinstance(trades_df, list):
+            trades = trades_df
+        else:
+            trades = []
+            
+        if not trades:
+            return False
+
+        # இன்றைய IST தேதி (YYYY-MM-DD)
+        today_ist = (datetime.datetime.utcnow() + datetime.timedelta(hours=5, minutes=30)).strftime('%Y-%m-%d')
+        
+        today_trades = []
+        for t in trades:
+            entry_time = str(t.get('Entry_Time', ''))
+            if today_ist in entry_time:
+                today_trades.append(t)
+
+        # தொடர் நஷ்டங்களைக் கணக்கிடுதல் (Trailing Consecutive Losses)
+        consecutive_losses = 0
+        for trade in reversed(today_trades):
+            try:
+                # ₹, $, மற்றும் இடைவெளிகளை நீக்கி சுத்தமான Float எண்ணாக மாற்றுதல்
+                raw_pnl = str(trade.get('Net_PnL', '0')).replace('₹', '').replace('$', '').strip()
+                pnl = float(raw_pnl)
+            except Exception:
+                pnl = 0.0
+
+            if pnl < 0:
+                consecutive_losses += 1
+            elif pnl > 0:
+                break # லாபகரமான வர்த்தகம் வந்தால் தொடர் நஷ்டக் கணக்கு முடியும்
+
+        # 2 அல்லது அதற்கு மேற்பட்ட நஷ்டங்கள் இருந்தால் பாட்டை நிரந்தரமாகப் பூட்டு!
+        if consecutive_losses >= 2:
+            st.session_state['kill_switch_active'] = True
+            st.session_state['kill_switch_reason'] = f"🛑 PERMANENT CLOUD LOCK: TODAY ({today_ist}) HAD {consecutive_losses} CONSECUTIVE LOSSES."
+            return True
+
+    except Exception as e:
+        print(f"Kill Switch Sync Error: {e}")
+        
+    return False
+
 def sync_trade_to_google_sheet(trade_record):
     """Bulletproof Sync to Google Sheets Permanent Database"""
     try:
@@ -462,6 +513,10 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
     if not trades_df.empty:
         trades_df = trades_df.drop_duplicates(subset=['Net_PnL', 'Entry_Price', 'Exit_Price'], keep='last')
 
+    # Enforce Persistent Kill Switch
+    if enforce_persistent_cloud_kill_switch(trades_df):
+        st.error("🛑 பாட் பாதுகாப்பு எச்சரிக்கை: இன்று 2 தொடர் நஷ்டங்கள் பதிவாகியுள்ளதால், கூகுள் ஷீட் தரவுத்தளத்தின் மூலம் பாட் அன்றைய நாளுக்குப் பூட்டப்பட்டுள்ளது!")
+
     total_trades = len(trades_df)
     
     if total_trades > 0:
@@ -618,7 +673,7 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
         # COOLDOWN & 2 CONSECUTIVE LOSSES KILL-SWITCH CHECK
         trades_today_count = 0
         last_exit_time = None
-        is_2_consecutive_losses = False
+        is_2_consecutive_losses = True if st.session_state.get('kill_switch_active', False) else False
 
         if total_trades > 0 and 'Exit_Time' in trades_df.columns:
             today_str = now_dt.strftime('%Y-%m-%d')
@@ -1121,5 +1176,8 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
             st.write(f"- Google Sheets Cloud Sync: {'✅ OK' if health['sheets'] else '❌ Disconnected'}")
             st.write(f"- Telegram Alert Bot: {'✅ OK' if health['telegram'] else '❌ Disconnected'}")
             st.success("✅ Credentials stored in cloud session successfully!")
+
+# Run Cloud State Recovery before scanning
+enforce_persistent_cloud_kill_switch()
 
 render_dashboard_main(selected_name, selected_symbol, timeframe)
