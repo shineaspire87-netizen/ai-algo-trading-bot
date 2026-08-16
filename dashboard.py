@@ -63,9 +63,9 @@ import ta
 from paper_broker import PaperBroker
 
 def render_institutional_quant_cards(bias_status, conf_score, vwap_val, pdh_val, pdl_val, atr_val, adx_val, vol_ratio, vcp_status, sweep_status, diagnostic_reason):
-    """Renders Ultra-Premium Dark Glassmorphism Quant Cards with Liquidity Sweep Detector"""
+    """Renders Ultra-Premium Dark Glassmorphism Quant Cards with HTML Execution Enabled"""
     
-    bias_color = "#10b981" if "BUY_CALL" in bias_status else ("#ef4444" if "BUY_PUT" in bias_status else "#f59e0b")
+    bias_color = "#10b981" if "BUY_CALL" in str(bias_status) else ("#ef4444" if "BUY_PUT" in str(bias_status) else "#f59e0b")
     
     try:
         conf_val = float(conf_score)
@@ -74,18 +74,46 @@ def render_institutional_quant_cards(bias_status, conf_score, vwap_val, pdh_val,
 
     html_cards = f"""
     <style>
-        .quant-grid {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; margin: 15px 0; }}
-        .quant-card {{ background: rgba(17, 24, 39, 0.85); backdrop-filter: blur(12px); border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; padding: 16px; }}
-        .quant-title {{ font-size: 12px; font-weight: 700; color: #9ca3af; text-transform: uppercase; margin-bottom: 8px; }}
-        .quant-val-big {{ font-size: 22px; font-weight: 800; color: {bias_color}; }}
-        .quant-row {{ display: flex; justify-content: space-between; font-size: 13px; color: #d1d5db; padding: 3px 0; border-bottom: 1px solid rgba(255,255,255,0.05); }}
+        .quant-grid {{
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 14px;
+            margin: 15px 0;
+        }}
+        .quant-card {{
+            background: rgba(17, 24, 39, 0.85) !important;
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.1) !important;
+            border-radius: 10px !important;
+            padding: 16px !important;
+        }}
+        .quant-title {{
+            font-size: 12px !important;
+            font-weight: 700 !important;
+            color: #9ca3af !important;
+            text-transform: uppercase !important;
+            margin-bottom: 8px !important;
+        }}
+        .quant-val-big {{
+            font-size: 22px !important;
+            font-weight: 800 !important;
+            color: {bias_color} !important;
+        }}
+        .quant-row {{
+            display: flex;
+            justify-content: space-between;
+            font-size: 13px !important;
+            color: #d1d5db !important;
+            padding: 4px 0 !important;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }}
     </style>
 
     <div class="quant-grid">
         <div class="quant-card">
             <div class="quant-title">🎯 Directional Bias & AI Confidence</div>
             <div class="quant-val-big">{bias_status}</div>
-            <div style="font-size: 13px; color: #e5e7eb;">AI Score: <b>{conf_val:.1f}%</b></div>
+            <div style="font-size: 13px; color: #e5e7eb; margin-top: 4px;">AI Score: <b>{conf_val:.1f}%</b></div>
             <div style="font-size: 11px; color: #10b981; margin-top: 4px;">{vcp_status}</div>
             <div style="font-size: 11px; color: #f59e0b; margin-top: 2px;">{sweep_status}</div>
         </div>
@@ -101,7 +129,7 @@ def render_institutional_quant_cards(bias_status, conf_score, vwap_val, pdh_val,
             <div class="quant-title">🛡️ Volatility & Order Flow Checks</div>
             <div class="quant-row"><span>ADX Strength:</span><b>{adx_val}</b></div>
             <div class="quant-row"><span>Volume Spike:</span><b>{vol_ratio}x</b></div>
-            <div class="quant-row"><span>Order Flow Trap:</span><b style="color: #10b981;">{'DETECTED' if 'TRAP' in sweep_status else 'SAFE'}</b></div>
+            <div class="quant-row"><span>Order Flow Trap:</span><b style="color: #10b981;">{'DETECTED' if 'TRAP' in str(sweep_status) else 'SAFE'}</b></div>
         </div>
     </div>
 
@@ -400,18 +428,66 @@ timeframe = st.sidebar.selectbox("Select Candle Timeframe:", ["1m", "5m", "15m",
 st.sidebar.markdown("---")
 st.sidebar.markdown("### 🧪 Testing & Override Controls")
 
-# Initialize session state if not set
-if 'allow_extended_trades' not in st.session_state:
-    st.session_state['allow_extended_trades'] = False
+TESTING_STATE_FILE = "testing_mode_state.json"
 
-# Direct Key Binding ensures toggle STAYS ON across auto-refreshes!
+def load_testing_override_state() -> bool:
+    """Read state from URL query parameters and disk file so it SURVIVES hard page refreshes!"""
+    # 1. Check URL query params first
+    try:
+        if st.query_params.get("testing_mode") == "true":
+            return True
+    except Exception:
+        pass
+
+    # 2. Check local disk file
+    if os.path.exists(TESTING_STATE_FILE):
+        try:
+            with open(TESTING_STATE_FILE, "r") as f:
+                data = json.load(f)
+                return data.get("allow_extended_trades", False)
+        except Exception:
+            pass
+            
+    return False
+
+def save_testing_override_state(val: bool):
+    """Save state to both disk file and URL query params"""
+    try:
+        # Save to local json
+        with open(TESTING_STATE_FILE, "w") as f:
+            json.dump({"allow_extended_trades": val}, f)
+            
+        # Save to URL Query Parameters
+        if val:
+            st.query_params["testing_mode"] = "true"
+        else:
+            if "testing_mode" in st.query_params:
+                del st.query_params["testing_mode"]
+    except Exception as e:
+        pass
+
+# Initialize session state from File/URL on app startup
+if 'allow_extended_trades' not in st.session_state:
+    st.session_state['allow_extended_trades'] = load_testing_override_state()
+
+# Callback triggered ONLY when user manually clicks toggle
+def on_testing_toggle_change():
+    new_status = st.session_state['testing_toggle_widget']
+    st.session_state['allow_extended_trades'] = new_status
+    save_testing_override_state(new_status)
+
+# Load current state
+current_toggle_val = st.session_state.get('allow_extended_trades', False)
+
+# BULLETPROOF PERMANENT TOGGLE WIDGET
 st.sidebar.toggle(
     "🧪 Enable Extended Testing Mode (Unlimited Trades)",
-    key="allow_extended_trades", # Direct Streamlit State Key!
-    help="Turn ON to allow the bot to scan beyond 3 trades for performance evaluation."
+    value=current_toggle_val,
+    key="testing_toggle_widget",
+    on_change=on_testing_toggle_change,
+    help="SURVIVES PAGE REFRESHES: Saved to URL query parameters and disk file."
 )
 
-# Read the persistent value
 allow_extended_trades = st.session_state['allow_extended_trades']
 
 if allow_extended_trades:
