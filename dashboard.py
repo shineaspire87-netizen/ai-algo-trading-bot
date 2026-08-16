@@ -1476,35 +1476,57 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
                     st.error("❌ Telegram Alert Failed! Please check your TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID in secrets/config.")
 
         st.markdown("---")
-        st.markdown("### 🤖 Google AI Studio (Gemini API) Connection Test")
-        
+        st.markdown("### 🤖 Google AI Studio (Gemini 1.5 API) Connection Test")
+
+        # Use session state to keep test results permanently on screen
         if st.button("🧪 Test Google AI Studio (Gemini API) Connection", use_container_width=True):
-            import google.generativeai as genai
+            st.session_state['run_gemini_test'] = True
+
+        if st.session_state.get('run_gemini_test', False):
+            import requests
             import os
-            
+            import time
+
             gemini_key = st.secrets.get("GEMINI_API_KEY", os.getenv("GEMINI_API_KEY", ""))
-            
-            st.write("🔍 **Diagnostic Parameters Check:**")
-            if gemini_key and "YOUR_" not in gemini_key:
-                masked = f"{gemini_key[:6]}...{gemini_key[-4:]}"
-                st.write(f"- API Key Status: `✅ Key Loaded ({masked})`")
-                
-                try:
-                    genai.configure(api_key=gemini_key)
-                    start_time = time.time()
-                    model = genai.GenerativeModel('gemini-2.5-flash')
-                    
-                    with st.spinner("Pinging Google AI Studio (Gemini 2.5 Flash)..."):
-                        res = model.generate_content("Respond in 1 short sentence confirming you are active as the ANTONY Quant AI Algo Terminal Master Sanity Check Engine.")
-                        latency = round((time.time() - start_time) * 1000, 2)
-                        
-                    st.success(f"🎉 **Google Gemini API Connected Successfully!** (Latency: `{latency} ms`)")
-                    st.info(f"🤖 **Gemini Live Response:** {res.text.strip()}")
-                    
-                except Exception as e:
-                    st.error(f"❌ Gemini API Call Failed: {str(e)}")
+
+            st.write("🔍 **Gemini API Configuration Check:**")
+
+            if not gemini_key or "YOUR_" in gemini_key:
+                st.error("❌ `GEMINI_API_KEY` Missing! Please add `GEMINI_API_KEY` to Streamlit Cloud -> Settings -> Secrets.")
             else:
-                st.error("❌ Gemini API Key Missing! Please add `GEMINI_API_KEY` to Streamlit Cloud Secrets.")
+                masked = f"{gemini_key[:6]}...{gemini_key[-4:]}"
+                st.write(f"- **API Key Detected:** `✅ {masked}`")
+
+                rest_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={gemini_key}"
+                headers = {"Content-Type": "application/json"}
+                payload = {
+                    "contents": [{
+                        "parts": [{"text": "Respond in 1 short sentence confirming you are active for ANTONY Quant AI Algo Terminal."}]
+                    }]
+                }
+
+                try:
+                    start_time = time.time()
+                    with st.spinner("Pinging Google Gemini 1.5 Flash REST API..."):
+                        response = requests.post(rest_url, json=payload, headers=headers, timeout=10)
+                        latency = round((time.time() - start_time) * 1000, 2)
+
+                    res_json = response.json()
+
+                    if response.status_code == 200 and "candidates" in res_json:
+                        gemini_text = res_json["candidates"][0]["content"]["parts"][0]["text"].strip()
+                        st.success(f"🎉 **Google Gemini API Connected Successfully!** (Latency: `{latency} ms`)")
+                        st.info(f"🤖 **Gemini Live Response:** {gemini_text}")
+                    else:
+                        error_msg = res_json.get("error", {}).get("message", "Unknown API Error")
+                        st.error(f"❌ Gemini API Rejected ({response.status_code}): {error_msg}")
+
+                except Exception as e:
+                    st.error(f"❌ Network Request Exception: {str(e)}")
+
+            if st.button("🔄 Clear Test Results"):
+                st.session_state['run_gemini_test'] = False
+                st.rerun()
 
 # Run Cloud State Recovery before scanning
 enforce_cloud_kill_switch_guard()
