@@ -75,6 +75,16 @@ except ImportError:
 
 ACTIVE_JSON = ACTIVE_TRADE_FILE
 
+ACTIVE_FILE_FALLBACK = "active_trade.json"
+
+def get_active_trade_file_path() -> str:
+    """100% UnboundLocalError-Safe Helper Function"""
+    try:
+        import config
+        return getattr(config, 'ACTIVE_TRADE_FILE', 'active_trade.json')
+    except Exception:
+        return 'active_trade.json'
+
 def render_institutional_quant_cards(bias_status, conf_score, vwap_val, pdh_val, pdl_val, atr_val, adx_val, vol_ratio, vcp_status, sweep_status, diagnostic_reason):
     """Renders Ultra-Premium Dark Glassmorphism Quant Cards using Safe Newline-Free HTML"""
     
@@ -625,16 +635,14 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
         st.session_state.trades_memory = []
 
     # 1. EXPLICIT INITIALIZATION AT THE VERY TOP OF THE FUNCTION
-    ACTIVE_JSON = "active_trade.json"
-    active_json_file = "active_trade.json"
+    ACTIVE_JSON = get_active_trade_file_path()
+    active_json_file = ACTIVE_JSON
     target_csv = "trades.csv"
     file_df = pd.DataFrame()
 
     # 2. Safely load from config if available
     try:
         import config
-        ACTIVE_JSON = getattr(config, 'ACTIVE_TRADE_FILE', 'active_trade.json')
-        active_json_file = ACTIVE_JSON
         target_csv = getattr(config, 'CSV_FILE', 'trades.csv')
     except Exception:
         pass
@@ -829,14 +837,14 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
         if "active_trade_memory" not in st.session_state:
             st.session_state.active_trade_memory = {"status": "NO_POSITION"}
 
-        ACTIVE_JSON = "active_trade.json"
-        if os.path.exists(ACTIVE_JSON):
+        ACTIVE_JSON = get_active_trade_file_path()
+        if os.path.exists(ACTIVE_JSON) and os.path.getsize(ACTIVE_JSON) > 0:
             try:
                 with open(ACTIVE_JSON, "r", encoding="utf-8") as f:
                     file_active = json.load(f)
                     if file_active.get("status") == "ACTIVE":
                         st.session_state.active_trade_memory = file_active
-            except:
+            except Exception as e:
                 pass
 
         active_data = st.session_state.active_trade_memory
