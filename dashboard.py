@@ -2,7 +2,7 @@
 import streamlit as st
 from backtester import run_historical_backtest
 from system_health import check_system_integrity
-from config import GOOGLE_SHEET_WEB_APP_URL, TELEGRAM_BOT_TOKEN
+from config import GOOGLE_SHEET_WEB_APP_URL, TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID
 import streamlit.components.v1 as components
 import pandas as pd
 
@@ -245,8 +245,7 @@ def sync_trade_to_google_sheet(trade_record):
     except Exception as e:
         print(f"Google Sheet Sync Error: {e}")
 
-TELEGRAM_BOT_TOKEN = "7864817112:AAFq2c4N3M055W6u1g0wY6q0P5bBqY"
-TELEGRAM_CHAT_ID = "1388656143"
+# Using Telegram credentials imported from config
 
 def send_telegram_alert(msg):
     """Bulletproof Dual-Route Telegram Notifier"""
