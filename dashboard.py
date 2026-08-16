@@ -132,21 +132,53 @@ def render_institutional_quant_cards(bias_status, conf_score, vwap_val, pdh_val,
     )
     st.markdown(html_cards, unsafe_allow_html=True)
 
-def render_trade_history_table(df_trades):
+def render_trade_history_table(df_trades: pd.DataFrame):
+    """Renders Trade History Table with Exact Currency Symbols ($ or ₹)"""
     if df_trades is None or df_trades.empty:
         st.info("ℹ️ No trades recorded yet for today.")
         return
 
     df_display = df_trades.copy()
 
-    # 1. Safely check which subset columns ACTUALLY exist before drop_duplicates
-    possible_subset = ['Entry_Price', 'Exit_Price', 'Exit_Reason', 'Entry_Time']
-    actual_subset = [col for col in possible_subset if col in df_display.columns]
+    # Format Currency Symbols dynamically row-by-row
+    for idx, row in df_display.iterrows():
+        symbol = str(row.get('Symbol', ''))
+        is_crypto = any(k in symbol.upper() for k in ["BITCOIN", "ETHEREUM", "BTC", "ETH"])
+        curr = "$" if is_crypto else "₹"
 
-    if actual_subset:
-        df_display = df_display.drop_duplicates(subset=actual_subset, keep='last')
+        # Format Net_PnL
+        if 'Net_PnL' in df_display.columns:
+            try:
+                val = float(str(row['Net_PnL']).replace('₹', '').replace('$', '').replace(',', '').strip())
+                df_display.at[idx, 'Net_PnL'] = f"{curr}{val:+,.2f}" if val != 0 else f"{curr}0.00"
+            except:
+                pass
 
-    # 2. Safely filter available display columns
+        # Format Capital_Balance
+        if 'Capital_Balance' in df_display.columns:
+            try:
+                val = float(str(row['Capital_Balance']).replace('₹', '').replace('$', '').replace(',', '').strip())
+                df_display.at[idx, 'Capital_Balance'] = f"{curr}{val:,.2f}"
+            except:
+                pass
+
+        # Format Gross_PnL
+        if 'Gross_PnL' in df_display.columns:
+            try:
+                val = float(str(row['Gross_PnL']).replace('₹', '').replace('$', '').replace(',', '').strip())
+                df_display.at[idx, 'Gross_PnL'] = f"{curr}{val:+,.2f}" if val != 0 else f"{curr}0.00"
+            except:
+                pass
+
+        # Format Brokerage_&_Taxes
+        if 'Brokerage_&_Taxes' in df_display.columns:
+            try:
+                val = float(str(row['Brokerage_&_Taxes']).replace('₹', '').replace('$', '').replace(',', '').strip())
+                df_display.at[idx, 'Brokerage_&_Taxes'] = f"-{curr}{abs(val):,.2f}"
+            except:
+                pass
+
+    # Deduplicate & Display desired columns
     desired_cols = [
         'Entry_Time', 'Exit_Time', 'Symbol', 'Option_Type', 
         'Entry_Price', 'Exit_Price', 'Quantity', 
@@ -154,11 +186,11 @@ def render_trade_history_table(df_trades):
         'Capital_Balance', 'Exit_Reason'
     ]
     available_cols = [col for col in desired_cols if col in df_display.columns]
-    
-    if available_cols:
-        st.dataframe(df_display[available_cols], use_container_width=True)
-    else:
-        st.dataframe(df_display, use_container_width=True)
+
+    if 'Entry_Price' in df_display.columns and 'Exit_Price' in df_display.columns:
+        df_display = df_display.drop_duplicates(subset=['Entry_Price', 'Exit_Price'], keep='last')
+
+    st.dataframe(df_display[available_cols], use_container_width=True)
 
 def render_system_health_panel():
     """Renders Compact, Executive Glassmorphism System Health Grid"""
