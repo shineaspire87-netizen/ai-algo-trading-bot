@@ -61,6 +61,32 @@ def execute_paper_trade_exit(trade_record: dict, exit_price: float, exit_reason:
 def execute_paper_exit(trade_record, exit_price, exit_reason):
     return execute_paper_trade_exit(trade_record, exit_price, exit_reason)
 
+def enforce_strict_risk_reward_exit(trade_record: dict, current_price: float) -> dict:
+    """Enforces Max Loss Cap at -$25.00 and Allows Target Gains up to +$50 / +$100"""
+    entry_price = float(trade_record['Entry_Price'])
+    qty = int(trade_record['Quantity'])
+    symbol = trade_record['Symbol']
+    
+    is_crypto = any(k in symbol.upper() for k in ["BITCOIN", "ETHEREUM", "BTC", "ETH"])
+    
+    current_pnl = (current_price - entry_price) * qty
+    
+    if is_crypto:
+        # STRICT CRYPTO CAP: Max Loss = -$25.00
+        if current_pnl <= -25.00:
+            return {"should_exit": True, "reason": "🛑 STRICT MAX LOSS CAP (-$25.00 Hit)", "exit_price": current_price}
+            
+        # TARGET 1: +$50.00 (+6% Gain)
+        if current_pnl >= 50.00 and not trade_record.get('t1_hit', False):
+            trade_record['t1_hit'] = True
+            return {"should_exit": False, "action": "PARTIAL_PROFIT_BOOKING", "reason": "🎯 TARGET 1 HIT (+$50.00 Gain)"}
+
+        # TARGET 2: +$100.00 (+12% Gain)
+        if current_pnl >= 100.00:
+            return {"should_exit": True, "reason": "🎯 TARGET 2 FULL EXIT (+$100.00 Gain)", "exit_price": current_price}
+
+    return {"should_exit": False, "reason": "HOLDING"}
+
 
 
 class PaperBroker:
