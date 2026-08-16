@@ -346,6 +346,21 @@ selected_name = st.sidebar.selectbox("Select Asset Chart to View:", list(WATCHLI
 selected_symbol = WATCHLIST[selected_name]
 timeframe = st.sidebar.selectbox("Select Candle Timeframe:", ["1m", "5m", "15m", "1h", "1d"], index=1)
 
+st.sidebar.markdown("---")
+st.sidebar.markdown("### 🧪 Testing & Override Controls")
+
+# Temporary Override Toggle Button for Market Analysis Check
+allow_extended_trades = st.sidebar.toggle(
+    "🧪 Enable Extended Testing Mode (Unlimited Trades)",
+    value=st.session_state.get('allow_extended_trades', False),
+    help="Turn ON to allow the bot to scan and trade beyond 3 trades for performance evaluation."
+)
+
+st.session_state['allow_extended_trades'] = allow_extended_trades
+
+if allow_extended_trades:
+    st.sidebar.info("⚡ **Testing Mode Active:** Bot will continue scanning for 70%+ AI Confidence trades beyond the 3-trade daily limit.")
+
 period_map = {"1m": "1d", "5m": "5d", "15m": "5d", "1h": "1mo", "1d": "3mo"}
 
 def get_intelligent_ai_response(user_input, asset_name, current_price, rsi_val, is_market_open, active_data, current_capital, total_pnl, win_rate):
@@ -711,7 +726,7 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
                 is_cooldown_active = True
                 cooldown_remaining_mins = int((900 - time_diff_sec) // 60) + 1
 
-        is_daily_limit_reached = (trades_today_count >= 3)
+        is_daily_limit_reached = False if st.session_state.get('allow_extended_trades', False) else (trades_today_count >= 3)
 
         # 🟢 INSTITUTIONAL RULE 1: 09:15 - 09:30 AM OPENING VOLATILITY BUFFER CHECK
         is_opening_buffer = False

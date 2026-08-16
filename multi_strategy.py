@@ -1,5 +1,6 @@
 # multi_strategy.py - With Direct Telegram Mobile Alerts & Hurst Engine
 import os
+import streamlit as st
 import datetime
 import yfinance as yf
 import pandas as pd
@@ -164,3 +165,16 @@ def scan_all_assets():
             continue
 
     return best_opportunity, scanned_results
+
+def is_daily_limit_reached(completed_trades_count: int) -> bool:
+    """Check if 3 trades daily limit is reached (Bypassed if Extended Testing Mode is ON)"""
+    
+    # Check if user enabled the temporary testing toggle in Dashboard
+    is_testing_mode_on = st.session_state.get('allow_extended_trades', False)
+    
+    if is_testing_mode_on:
+        # Testing Mode is ON -> Allow scanning beyond 3 trades
+        return False
+        
+    # Default Safe Mode -> Hard Lock at 3 completed trades
+    return completed_trades_count >= 3
