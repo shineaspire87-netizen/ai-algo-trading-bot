@@ -188,3 +188,42 @@ def is_safe_entry_window_in_candle() -> bool:
         return True
         
     return False # Rejects entry in 1st minute and last 1 minute of the candle
+
+def calculate_dynamic_atr_levels(df: pd.DataFrame, entry_price: float, signal_type: str, atr_multiplier_sl: float = 1.5, atr_multiplier_tp1: float = 1.5, atr_multiplier_tp2: float = 3.0):
+    """Dynamic ATR-Based Stop Loss & Target Calculation"""
+    df = df.copy()
+    atr = ta.volatility.average_true_range(df['High'], df['Low'], df['Close'], window=14).iloc[-1]
+    
+    if signal_type == "BUY_CALL":
+        sl = entry_price - (atr * atr_multiplier_sl)
+        tp1 = entry_price + (atr * atr_multiplier_tp1)
+        tp2 = entry_price + (atr * atr_multiplier_tp2)
+    else: # BUY_PUT
+        sl = entry_price + (atr * atr_multiplier_sl)
+        tp1 = entry_price - (atr * atr_multiplier_tp1)
+        tp2 = entry_price - (atr * atr_multiplier_tp2)
+        
+    return round(sl, 2), round(tp1, 2), round(tp2, 2), round(atr, 2)
+
+def evaluate_soft_kill_switch_position_scaling(consecutive_losses: int):
+    """Soft Kill-Switch: Position Sizing & Confidence Threshold Adjustment"""
+    if consecutive_losses >= 2:
+        # Soft Lock: Scale Position Size to 50% & Require 75% AI Confidence
+        return {
+            "position_scale_factor": 0.50, # 50% Position Size
+            "min_ai_confidence": 0.75,     # Higher Bar for 3rd Trade (75%)
+            "required_adx": 28.0,          # Strong Trend Only
+            "status": "SOFT_KILL_SWITCH_ACTIVE"
+        }
+    return {
+        "position_scale_factor": 1.00,
+        "min_ai_confidence": 0.70,
+        "required_adx": 25.0,
+        "status": "NORMAL"
+    }
+
+def is_safe_mid_candle_window() -> bool:
+    """Rule #4: Safest Entry Window (2nd to 4th minute inside 5-min candle: 60s to 240s)"""
+    now = datetime.datetime.now()
+    second_in_candle = now.second + (now.minute % 5) * 60
+    return 60 <= second_in_candle <= 240

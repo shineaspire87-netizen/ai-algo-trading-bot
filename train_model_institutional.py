@@ -87,3 +87,42 @@ def predict_signal_probability(model, features_list, current_row_df):
     except Exception as e:
         logging.error(f"Prediction Error: {e}")
         return 0.50
+
+def train_walk_forward_ensemble(df: pd.DataFrame):
+    """Walk-Forward Cross Validation to Prevent Overfitting"""
+    df = df.copy()
+    
+    # Feature Calculations
+    adx_ind = ta.trend.ADXIndicator(high=df['High'], low=df['Low'], close=df['Close'], window=14)
+    df['ADX'] = adx_ind.adx()
+    df['ATR'] = ta.volatility.average_true_range(df['High'], df['Low'], df['Close'], window=14)
+    df['Body_Ratio'] = abs(df['Close'] - df['Open']) / (df['High'] - df['Low'] + 1e-6)
+    df['Vol_Ratio'] = df['Volume'] / (df['Volume'].rolling(20).mean() + 1e-6)
+    
+    df['Target'] = np.where(df['Close'].shift(-1) > df['Close'] * 1.003, 1, 0)
+    df = df.dropna()
+    
+    features = ['ADX', 'ATR', 'Body_Ratio', 'Vol_Ratio']
+    X = df[features]
+    y = df['Target']
+    
+    # 5-Fold Walk-Forward TimeSeries Split
+    tscv = TimeSeriesSplit(n_splits=5)
+    
+    xgb = XGBClassifier(n_estimators=100, max_depth=3, learning_rate=0.03, random_state=42)
+    lgb = LGBMClassifier(n_estimators=100, max_depth=3, learning_rate=0.03, random_state=42, verbose=-1)
+    
+    ensemble = VotingClassifier(estimators=[('xgb', xgb), ('lgb', lgb)], voting='soft')
+    
+    # Out-of-Sample Walk-Forward Training Loop
+    oof_scores = []
+    for train_idx, val_idx in tscv.split(X):
+        X_tr, y_tr = X.iloc[train_idx], y.iloc[train_idx]
+        X_va, y_va = X.iloc[val_idx], y.iloc[val_idx]
+        
+        ensemble.fit(X_tr, y_tr)
+        acc = ensemble.score(X_va, y_va)
+        oof_scores.append(acc)
+        
+    logging.info(f"✅ Walk-Forward Cross-Validation Score: {np.mean(oof_scores):.4f}")
+    return ensemble, features

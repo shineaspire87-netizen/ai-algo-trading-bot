@@ -3,6 +3,7 @@ import streamlit as st
 from backtester import run_historical_backtest
 from system_health import check_system_integrity
 from config import GOOGLE_SHEET_WEB_APP_URL, TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID
+from multi_strategy import evaluate_soft_kill_switch_position_scaling, calculate_dynamic_atr_levels
 import streamlit.components.v1 as components
 import pandas as pd
 
@@ -360,6 +361,11 @@ st.session_state['allow_extended_trades'] = allow_extended_trades
 
 if allow_extended_trades:
     st.sidebar.info("⚡ **Testing Mode Active:** Bot will continue scanning for 70%+ AI Confidence trades beyond the 3-trade daily limit.")
+
+# Soft Kill Switch Status Check
+soft_kill_info = evaluate_soft_kill_switch_position_scaling(st.session_state.get('consecutive_losses', 0))
+if soft_kill_info['status'] == "SOFT_KILL_SWITCH_ACTIVE":
+    st.sidebar.warning("⚠️ SOFT KILL-SWITCH ACTIVE: 2 Losses Detected. Position Size Scaled to 50% & AI Confidence Threshold set to 75%.")
 
 period_map = {"1m": "1d", "5m": "5d", "15m": "5d", "1h": "1mo", "1d": "3mo"}
 
