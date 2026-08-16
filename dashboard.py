@@ -609,6 +609,8 @@ def log_trade_to_csv_and_update(active_data, exit_price, exit_reason, live_pnl, 
 
 @st.fragment(run_every="3s")
 def render_dashboard_main(asset_name, asset_symbol, tf_str):
+    global active_json_file, CSV_FILE
+    
     # Direct string path check (Zero Scoping Issues)
     trade_file_path = "active_trade.json"
     
