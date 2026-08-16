@@ -609,6 +609,9 @@ def log_trade_to_csv_and_update(active_data, exit_price, exit_reason, live_pnl, 
 
 @st.fragment(run_every="3s")
 def render_dashboard_main(asset_name, asset_symbol, tf_str):
+    import os
+    import json
+    import datetime
     global active_json_file, CSV_FILE
     
     # Direct string path check (Zero Scoping Issues)
