@@ -63,6 +63,8 @@ import yfinance as yf
 import ta
 from paper_broker import PaperBroker
 
+CSV_FILE = "trades.csv"
+
 def render_institutional_quant_cards(bias_status, conf_score, vwap_val, pdh_val, pdl_val, atr_val, adx_val, vol_ratio, vcp_status, sweep_status, diagnostic_reason):
     """Renders Ultra-Premium Dark Glassmorphism Quant Cards using Safe Newline-Free HTML"""
     
@@ -544,7 +546,6 @@ def log_trade_to_csv_and_update(active_data, exit_price, exit_reason, live_pnl, 
     st.session_state.trades_memory.append(new_trade_record)
 
     # 2. Update CSV File
-    CSV_FILE = "trades.csv"
     try:
         if os.path.exists(CSV_FILE) and os.path.getsize(CSV_FILE) > 0:
             df_existing = pd.read_csv(CSV_FILE)
@@ -612,7 +613,6 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
     if "trades_memory" not in st.session_state:
         st.session_state.trades_memory = []
 
-    CSV_FILE = "trades.csv"
     file_df = pd.DataFrame()
     if os.path.exists(CSV_FILE) and os.path.getsize(CSV_FILE) > 0:
         try:
