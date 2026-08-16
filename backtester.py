@@ -2,55 +2,53 @@
 import pandas as pd
 import numpy as np
 
-class InstitutionalBacktester:
-    def __init__(self, initial_capital=100000, friction_per_trade=45.0):
-        self.capital = initial_capital
-        self.friction = friction_per_trade
-
-    def run_backtest(self, df: pd.DataFrame, target_pct=0.06, sl_pct=0.03):
-        trades = []
-        equity_curve = [self.capital]
-        current_capital = self.capital
-
-        for i in range(len(df) - 1):
-            row = df.iloc[i]
-            # Entry Signal Check: Candle Body >= 60%, ADX > 25, Price > VWAP
-            if row['Body_Range_Ratio'] >= 0.60 and row['ADX'] > 25.0 and row['Close'] > row['VWAP']:
-                entry_price = df.iloc[i+1]['Open']
-                tp = entry_price * (1 + target_pct)
-                sl = entry_price * (1 - sl_pct)
+def run_historical_backtest(df, initial_capital=100000, target_pct=0.06, sl_pct=0.03, friction=45.0):
+    if df is None or len(df) < 30:
+        return None
+    
+    df = df.copy()
+    # Body Range Ratio
+    df['Body_Ratio'] = abs(df['Close'] - df['Open']) / (df['High'] - df['Low'] + 1e-6)
+    
+    trades = []
+    capital = initial_capital
+    equity = [capital]
+    
+    for i in range(20, len(df) - 1):
+        row = df.iloc[i]
+        # Core Entry Rules Check
+        if row['Body_Ratio'] >= 0.60:
+            entry = df.iloc[i+1]['Open']
+            tp = entry * (1 + target_pct)
+            sl = entry * (1 - sl_pct)
+            
+            next_candle = df.iloc[i+1]
+            if next_candle['High'] >= tp:
+                exit_p = tp
+                res = "TARGET (+6%)"
+            elif next_candle['Low'] <= sl:
+                exit_p = sl
+                res = "STOP LOSS (-3%)"
+            else:
+                exit_p = next_candle['Close']
+                res = "5-MIN TIMEOUT"
                 
-                # Single Candle 5-Min Expiry Check
-                exit_price = df.iloc[i+1]['Close']
-                if df.iloc[i+1]['High'] >= tp:
-                    exit_price = tp
-                    status = "TARGET_HIT"
-                elif df.iloc[i+1]['Low'] <= sl:
-                    exit_price = sl
-                    status = "SL_HIT"
-                else:
-                    status = "SINGLE_CANDLE_TIMEOUT"
-
-                pnl = (exit_price - entry_price) / entry_price * current_capital - self.friction
-                current_capital += pnl
-                equity_curve.append(current_capital)
-
-                trades.append({
-                    "Timestamp": df.index[i+1],
-                    "Entry": entry_price,
-                    "Exit": exit_price,
-                    "PnL": pnl,
-                    "Status": status
-                })
-
-        trades_df = pd.DataFrame(trades)
-        win_rate = (len(trades_df[trades_df['PnL'] > 0]) / len(trades_df)) * 100 if len(trades_df) > 0 else 0
-        profit_factor = trades_df[trades_df['PnL'] > 0]['PnL'].sum() / abs(trades_df[trades_df['PnL'] < 0]['PnL'].sum() + 1e-6)
-
-        return {
-            "Equity_Curve": equity_curve,
-            "Trades_Log": trades_df,
-            "Win_Rate": win_rate,
-            "Profit_Factor": profit_factor,
-            "Final_Capital": current_capital
-        }
+            pnl = ((exit_p - entry) / entry) * capital - friction
+            capital += pnl
+            equity.append(capital)
+            
+            trades.append({"Time": df.index[i+1], "Type": "BUY", "Entry": entry, "Exit": exit_p, "PnL": pnl, "Result": res})
+            
+    tdf = pd.DataFrame(trades)
+    wins = len(tdf[tdf['PnL'] > 0]) if len(tdf) > 0 else 0
+    total = len(tdf) if len(tdf) > 0 else 1
+    win_rate = (wins / total) * 100
+    
+    return {
+        "trades": tdf,
+        "equity": equity,
+        "win_rate": round(win_rate, 2),
+        "total_trades": total,
+        "final_capital": round(capital, 2),
+        "total_profit": round(capital - initial_capital, 2)
+    }
