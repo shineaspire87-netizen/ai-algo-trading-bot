@@ -1,5 +1,6 @@
 # dashboard.py - Antony Quant AI Algo Terminal (Complete Institutional Engine & Live Sync)
 import streamlit as st
+import textwrap
 from backtester import run_historical_backtest
 from system_health import check_system_integrity
 from config import GOOGLE_SHEET_WEB_APP_URL, TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID
@@ -63,81 +64,83 @@ import ta
 from paper_broker import PaperBroker
 
 def render_institutional_quant_cards(bias_status, conf_score, vwap_val, pdh_val, pdl_val, atr_val, adx_val, vol_ratio, vcp_status, sweep_status, diagnostic_reason):
-    """Renders Ultra-Premium Dark Glassmorphism Quant Cards with HTML Execution Enabled"""
+    """Renders Ultra-Premium Dark Glassmorphism Quant Cards using Clean Unindented HTML"""
     
-    bias_color = "#10b981" if "BUY_CALL" in str(bias_status) else ("#ef4444" if "BUY_PUT" in str(bias_status) else "#f59e0b")
+    bias_color = "#10b981" if "BUY_CALL" in bias_status else ("#ef4444" if "BUY_PUT" in bias_status else "#f59e0b")
     
     try:
         conf_val = float(conf_score)
     except Exception:
         conf_val = 50.0
 
-    html_cards = f"""
-    <style>
-        .quant-grid {{
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-            gap: 14px;
-            margin: 15px 0;
-        }}
-        .quant-card {{
-            background: rgba(17, 24, 39, 0.85) !important;
-            backdrop-filter: blur(12px);
-            border: 1px solid rgba(255, 255, 255, 0.1) !important;
-            border-radius: 10px !important;
-            padding: 16px !important;
-        }}
-        .quant-title {{
-            font-size: 12px !important;
-            font-weight: 700 !important;
-            color: #9ca3af !important;
-            text-transform: uppercase !important;
-            margin-bottom: 8px !important;
-        }}
-        .quant-val-big {{
-            font-size: 22px !important;
-            font-weight: 800 !important;
-            color: {bias_color} !important;
-        }}
-        .quant-row {{
-            display: flex;
-            justify-content: space-between;
-            font-size: 13px !important;
-            color: #d1d5db !important;
-            padding: 4px 0 !important;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-        }}
-    </style>
+    raw_html = f"""
+<style>
+    .quant-grid {{
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+        gap: 14px;
+        margin: 15px 0;
+    }}
+    .quant-card {{
+        background: rgba(17, 24, 39, 0.85) !important;
+        backdrop-filter: blur(12px);
+        border: 1px solid rgba(255, 255, 255, 0.1) !important;
+        border-radius: 10px !important;
+        padding: 16px !important;
+    }}
+    .quant-title {{
+        font-size: 12px !important;
+        font-weight: 700 !important;
+        color: #9ca3af !important;
+        text-transform: uppercase !important;
+        margin-bottom: 8px !important;
+    }}
+    .quant-val-big {{
+        font-size: 22px !important;
+        font-weight: 800 !important;
+        color: {bias_color} !important;
+    }}
+    .quant-row {{
+        display: flex;
+        justify-content: space-between;
+        font-size: 13px !important;
+        color: #d1d5db !important;
+        padding: 4px 0 !important;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    }}
+</style>
 
-    <div class="quant-grid">
-        <div class="quant-card">
-            <div class="quant-title">🎯 Directional Bias & AI Confidence</div>
-            <div class="quant-val-big">{bias_status}</div>
-            <div style="font-size: 13px; color: #e5e7eb; margin-top: 4px;">AI Score: <b>{conf_val:.1f}%</b></div>
-            <div style="font-size: 11px; color: #10b981; margin-top: 4px;">{vcp_status}</div>
-            <div style="font-size: 11px; color: #f59e0b; margin-top: 2px;">{sweep_status}</div>
-        </div>
-
-        <div class="quant-card">
-            <div class="quant-title">📊 Key Quant Levels</div>
-            <div class="quant-row"><span>VWAP Anchor:</span><b>{vwap_val}</b></div>
-            <div class="quant-row"><span>PDH / PDL:</span><b>{pdh_val} / {pdl_val}</b></div>
-            <div class="quant-row"><span>Dynamic ATR (14):</span><b>{atr_val}</b></div>
-        </div>
-
-        <div class="quant-card">
-            <div class="quant-title">🛡️ Volatility & Order Flow Checks</div>
-            <div class="quant-row"><span>ADX Strength:</span><b>{adx_val}</b></div>
-            <div class="quant-row"><span>Volume Spike:</span><b>{vol_ratio}x</b></div>
-            <div class="quant-row"><span>Order Flow Trap:</span><b style="color: #10b981;">{'DETECTED' if 'TRAP' in str(sweep_status) else 'SAFE'}</b></div>
-        </div>
+<div class="quant-grid">
+    <div class="quant-card">
+        <div class="quant-title">🎯 Directional Bias & AI Confidence</div>
+        <div class="quant-val-big">{bias_status}</div>
+        <div style="font-size: 13px; color: #e5e7eb; margin-top: 4px;">AI Score: <b>{conf_val:.1f}%</b></div>
+        <div style="font-size: 11px; color: #10b981; margin-top: 4px;">{vcp_status}</div>
+        <div style="font-size: 11px; color: #f59e0b; margin-top: 2px;">{sweep_status}</div>
     </div>
 
-    <div style="background: rgba(30, 41, 59, 0.85); border-left: 4px solid {bias_color}; padding: 12px; border-radius: 6px; margin-bottom: 15px; font-size: 13px; color: #cbd5e1;">
-        <b>⚡ Executive Action Diagnostic:</b> {diagnostic_reason}
+    <div class="quant-card">
+        <div class="quant-title">📊 Key Quant Levels</div>
+        <div class="quant-row"><span>VWAP Anchor:</span><b>{vwap_val}</b></div>
+        <div class="quant-row"><span>PDH / PDL:</span><b>{pdh_val} / {pdl_val}</b></div>
+        <div class="quant-row"><span>Dynamic ATR (14):</span><b>{atr_val}</b></div>
     </div>
-    """
-    st.markdown(html_cards, unsafe_allow_html=True)
+
+    <div class="quant-card">
+        <div class="quant-title">🛡️ Volatility & Order Flow Checks</div>
+        <div class="quant-row"><span>ADX Strength:</span><b>{adx_val}</b></div>
+        <div class="quant-row"><span>Volume Spike:</span><b>{vol_ratio}x</b></div>
+        <div class="quant-row"><span>Order Flow Trap:</span><b style="color: #10b981;">{'DETECTED' if 'TRAP' in sweep_status else 'SAFE'}</b></div>
+    </div>
+</div>
+
+<div style="background: rgba(30, 41, 59, 0.85); border-left: 4px solid {bias_color}; padding: 12px; border-radius: 6px; margin-bottom: 15px; font-size: 13px; color: #cbd5e1;">
+    <b>⚡ Executive Action Diagnostic:</b> {diagnostic_reason}
+</div>
+"""
+    
+    clean_html = textwrap.dedent(raw_html)
+    st.markdown(clean_html, unsafe_allow_html=True)
 
 
 st.set_page_config(
