@@ -1,5 +1,8 @@
 # dashboard.py - Antony Quant AI Algo Terminal (Complete Institutional Engine & Live Sync)
 import streamlit as st
+
+# Top of dashboard.py (Global Scope)
+ACTIVE_TRADE_FILE = "active_trade.json"
 import textwrap
 from backtester import run_historical_backtest
 from system_health import check_system_integrity
@@ -606,13 +609,12 @@ def log_trade_to_csv_and_update(active_data, exit_price, exit_reason, live_pnl, 
 
 @st.fragment(run_every="3s")
 def render_dashboard_main(asset_name, asset_symbol, tf_str):
-    # 1. Define active_json_file at the VERY FIRST LINE of the function
-    active_json_file = "active_trade.json"
-
-    # 2. Check active trade file using active_json_file
+    # Direct string path check (Zero Scoping Issues)
+    trade_file_path = "active_trade.json"
+    
     try:
-        if os.path.exists(active_json_file) and os.path.getsize(active_json_file) > 0:
-            with open(active_json_file, 'r') as f:
+        if os.path.exists(trade_file_path) and os.path.getsize(trade_file_path) > 0:
+            with open(trade_file_path, 'r') as f:
                 active_trade = json.load(f)
             
             if active_trade and active_trade.get('status') == 'ACTIVE':
