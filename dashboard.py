@@ -68,8 +68,12 @@ def render_live_ticking_scan_header(cycle_count=28):
     """
     st.components.v1.html(clock_html, height=55)
 
-def render_institutional_single_line_header(realtime_price, total_capital, net_pnl, today_trades, total_trades, win_rate):
+def render_institutional_single_line_header(realtime_price, total_capital, net_pnl, today_trades, total_trades, win_rate, asset_name="BITCOIN"):
     """Renders all 6 top metrics in one single horizontal glassmorphism bar"""
+    
+    selected_asset = asset_name if asset_name else st.session_state.get('selected_asset', 'BITCOIN')
+    is_crypto = any(k in selected_asset.upper() for k in ["BITCOIN", "ETHEREUM", "SOLANA", "BTC", "ETH", "SOL"])
+    curr = "$" if is_crypto else "₹"
     
     pnl_color = "#10b981" if net_pnl >= 0 else "#ef4444"
     win_color = "#10b981" if win_rate >= 50.0 else "#ef4444"
@@ -120,10 +124,10 @@ def render_institutional_single_line_header(realtime_price, total_capital, net_p
     </style>
 
     <div class="single-line-header">
-        <!-- 1. Real-Time Bitcoin Spot Price (0ms) -->
+        <!-- 1. Real-Time Spot Price (0ms) -->
         <div class="hdr-item">
-            <div class="hdr-label">⚡ BITCOIN SPOT (0MS)</div>
-            <div id="hdr-btc-price" class="hdr-val" style="color: #10b981; font-size: 18px;">${realtime_price:,.2f}</div>
+            <div class="hdr-label">⚡ {selected_asset} SPOT (0MS)</div>
+            <div id="hdr-btc-price" class="hdr-val" style="color: #10b981; font-size: 18px;">{curr}{realtime_price:,.2f}</div>
         </div>
 
         <div class="hdr-divider"></div>
@@ -1484,12 +1488,12 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
     if is_crypto_selected:
         disp_cap = current_capital / conversion_factor
         disp_pnl = total_pnl / conversion_factor
-        render_institutional_single_line_header(current_price, disp_cap, disp_pnl, today_trades_count, total_trades_count, win_rate)
+        render_institutional_single_line_header(current_price, disp_cap, disp_pnl, today_trades_count, total_trades_count, win_rate, asset_name=asset_name)
     else:
         # TOP KPI METRICS CARDS (Streamlit Columns for NSE)
         col1, col2, col3, col4, col5 = st.columns(5)
         with col1:
-            st.metric(label=f"{asset_name} Price", value=f"₹{current_price:,.2f}", delta=f"ATM: {atm_strike}" if atm_strike else None)
+            st.metric(label=f"⚡ {asset_name} SPOT (0MS)", value=f"₹{current_price:,.2f}", delta=f"ATM: {atm_strike}" if atm_strike else None)
         with col2:
             st.metric(label="Total Capital", value=f"₹{current_capital:,.2f}")
         with col3:
