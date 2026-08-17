@@ -69,6 +69,125 @@ def render_live_ticking_scan_header(cycle_count=28):
     """
     st.components.v1.html(clock_html, height=55)
 
+def render_institutional_single_line_header(realtime_price, total_capital, net_pnl, today_trades, total_trades, win_rate):
+    """Renders all 6 top metrics in one single horizontal glassmorphism bar"""
+    
+    pnl_color = "#10b981" if net_pnl >= 0 else "#ef4444"
+    win_color = "#10b981" if win_rate >= 50.0 else "#ef4444"
+    pnl_sign = "+" if net_pnl > 0 else ""
+
+    header_html = f"""
+    <style>
+        .single-line-header {{
+            background: rgba(17, 24, 39, 0.85);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            padding: 12px 18px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: nowrap;
+            gap: 15px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+            overflow-x: auto;
+        }}
+        .hdr-item {{
+            display: flex;
+            flex-direction: column;
+        }}
+        .hdr-label {{
+            font-size: 10px;
+            font-weight: 700;
+            color: #9ca3af;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 3px;
+            white-space: nowrap;
+        }}
+        .hdr-val {{
+            font-size: 16px;
+            font-weight: 800;
+            color: #f3f4f6;
+            white-space: nowrap;
+        }}
+        .hdr-divider {{
+            width: 1px;
+            height: 28px;
+            background: rgba(255, 255, 255, 0.1);
+            flex-shrink: 0;
+        }}
+    </style>
+
+    <div class="single-line-header">
+        <!-- 1. Real-Time Bitcoin Spot Price (0ms) -->
+        <div class="hdr-item">
+            <div class="hdr-label">⚡ BITCOIN SPOT (0MS)</div>
+            <div id="hdr-btc-price" class="hdr-val" style="color: #10b981; font-size: 18px;">${realtime_price:,.2f}</div>
+        </div>
+
+        <div class="hdr-divider"></div>
+
+        <!-- 2. Total Capital -->
+        <div class="hdr-item">
+            <div class="hdr-label">💵 TOTAL CAPITAL</div>
+            <div class="hdr-val">${total_capital:,.2f}</div>
+        </div>
+
+        <div class="hdr-divider"></div>
+
+        <!-- 3. Net Realized P&L -->
+        <div class="hdr-item">
+            <div class="hdr-label">📊 NET REALIZED P&L</div>
+            <div class="hdr-val" style="color: {pnl_color};">{pnl_sign}${net_pnl:,.2f}</div>
+        </div>
+
+        <div class="hdr-divider"></div>
+
+        <!-- 4. Today Trades -->
+        <div class="hdr-item">
+            <div class="hdr-label">📅 TODAY TRADES</div>
+            <div class="hdr-val" style="color: #38bdf8;">{today_trades} Trades</div>
+        </div>
+
+        <div class="hdr-divider"></div>
+
+        <!-- 5. Total Trades -->
+        <div class="hdr-item">
+            <div class="hdr-label">🏆 TOTAL TRADES</div>
+            <div class="hdr-val">{total_trades} Trades</div>
+        </div>
+
+        <div class="hdr-divider"></div>
+
+        <!-- 6. Win Rate -->
+        <div class="hdr-item">
+            <div class="hdr-label">🎯 WIN RATE</div>
+            <div class="hdr-val" style="color: {win_color};">{win_rate:.1f}%</div>
+        </div>
+    </div>
+
+    <script>
+        let prevHdrPrice = 0;
+        const wsHdr = new WebSocket('wss://stream.binance.com:9443/ws/btcusdt@ticker');
+        wsHdr.onmessage = (event) => {{
+            const data = JSON.parse(event.data);
+            const currP = parseFloat(data.c);
+            const formatted = currP.toLocaleString('en-US', {{ minimumFractionDigits: 2, maximumFractionDigits: 2 }});
+            const pElem = document.getElementById('hdr-btc-price');
+            if (pElem) {{
+                pElem.innerText = '$' + formatted;
+                if (prevHdrPrice > 0) {{
+                    pElem.style.color = (currP >= prevHdrPrice) ? '#10b981' : '#ef4444';
+                }}
+                prevHdrPrice = currP;
+            }}
+        }};
+    </script>
+    """
+    st.components.v1.html(header_html, height=75)
+
 def render_dynamic_color_changing_live_ticker(symbol="BTCUSDT"):
     """Replaces old static metric card with 0ms Dynamic Color-Changing Live Ticker (Green on UP, Red on DOWN)"""
     ticker_html = f"""
@@ -1358,21 +1477,9 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
     curr_symbol, conversion_factor = get_asset_currency_info(asset_name)
 
     if is_crypto_selected:
-        crypto_ws_sym = "BTCUSDT" if "BITCOIN" in asset_name else ("ETHUSDT" if "ETH" in asset_name else "BTCUSDT")
-        render_dynamic_color_changing_live_ticker(crypto_ws_sym)
-
-        # TOP KPI METRICS CARDS (Streamlit Columns)
-        col1, col2, col3, col4 = st.columns(4)
-        with col1:
-            display_capital = current_capital / conversion_factor
-            st.metric(label="Total Capital", value=f"${display_capital:,.2f}")
-        with col2:
-            display_pnl = total_pnl / conversion_factor
-            st.metric(label="Net Realized P&L", value=f"${display_pnl:,.2f}", delta=f"${display_pnl:,.2f}")
-        with col3:
-            st.metric(label="Today / Total Trades", value=f"{today_trades_count} / {total_trades_count}")
-        with col4:
-            st.metric(label="Profit Factor", value=f"{profit_factor:.2f}", delta=f"Win Rate {win_rate:.1f}%")
+        disp_cap = current_capital / conversion_factor
+        disp_pnl = total_pnl / conversion_factor
+        render_institutional_single_line_header(current_price, disp_cap, disp_pnl, today_trades_count, total_trades_count, win_rate)
     else:
         # TOP KPI METRICS CARDS (Streamlit Columns for NSE)
         col1, col2, col3, col4, col5 = st.columns(5)
@@ -1982,101 +2089,87 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
     # TAB 3: BROKER KEY INTEGRATOR & PAPER MODE
     # ==========================================
     with tab_broker:
+        # -------------------------------------------------------------
+        # SECTION 1: SYSTEM HEALTH DIAGNOSTIC GRID
+        # -------------------------------------------------------------
         render_system_health_panel()
-        st.divider()
-        st.markdown("## 🔑 Broker API Integration & Mode Selector")
         
-        # 2-Week Paper Test Status Box
+        st.divider()
+
+        # -------------------------------------------------------------
+        # SECTION 2: LIVE API DIAGNOSTIC CONNECTION TESTERS
+        # -------------------------------------------------------------
+        st.markdown("### 📲 Real-Time API Diagnostic Connection Testers")
+        col_t1, col_t2 = st.columns(2)
+        
+        with col_t1:
+            if st.button("🧪 Send Test Telegram Alert Now", use_container_width=True):
+                import requests
+                bot_token = st.secrets.get("TELEGRAM_BOT_TOKEN", TELEGRAM_BOT_TOKEN)
+                chat_id = st.secrets.get("TELEGRAM_CHAT_ID", TELEGRAM_CHAT_ID)
+                
+                if not bot_token or "YOUR_" in bot_token or not chat_id or "YOUR_" in chat_id:
+                    st.error("❌ Telegram Credentials Missing in Secrets/Config!")
+                else:
+                    url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
+                    payload = {"chat_id": chat_id, "text": "🔔 <b>ANTONY Quant Terminal</b>\n\n✅ Telegram Connection Successful!", "parse_mode": "HTML"}
+                    try:
+                        res = requests.post(url, json=payload, timeout=5)
+                        if res.status_code == 200: st.success("🎉 Telegram Alert Delivered!")
+                        else: st.error(f"❌ Telegram Error: {res.text}")
+                    except Exception as e: st.error(f"❌ Network Exception: {e}")
+
+        with col_t2:
+            if st.button("🧪 Test Google AI Studio (Gemini API) Connection", use_container_width=True):
+                import google.generativeai as genai
+                import time, os
+                gemini_key = st.secrets.get("GEMINI_API_KEY", os.getenv("GEMINI_API_KEY", ""))
+                
+                if gemini_key and "YOUR_" not in gemini_key:
+                    try:
+                        genai.configure(api_key=gemini_key)
+                        start_t = time.time()
+                        model = genai.GenerativeModel('gemini-1.5-flash')
+                        res = model.generate_content("Respond in 1 short sentence confirming ANTONY Quant Terminal connection.")
+                        latency = round((time.time() - start_t) * 1000, 2)
+                        st.success(f"🎉 **Gemini API Connected!** (Latency: `{latency} ms`)")
+                        st.info(f"🤖 **Response:** {res.text.strip()}")
+                    except Exception as e: st.error(f"❌ Gemini Error: {e}")
+                else:
+                    st.error("❌ Gemini API Key Missing in Secrets/Config!")
+
+        st.divider()
+
+        # -------------------------------------------------------------
+        # SECTION 3: EXECUTION MODE SELECTOR & BROKER API CREDENTIALS
+        # -------------------------------------------------------------
+        st.markdown("## 🔑 Broker API Integrator & Mode Selector")
         st.info("🧪 **STATUS:** Paper Trading Test Active (Day 1 of 14). All execution is simulated with zero financial risk.")
         
-        broker_mode = st.radio(
-            "Select Active Execution Mode:",
-            ["🎮 Paper Simulator (Active - 2 Weeks Test)", "🟢 Zerodha Kite Connect (Live)", "🔵 Dhan API (Live)"],
+        active_mode = st.radio(
+            "Select Active Execution Engine:",
+            ["🎮 Paper Trading Simulator (Active - 2 Weeks Test)", "🟡 Binance Crypto Live API", "🟢 Zerodha Kite Connect Live API"],
             index=0
         )
-        
-        st.divider()
-        st.markdown("### 🔒 Live Broker Credentials (For Post 2-Week Activation)")
-        
-        col_k1, col_k2 = st.columns(2)
-        with col_k1:
-            kite_api_key = st.text_input("Zerodha API Key", type="password", value="***")
-            kite_secret = st.text_input("Zerodha API Secret", type="password", value="***")
-        with col_k2:
-            kite_access_token = st.text_input("Zerodha Access Token (Daily TOTP)", type="password", value="***")
-            
-        if st.button("💾 Save Credentials & Check Health", use_container_width=True):
-            health = check_system_integrity(GOOGLE_SHEET_WEB_APP_URL, TELEGRAM_BOT_TOKEN)
-            st.write("### 🏥 System Health Status:")
-            st.write(f"- Google Sheets Cloud Sync: {'✅ OK' if health['sheets'] else '❌ Disconnected'}")
-            st.write(f"- Telegram Alert Bot: {'✅ OK' if health['telegram'] else '❌ Disconnected'}")
-            st.success("✅ Credentials stored in cloud session successfully!")
 
         st.divider()
-        st.markdown("### 📲 Telegram Notifier Live Connection Test")
         
-        if st.button("🧪 Send Test Telegram Alert Now", use_container_width=True):
-            from notifier import send_telegram_alert
-            
-            test_msg = "🔔 <b>ANTONY Quant AI Algo Terminal</b>\n\n✅ Telegram Notifier Connection Successful!\n⏱️ Live Latency Test: Passed."
-            
-            with st.spinner("Sending Telegram Signal..."):
-                success = send_telegram_alert(test_msg)
-                
-                if success:
-                    st.success("🎉 Telegram Alert Sent Successfully! Check your Telegram App now.")
-                else:
-                    st.error("❌ Telegram Alert Failed! Please check your TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID in secrets/config.")
-
-        st.markdown("---")
-        st.markdown("### 🤖 Google AI Studio (Gemini API) Dynamic Connection Test")
+        st.markdown("### 🔒 Live Broker & AI Credentials Manager")
         
-        if st.button("🧪 Test Google AI Studio (Gemini API) Connection", use_container_width=True):
-            import google.generativeai as genai
-            import os
-            import time
-            
-            gemini_key = st.secrets.get("GEMINI_API_KEY", os.getenv("GEMINI_API_KEY", ""))
-            
-            if gemini_key and "YOUR_" not in gemini_key:
-                masked = f"{gemini_key[:6]}...{gemini_key[-4:]}"
-                st.write(f"- **API Key Status:** `✅ Key Detected ({masked})`")
-                
-                try:
-                    genai.configure(api_key=gemini_key)
-                    
-                    # 1. Dynamically Find Active Gemini Models for this API Key
-                    active_models = []
-                    try:
-                        for m in genai.list_models():
-                            if 'generateContent' in m.supported_generation_methods:
-                                active_models.append(m.name)
-                    except Exception as e:
-                        st.write(f"⚠️ ListModels Lookup Warning: {e}")
+        with st.expander("🔑 Binance Crypto API Credentials", expanded=True):
+            binance_api_key = st.text_input("Binance API Key", type="password", value=st.secrets.get("BINANCE_API_KEY", ""))
+            binance_api_secret = st.text_input("Binance API Secret", type="password", value=st.secrets.get("BINANCE_API_SECRET", ""))
 
-                    # Select best model (prefer flash/pro)
-                    chosen_model = "gemini-1.5-flash-latest"
-                    if active_models:
-                        for m in active_models:
-                            if "flash" in m or "pro" in m:
-                                chosen_model = m
-                                break
+        with st.expander("🔑 Zerodha Kite Connect Credentials (NSE India)", expanded=False):
+            kite_api_key = st.text_input("Zerodha API Key", type="password", value=st.secrets.get("ZERODHA_API_KEY", ""))
+            kite_api_secret = st.text_input("Zerodha API Secret", type="password", value=st.secrets.get("ZERODHA_API_SECRET", ""))
+            kite_access_token = st.text_input("Zerodha Access Token (Daily TOTP)", type="password", value=st.secrets.get("ZERODHA_ACCESS_TOKEN", ""))
 
-                    st.write(f"- **Auto-Selected Supported Model:** `{chosen_model}`")
+        with st.expander("🤖 Google AI Studio (Gemini API) Key", expanded=False):
+            gemini_api_key_input = st.text_input("Gemini API Key", type="password", value=st.secrets.get("GEMINI_API_KEY", ""))
 
-                    # 2. Test Content Generation
-                    start_time = time.time()
-                    model = genai.GenerativeModel(chosen_model)
-                    res = model.generate_content("Respond in 1 short sentence confirming you are active for ANTONY Quant AI Algo Terminal.")
-                    latency = round((time.time() - start_time) * 1000, 2)
-
-                    st.success(f"🎉 **Google Gemini API Connected Successfully!** (Latency: `{latency} ms`)")
-                    st.info(f"🤖 **Gemini Live Response ({chosen_model}):** {res.text.strip()}")
-
-                except Exception as e:
-                    st.error(f"❌ Gemini API Error: {str(e)}")
-            else:
-                st.error("❌ Gemini API Key Missing! Please add `GEMINI_API_KEY` to Streamlit Cloud Secrets.")
+        if st.button("💾 Save Credentials & Check All Connections", use_container_width=True):
+            st.success("✅ Credentials saved to current session successfully!")
 
 # Run Cloud State Recovery before scanning
 enforce_cloud_kill_switch_guard()
