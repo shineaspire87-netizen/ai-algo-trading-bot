@@ -246,65 +246,117 @@ def render_institutional_quant_cards(bias_status, conf_score, vwap_val, pdh_val,
     st.markdown(html_cards, unsafe_allow_html=True)
 
 def render_trade_history_table(df_trades: pd.DataFrame):
-    """Renders Trade Log with explicit Spot Price and Option Premium Price columns"""
+    """Renders Detailed Trade Log with Date Filter & Win/Loss Color-Coded Log Table"""
     if df_trades is None or df_trades.empty:
-        st.info("ℹ️ No trades recorded yet for today.")
+        st.info("இன்னும் எந்த வர்த்தகமும் பதிவு செய்யப்படவில்லை (No Trades Logged Yet).")
         return
 
-    df_display = df_trades.copy()
+    ist = pytz.timezone('Asia/Kolkata')
+    today_date_str = datetime.datetime.now(ist).strftime('%Y-%m-%d')
+
+    df = df_trades.copy()
+    if 'Entry_Time' in df.columns:
+        df['Entry_Date_Str'] = pd.to_datetime(df['Entry_Time'], errors='coerce').dt.strftime('%Y-%m-%d')
+    else:
+        df['Entry_Date_Str'] = today_date_str
+
+    # --- 1. Date Filter Option ---
+    col_f1, col_f2 = st.columns([1, 2])
+    with col_f1:
+        date_filter = st.selectbox(
+            "📅 Filter Trades By Date:",
+            ["All Time", "Today Only", "Custom Date Range"],
+            index=0
+        )
+    
+    filtered_df = df.copy()
+    
+    # NaN மற்றும் None மதிப்புகளைச் சரிசெய்தல்
+    if 'Gross_PnL' in filtered_df.columns:
+        filtered_df['Gross_PnL'] = filtered_df['Gross_PnL'].fillna(0)
+    if 'Brokerage_&_Taxes' in filtered_df.columns:
+        filtered_df['Brokerage_&_Taxes'] = filtered_df['Brokerage_&_Taxes'].fillna(0)
+    if 'Quantity' in filtered_df.columns:
+        filtered_df['Quantity'] = filtered_df['Quantity'].fillna(15)
+
+    if date_filter == "Today Only":
+        filtered_df = filtered_df[filtered_df['Entry_Date_Str'] == today_date_str]
+    elif date_filter == "Custom Date Range":
+        with col_f2:
+            date_res = st.date_input("Select Date Range:", [datetime.datetime.now(ist).date(), datetime.datetime.now(ist).date()])
+            if isinstance(date_res, (list, tuple)) and len(date_res) == 2:
+                start_date, end_date = date_res
+                filtered_df['Date_Obj'] = pd.to_datetime(filtered_df['Entry_Time'], errors='coerce').dt.date
+                filtered_df = filtered_df[(filtered_df['Date_Obj'] >= start_date) & (filtered_df['Date_Obj'] <= end_date)]
+
+    # Win / Loss status மற்றும் வண்ணக் குறியீடு (Color Badge Column Add செய்தல்)
+    def get_status(pnl):
+        try:
+            val = float(str(pnl).replace('$', '').replace('₹', '').replace(',', '').strip())
+            if val > 0:
+                return "🟢 WIN"
+            elif val < 0:
+                return "🔴 LOSS"
+            else:
+                return "⚪ BREAKEVEN"
+        except:
+            return "⚪ UNKNOWN"
+
+    if 'Net_PnL' in filtered_df.columns:
+        filtered_df['Outcome'] = filtered_df['Net_PnL'].apply(get_status)
+    else:
+        filtered_df['Outcome'] = "⚪ UNKNOWN"
 
     # Format Currency Symbols dynamically row-by-row
-    for idx, row in df_display.iterrows():
+    for idx, row in filtered_df.iterrows():
         symbol = str(row.get('Symbol', ''))
         is_crypto = any(k in symbol.upper() for k in ["BITCOIN", "ETHEREUM", "BTC", "ETH"])
         curr = "$" if is_crypto else "₹"
 
         # Format Net_PnL
-        if 'Net_PnL' in df_display.columns:
+        if 'Net_PnL' in filtered_df.columns:
             try:
                 val = float(str(row['Net_PnL']).replace('₹', '').replace('$', '').replace(',', '').strip())
-                df_display.at[idx, 'Net_PnL'] = f"{curr}{val:+,.2f}" if val != 0 else f"{curr}0.00"
+                filtered_df.at[idx, 'Net_PnL'] = f"{curr}{val:+,.2f}" if val != 0 else f"{curr}0.00"
             except:
                 pass
 
         # Format Capital_Balance
-        if 'Capital_Balance' in df_display.columns:
+        if 'Capital_Balance' in filtered_df.columns:
             try:
                 val = float(str(row['Capital_Balance']).replace('₹', '').replace('$', '').replace(',', '').strip())
-                df_display.at[idx, 'Capital_Balance'] = f"{curr}{val:,.2f}"
+                filtered_df.at[idx, 'Capital_Balance'] = f"{curr}{val:,.2f}"
             except:
                 pass
 
         # Format Gross_PnL
-        if 'Gross_PnL' in df_display.columns:
+        if 'Gross_PnL' in filtered_df.columns:
             try:
                 val = float(str(row['Gross_PnL']).replace('₹', '').replace('$', '').replace(',', '').strip())
-                df_display.at[idx, 'Gross_PnL'] = f"{curr}{val:+,.2f}" if val != 0 else f"{curr}0.00"
+                filtered_df.at[idx, 'Gross_PnL'] = f"{curr}{val:+,.2f}" if val != 0 else f"{curr}0.00"
             except:
                 pass
 
         # Format Brokerage_&_Taxes
-        if 'Brokerage_&_Taxes' in df_display.columns:
+        if 'Brokerage_&_Taxes' in filtered_df.columns:
             try:
                 val = float(str(row['Brokerage_&_Taxes']).replace('₹', '').replace('$', '').replace(',', '').strip())
-                df_display.at[idx, 'Brokerage_&_Taxes'] = f"-{curr}{abs(val):,.2f}"
+                filtered_df.at[idx, 'Brokerage_&_Taxes'] = f"-{curr}{abs(val):,.2f}"
             except:
                 pass
 
-    # Rename & Format for 100% Clarity
     desired_cols = [
-        'Entry_Time', 'Exit_Time', 'Symbol', 'Option_Type', 
+        'Outcome', 'Entry_Time', 'Exit_Time', 'Symbol', 'Option_Type', 
         'Entry_Price', 'Exit_Price', 'Quantity', 
         'Gross_PnL', 'Brokerage_&_Taxes', 'Net_PnL', 
         'Capital_Balance', 'Exit_Reason'
     ]
-    
-    available_cols = [col for col in desired_cols if col in df_display.columns]
-    
-    if 'Entry_Price' in df_display.columns and 'Exit_Price' in df_display.columns:
-        df_display = df_display.drop_duplicates(subset=['Entry_Price', 'Exit_Price'], keep='last')
+    display_cols = [col for col in desired_cols if col in filtered_df.columns]
 
-    st.dataframe(df_display[available_cols], use_container_width=True)
+    if 'Entry_Price' in filtered_df.columns and 'Exit_Price' in filtered_df.columns:
+        filtered_df = filtered_df.drop_duplicates(subset=['Entry_Price', 'Exit_Price'], keep='last')
+
+    st.dataframe(filtered_df[display_cols], use_container_width=True, hide_index=True)
 
 def render_system_health_panel():
     """Renders Compact, Executive Glassmorphism System Health Grid"""
@@ -978,6 +1030,16 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
 
     total_trades = len(trades_df)
     
+    today_date_str = now_dt.strftime('%Y-%m-%d')
+    if not trades_df.empty and 'Entry_Time' in trades_df.columns:
+        trades_df['Entry_Date_Str'] = pd.to_datetime(trades_df['Entry_Time'], errors='coerce').dt.strftime('%Y-%m-%d')
+        today_trades_df = trades_df[trades_df['Entry_Date_Str'] == today_date_str]
+        today_trades_count = len(today_trades_df)
+        total_trades_count = len(trades_df)
+    else:
+        today_trades_count = 0
+        total_trades_count = len(trades_df) if not trades_df.empty else 0
+
     if total_trades > 0:
         pnl_col = 'Net_PnL' if 'Net_PnL' in trades_df.columns else ('PnL' if 'PnL' in trades_df.columns else None)
         total_pnl = float(trades_df[pnl_col].sum()) if pnl_col else 0.0
@@ -1110,23 +1172,27 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
     # Dynamic Symbol Assignment based on Asset
     curr_symbol, conversion_factor = get_asset_currency_info(asset_name)
 
-    # TOP KPI METRICS CARDS
-    k1, k2, k3, k4, k5, k6 = st.columns(6)
-    k1.metric(f"{asset_name} Price", f"{p_curr}{current_price:,.2f}", delta=f"ATM: {atm_strike}")
-    
-    # Render Metric Cards with Dynamic Currency
-    if curr_symbol == "$":
-        display_capital = current_capital / conversion_factor
-        display_pnl = total_pnl / conversion_factor
-        k2.metric("Total Capital", f"${display_capital:,.2f}")
-        k3.metric("Net Realized P&L", f"${display_pnl:,.2f}", delta=f"${display_pnl:,.2f}")
-    else:
-        k2.metric("Total Capital", f"₹{current_capital:,.2f}")
-        k3.metric("Net Realized P&L", f"₹{total_pnl:,.2f}", delta=f"₹{total_pnl:,.2f}")
+    # TOP KPI METRICS CARDS (Streamlit Columns)
+    col1, col2, col3, col4, col5 = st.columns(5)
 
-    k4.metric("Completed Trades", f"{total_trades}")
-    k5.metric("Max Drawdown", f"{max_drawdown:.2f}%")
-    k6.metric("Profit Factor", f"{profit_factor:.2f}", delta="Avg RRR 1:2.0")
+    with col1:
+        st.metric(label=f"{asset_name} Price", value=f"{p_curr}{current_price:,.2f}", delta=f"ATM: {atm_strike}" if atm_strike else None)
+    with col2:
+        if curr_symbol == "$":
+            display_capital = current_capital / conversion_factor
+            st.metric(label="Total Capital", value=f"${display_capital:,.2f}")
+        else:
+            st.metric(label="Total Capital", value=f"₹{current_capital:,.2f}")
+    with col3:
+        if curr_symbol == "$":
+            display_pnl = total_pnl / conversion_factor
+            st.metric(label="Net Realized P&L", value=f"${display_pnl:,.2f}", delta=f"${display_pnl:,.2f}")
+        else:
+            st.metric(label="Net Realized P&L", value=f"₹{total_pnl:,.2f}", delta=f"₹{total_pnl:,.2f}")
+    with col4:
+        st.metric(label="Today / Total Trades", value=f"{today_trades_count} / {total_trades_count}")
+    with col5:
+        st.metric(label="Profit Factor", value=f"{profit_factor:.2f}", delta=f"Win Rate {win_rate:.1f}%")
 
     st.markdown("---")
 
