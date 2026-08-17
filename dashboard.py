@@ -7,19 +7,7 @@ import pandas as pd
 import time
 import threading
 
-# 1. Anti-Freeze Web-Socket Keep-Alive JS Script
-st.markdown("""
-    <script>
-        // Auto-Reconnect Streamlit WebSocket if connection stalls or freezes
-        setInterval(function() {
-            if (window.Streamlit) {
-                window.Streamlit.setComponentReady();
-            }
-        }, 5000);
-    </script>
-""", unsafe_allow_html=True)
-
-# 2. Error-Handled Safe Auto-Refresh Loop (Prevents Freezing on API Timeouts)
+# 1. Safe Auto-Refresh Loop Engine (Prevents Freezing on API Timeouts)
 try:
     from streamlit_autorefresh import st_autorefresh
     # Auto-refreshes every 3 seconds safely
