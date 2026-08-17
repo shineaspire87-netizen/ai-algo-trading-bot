@@ -13,21 +13,29 @@ def ask_gemini_trade_validation(asset_symbol: str, option_type: str, rsi_val: fl
     try:
         genai.configure(api_key=gemini_key)
         
-        # Fallback candidate models
-        candidates = ["gemini-1.5-flash-latest", "gemini-1.5-pro-latest", "gemini-1.5-flash", "gemini-pro"]
+        # Fallback candidate models (Gemini 2.5 Flash / 2.0 Flash First)
+        candidates = [
+            "gemini-2.5-flash",
+            "gemini-2.0-flash",
+            "gemini-2.0-flash-exp",
+            "gemini-2.5-pro",
+            "gemini-1.5-flash-latest",
+            "gemini-1.5-pro-latest",
+            "gemini-1.5-pro",
+            "gemini-pro"
+        ]
         
         model = None
         for cand in candidates:
             try:
                 m = genai.GenerativeModel(cand)
-                # Quick check
                 model = m
                 break
             except Exception:
                 continue
 
         if not model:
-            model = genai.GenerativeModel("gemini-1.5-flash-latest")
+            model = genai.GenerativeModel("gemini-2.5-flash")
 
         prompt = f"""
         You are an expert Options Scalper. Evaluate: BUY {option_type} on {asset_symbol}.

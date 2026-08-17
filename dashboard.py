@@ -2116,7 +2116,7 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
             return False, f"🔴 **TELEGRAM CONNECTION EXCEPTION:** {str(e)}"
 
     def check_authentic_gemini_backend_ping() -> tuple[bool, str]:
-        """Performs authentic API ping to Google AI Studio with dynamic model discovery"""
+        """Performs authentic API ping to Google AI Studio with Gemini 2.5 Flash / 2.0 Flash dynamic fallback"""
         gemini_key = st.secrets.get("GEMINI_API_KEY", os.getenv("GEMINI_API_KEY", st.session_state.get("GEMINI_API_KEY", "")))
         if not gemini_key or "YOUR_" in str(gemini_key):
             return False, "🟡 **GEMINI API KEY NOTICE:** Key missing in secrets. Please add `GEMINI_API_KEY` in Streamlit Cloud Secrets."
@@ -2126,28 +2126,40 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
             genai.configure(api_key=gemini_key)
             start_t = time.time()
             
-            # 1. DYNAMIC MODEL AUTO-DISCOVERY (Queries Google AI Studio for active working model string)
-            working_model_name = "gemini-1.5-flash-latest"
+            # Prioritized Models (Gemini 2.5 Flash / 2.0 Flash First)
+            candidates = [
+                "gemini-2.5-flash",
+                "gemini-2.0-flash",
+                "gemini-2.0-flash-exp",
+                "gemini-2.5-pro",
+                "gemini-1.5-flash-latest",
+                "gemini-1.5-pro-latest",
+                "gemini-1.5-pro",
+                "gemini-pro"
+            ]
+            
             try:
-                available_models = []
                 for m in genai.list_models():
                     if 'generateContent' in m.supported_generation_methods:
-                        clean_name = m.name.replace("models/", "")
-                        available_models.append(clean_name)
-                
-                if available_models:
-                    # Prefer flash models, otherwise pick first available working model
-                    flash_models = [m for m in available_models if 'flash' in m]
-                    working_model_name = flash_models[0] if flash_models else available_models[0]
+                        clean = m.name.replace("models/", "")
+                        if clean not in candidates:
+                            candidates.append(clean)
             except Exception:
-                working_model_name = "gemini-1.5-flash-latest"
+                pass
 
-            # 2. Instantiate Model and Test Connection
-            model = genai.GenerativeModel(working_model_name)
-            res = model.generate_content("Ping")
-            latency = round((time.time() - start_t) * 1000, 2)
-            
-            return True, f"🤖 **GOOGLE GEMINI AI CONNECTED SUCCESSFULLY!**\n\n• **Active Model:** `{working_model_name}` | **Server Status:** `HTTP 200 OK`\n• **Response Time:** `{latency} ms` | **Gemini Reply:** `{res.text.strip()}`"
+            last_error = ""
+            for cand in candidates:
+                try:
+                    model = genai.GenerativeModel(cand)
+                    res = model.generate_content("Ping")
+                    if res and res.text:
+                        latency = round((time.time() - start_t) * 1000, 2)
+                        return True, f"🤖 **GOOGLE GEMINI AI ({cand.upper()}) CONNECTED SUCCESSFULLY!**\n\n• **Active Model:** `{cand}` | **Server Status:** `HTTP 200 OK`\n• **Response Time:** `{latency} ms` | **Gemini Reply:** `{res.text.strip()}`"
+                except Exception as e_cand:
+                    last_error = str(e_cand)
+                    continue
+
+            return False, f"🔴 **GEMINI BACKEND EXCEPTION:** {last_error}"
         except Exception as e:
             return False, f"🔴 **GEMINI BACKEND EXCEPTION:** {str(e)}"
 
