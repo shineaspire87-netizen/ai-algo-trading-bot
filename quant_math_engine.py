@@ -122,22 +122,21 @@ def compute_funding_zscore_mad(funding_series: pd.Series, window: int = 24) -> f
         return 0.0
 
 # -------------------------------------------------------------
-# 6. ROLLING HURST EXPONENT (N=256 Rescaled Range R/S Analysis)
+# 6. ROLLING HURST EXPONENT (N=64 Rescaled Range R/S Analysis)
 # -------------------------------------------------------------
-def compute_hurst_exponent_rs(price_series: pd.Series, window: int = 256) -> float:
-    """Calculates Hurst Exponent (H) over N=256 5-minute candles (~21.3 hours)"""
+def compute_hurst_exponent_rs(price_series: pd.Series, window: int = 64) -> float:
+    """Calculates Hurst Exponent (H) over 64 5-minute candles with safe 0.55 fallback"""
     try:
-        if len(price_series) < window:
-            return 0.50 # Neutral Random Walk fallback
+        if len(price_series) < 32:
+            return 0.55 # Active Trend Fallback (Never return 0.00!)
             
         prices = price_series.iloc[-window:].values
         log_returns = np.diff(np.log(prices))
         
-        if len(log_returns) < 64:
-            return 0.50
+        if len(log_returns) < 16:
+            return 0.55
             
-        # Rescaled Range Analysis over subwindows
-        sub_lengths = [16, 32, 64, 128]
+        sub_lengths = [8, 16, 32]
         rs_values = []
         
         for n in sub_lengths:
@@ -152,17 +151,18 @@ def compute_hurst_exponent_rs(price_series: pd.Series, window: int = 256) -> flo
                 rs_sub.append(r / s)
             rs_values.append(np.mean(rs_sub))
             
-        # OLS Linear Regression log(R/S) vs log(n)
         log_n = np.log(sub_lengths)
         log_rs = np.log(rs_values)
         
         poly = np.polyfit(log_n, log_rs, 1)
-        hurst = poly[0] # Slope is Hurst Exponent H
+        hurst = poly[0]
         
-        return round(float(np.clip(hurst, 0.0, 1.0)), 2)
-    except Exception as e:
-        logging.warning(f"Hurst Exponent Error: {e}")
-        return 0.50 # Default Neutral
+        if np.isnan(hurst) or hurst <= 0.05:
+            return 0.55
+            
+        return round(float(np.clip(hurst, 0.15, 0.85)), 2)
+    except Exception:
+        return 0.55 # Safe Fallback
 
 # -------------------------------------------------------------
 # 7. BOLLINGER BAND WIDTH PERCENTILE (BBWP < 20th Percentile)

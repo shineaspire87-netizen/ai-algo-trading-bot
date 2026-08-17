@@ -1843,6 +1843,9 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
         # UNIFIED LIVE AI TRADING CENTER
         st.subheader(f"🤖 UNIFIED LIVE AI TRADING CENTER: {asset_name}")
 
+        diagnostic_reason = st.session_state.get('last_reason', f'Scanning 24/7 {asset_name} 5m Market Data for 70%+ AI Confidence Signals...')
+        st.info(f"⚡ **Multi-Data Feed Executive Action:** {diagnostic_reason}")
+
         entry_stock_p, target_stock_p, sl_stock_p = None, None, None
 
         if active_data.get("status") == "ACTIVE" and is_market_open:
