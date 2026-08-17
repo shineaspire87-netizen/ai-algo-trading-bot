@@ -2075,84 +2075,6 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
     # ==========================================
     # TAB 3: BROKER KEY INTEGRATOR & PAPER MODE
     # ==========================================
-    def on_test_telegram_click():
-        import requests, time
-        start_t = time.time()
-        now_ist = datetime.datetime.now(pytz.timezone('Asia/Kolkata')).strftime('%I:%M:%S %p IST, %d-%b-%Y')
-        bot_token = st.session_state.get('input_direct_tg_token_v4') or st.secrets.get("TELEGRAM_BOT_TOKEN", "8939955418:AAFXd58Nwr84uIGeqrvIqvntveWwHjqmenE")
-        chat_id = st.session_state.get('input_direct_tg_chat_v4') or st.secrets.get("TELEGRAM_CHAT_ID", "1072750499")
-        try:
-            url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
-            test_text = (
-                f"🔔 <b>ANTONY Quant AI Algo Terminal</b>\n\n"
-                f"🟢 <b>STATUS: ACTIVE & CONNECTED</b>\n"
-                f"⏰ <b>Time:</b> {now_ist}\n"
-                f"👤 <b>Trader:</b> ANTONY\n"
-                f"📱 <b>Chat ID:</b> <code>{chat_id}</code>\n\n"
-                f"✅ <i>Live Telegram Signal Notifier is Active & Running 24/7!</i>"
-            )
-            payload = {"chat_id": chat_id, "text": test_text, "parse_mode": "HTML"}
-            res = requests.post(url, json=payload, timeout=6)
-            lat_ms = round((time.time() - start_t) * 1000, 1)
-
-            if res.status_code == 200:
-                st.session_state['tg_diag_status'] = {
-                    "state": "ACTIVE",
-                    "time": now_ist,
-                    "latency": lat_ms,
-                    "msg": "Telegram Alert Delivered Successfully! Check your Telegram App now."
-                }
-            else:
-                st.session_state['tg_diag_status'] = {
-                    "state": "INACTIVE",
-                    "time": now_ist,
-                    "latency": lat_ms,
-                    "error": f"API Error ({res.status_code}): {res.text}"
-                }
-        except Exception as e:
-            st.session_state['tg_diag_status'] = {
-                "state": "INACTIVE",
-                "time": now_ist,
-                "latency": 0,
-                "error": f"Network Exception: {str(e)}"
-            }
-
-    def on_test_gemini_click():
-        import time
-        start_t = time.time()
-        now_ist = datetime.datetime.now(pytz.timezone('Asia/Kolkata')).strftime('%I:%M:%S %p IST, %d-%b-%Y')
-        gemini_key = st.session_state.get('input_direct_gemini_key_v4') or st.secrets.get("GEMINI_API_KEY", os.getenv("GEMINI_API_KEY", ""))
-        try:
-            import google.generativeai as genai
-            if gemini_key and "YOUR_" not in str(gemini_key):
-                genai.configure(api_key=gemini_key)
-                model = genai.GenerativeModel('gemini-1.5-flash')
-                res = model.generate_content("Respond in 1 short sentence confirming ANTONY Quant Terminal connection.")
-                lat_ms = round((time.time() - start_t) * 1000, 1)
-
-                st.session_state['gemini_diag_status'] = {
-                    "state": "ACTIVE",
-                    "time": now_ist,
-                    "latency": lat_ms,
-                    "model": "gemini-1.5-flash",
-                    "response": res.text.strip()
-                }
-            else:
-                st.session_state['gemini_diag_status'] = {
-                    "state": "INACTIVE",
-                    "time": now_ist,
-                    "latency": 0,
-                    "error": "Gemini API Key is missing or invalid! Please paste a valid key from Google AI Studio."
-                }
-        except Exception as e:
-            lat_ms = round((time.time() - start_t) * 1000, 1)
-            st.session_state['gemini_diag_status'] = {
-                "state": "INACTIVE",
-                "time": now_ist,
-                "latency": lat_ms,
-                "error": f"Gemini API Error: {str(e)}"
-            }
-
     with tab_broker:
         st.markdown("## 🔑 Broker API Integrator & Direct Diagnostic Center")
         st.info("🧪 **STATUS:** Paper Trading Test Active (Day 1 of 14). All execution is simulated with zero financial risk.")
@@ -2160,106 +2082,101 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
         st.divider()
 
         # -------------------------------------------------------------
-        # 1. DIRECT TELEGRAM BOT TESTER WITH PERSISTENT ACTIVE/INACTIVE STATUS
+        # 1. TELEGRAM TESTER ENGINE WITH PERSISTENT BANNER
         # -------------------------------------------------------------
         st.markdown("### 📲 Telegram Alert Bot Connection Tester")
         
         default_tg_token = st.secrets.get("TELEGRAM_BOT_TOKEN", "8939955418:AAFXd58Nwr84uIGeqrvIqvntveWwHjqmenE")
         default_tg_chat = st.secrets.get("TELEGRAM_CHAT_ID", "1072750499")
         
-        col_tg1, col_tg2 = st.columns(2)
+        col_inp_tg1, col_inp_tg2 = st.columns(2)
+        with col_inp_tg1:
+            tg_token_val = st.text_input("Telegram Bot Token", value=default_tg_token, type="password", key="tab3_inp_tg_token")
+        with col_inp_tg2:
+            tg_chat_val = st.text_input("Telegram Chat ID", value=default_tg_chat, key="tab3_inp_tg_chat")
+
+        col_tg1, col_tg2 = st.columns([3, 1])
         with col_tg1:
-            tg_token_input = st.text_input("Telegram Bot Token", value=default_tg_token, type="password", key="input_direct_tg_token_v4")
+            btn_tg = st.button("🚀 Test Telegram Connection & Send Live Message Now", key="tab3_tg_test_btn_v4", use_container_width=True)
         with col_tg2:
-            tg_chat_input = st.text_input("Telegram Chat ID", value=default_tg_chat, key="input_direct_tg_chat_v4")
-
-        col_btn_tg, col_reset_tg = st.columns([0.75, 0.25])
-        with col_btn_tg:
-            st.button("🚀 Test Telegram Connection & Send Live Message Now", key="btn_direct_tg_test_v4", on_click=on_test_telegram_click, use_container_width=True)
-
-        with col_reset_tg:
-            if st.button("🔄 Clear Status", key="btn_reset_tg", use_container_width=True):
-                st.session_state.pop('tg_diag_status', None)
+            if st.button("🔄 Clear Status", key="tab3_tg_clear_btn_v4", use_container_width=True):
+                st.session_state.pop('telegram_test_output', None)
                 st.rerun()
 
-        # PERSISTENT TELEGRAM ACTIVE / INACTIVE DISPLAY CARD
-        if 'tg_diag_status' in st.session_state:
-            info = st.session_state['tg_diag_status']
-            if info["state"] == "ACTIVE":
-                st.markdown(f"""
-                <div style="background: rgba(16, 185, 129, 0.12); border: 1px solid #10b981; border-radius: 10px; padding: 14px 18px; margin-top: 10px; margin-bottom: 10px;">
-                    <div style="display:flex; justify-content:space-between; align-items:center;">
-                        <span style="font-size:16px; font-weight:800; color:#10b981;">🟢 TELEGRAM STATUS: ACTIVE & CONNECTED</span>
-                        <span style="background: #10b981; color:#000; font-weight:700; font-size:11px; padding:3px 10px; border-radius:12px;">200 OK</span>
-                    </div>
-                    <div style="font-size:13px; color:#e2e8f0; margin-top:6px;">
-                        ⏱️ <b>Tested At:</b> {info['time']} | ⚡ <b>Latency:</b> {info['latency']} ms<br>
-                        📬 <b>Notification:</b> {info['msg']}
-                    </div>
-                </div>
-                """, unsafe_allow_html=True)
+        if btn_tg:
+            with st.spinner("Sending live test alert to Telegram..."):
+                try:
+                    import requests
+                    token = tg_token_val or st.secrets.get("TELEGRAM_BOT_TOKEN", "8939955418:AAFXd58Nwr84uIGeqrvIqvntveWwHjqmenE")
+                    chat_id = tg_chat_val or st.secrets.get("TELEGRAM_CHAT_ID", "1072750499")
+                    
+                    url = f"https://api.telegram.org/bot{token}/sendMessage"
+                    payload = {
+                        "chat_id": chat_id,
+                        "text": "🔔 <b>ANTONY Quant AI Algo Terminal</b>\n\n✅ Live Connection Test Successful!\n⏱️ Heartbeat Ping: Passed.",
+                        "parse_mode": "HTML"
+                    }
+                    res = requests.post(url, json=payload, timeout=5)
+                    
+                    if res.status_code == 200 and res.json().get("ok"):
+                        st.session_state['telegram_test_output'] = ("SUCCESS", "🎉 **TELEGRAM CONNECTED SUCCESSFULLY!** Live test alert delivered to your Telegram Mobile App. Check your phone now!")
+                    else:
+                        st.session_state['telegram_test_output'] = ("ERROR", f"❌ Telegram API Error ({res.status_code}): {res.text}")
+                except Exception as e:
+                    st.session_state['telegram_test_output'] = ("ERROR", f"❌ Network Request Error: {str(e)}")
+
+        # Always render Telegram Output Banner if present in session
+        if 'telegram_test_output' in st.session_state:
+            out_type, out_msg = st.session_state['telegram_test_output']
+            if out_type == "SUCCESS":
+                st.success(out_msg)
             else:
-                st.markdown(f"""
-                <div style="background: rgba(239, 68, 68, 0.12); border: 1px solid #ef4444; border-radius: 10px; padding: 14px 18px; margin-top: 10px; margin-bottom: 10px;">
-                    <div style="display:flex; justify-content:space-between; align-items:center;">
-                        <span style="font-size:16px; font-weight:800; color:#ef4444;">🔴 TELEGRAM STATUS: INACTIVE / ERROR</span>
-                        <span style="background: #ef4444; color:#fff; font-weight:700; font-size:11px; padding:3px 10px; border-radius:12px;">FAILED</span>
-                    </div>
-                    <div style="font-size:13px; color:#fca5a5; margin-top:6px;">
-                        ⏱️ <b>Tested At:</b> {info['time']}<br>
-                        ⚠️ <b>Reason:</b> {info['error']}
-                    </div>
-                </div>
-                """, unsafe_allow_html=True)
+                st.error(out_msg)
 
         st.divider()
 
         # -------------------------------------------------------------
-        # 2. DIRECT GOOGLE GEMINI API TESTER WITH PERSISTENT ACTIVE/INACTIVE STATUS
+        # 2. GOOGLE GEMINI 1.5 API TESTER ENGINE WITH PERSISTENT BANNER
         # -------------------------------------------------------------
         st.markdown("### 🤖 Google AI Studio (Gemini 1.5 API) Connection Tester")
         
         default_gemini_key = st.secrets.get("GEMINI_API_KEY", os.getenv("GEMINI_API_KEY", ""))
-        gemini_key_input = st.text_input("Gemini API Key", value=default_gemini_key, type="password", key="input_direct_gemini_key_v4")
+        gemini_key_val = st.text_input("Gemini API Key", value=default_gemini_key, type="password", key="tab3_inp_gemini_key")
 
-        col_btn_gm, col_reset_gm = st.columns([0.75, 0.25])
-        with col_btn_gm:
-            st.button("🚀 Cross-Check Gemini API Key & Verify AI Connection", key="btn_direct_gemini_test_v4", on_click=on_test_gemini_click, use_container_width=True)
-
-        with col_reset_gm:
-            if st.button("🔄 Clear Status", key="btn_reset_gemini", use_container_width=True):
-                st.session_state.pop('gemini_diag_status', None)
+        col_gm1, col_gm2 = st.columns([3, 1])
+        with col_gm1:
+            btn_gm = st.button("🚀 Cross-Check Gemini API Key & Verify AI Connection", key="tab3_gemini_test_btn_v4", use_container_width=True)
+        with col_gm2:
+            if st.button("🔄 Clear Status", key="tab3_gemini_clear_btn_v4", use_container_width=True):
+                st.session_state.pop('gemini_test_output', None)
                 st.rerun()
 
-        # PERSISTENT GEMINI ACTIVE / INACTIVE DISPLAY CARD
-        if 'gemini_diag_status' in st.session_state:
-            g_info = st.session_state['gemini_diag_status']
-            if g_info["state"] == "ACTIVE":
-                st.markdown(f"""
-                <div style="background: rgba(16, 185, 129, 0.12); border: 1px solid #10b981; border-radius: 10px; padding: 14px 18px; margin-top: 10px; margin-bottom: 10px;">
-                    <div style="display:flex; justify-content:space-between; align-items:center;">
-                        <span style="font-size:16px; font-weight:800; color:#10b981;">🟢 GEMINI API STATUS: ACTIVE & VERIFIED</span>
-                        <span style="background: #10b981; color:#000; font-weight:700; font-size:11px; padding:3px 10px; border-radius:12px;">{g_info.get('model', 'gemini-1.5-flash')}</span>
-                    </div>
-                    <div style="font-size:13px; color:#e2e8f0; margin-top:6px;">
-                        ⏱️ <b>Verified At:</b> {g_info['time']} | ⚡ <b>Latency:</b> {g_info['latency']} ms<br>
-                        🤖 <b>Live AI Response:</b> <i>"{g_info['response']}"</i>
-                    </div>
-                </div>
-                """, unsafe_allow_html=True)
+        if btn_gm:
+            with st.spinner("Pinging Google AI Studio (Gemini 1.5 Flash)..."):
+                try:
+                    import google.generativeai as genai
+                    import time, os
+                    gemini_key = gemini_key_val or st.secrets.get("GEMINI_API_KEY", os.getenv("GEMINI_API_KEY", ""))
+                    
+                    if gemini_key and "YOUR_" not in str(gemini_key):
+                        genai.configure(api_key=gemini_key)
+                        start_t = time.time()
+                        model = genai.GenerativeModel('gemini-1.5-flash')
+                        res = model.generate_content("Respond in 1 short sentence confirming ANTONY Quant Terminal connection.")
+                        latency = round((time.time() - start_t) * 1000, 2)
+                        st.session_state['gemini_test_output'] = ("SUCCESS", f"🎉 **GOOGLE GEMINI 1.5 API CONNECTED!** (Latency: `{latency} ms`)\n\n🤖 **Gemini Live Response:** {res.text.strip()}")
+                    else:
+                        st.session_state['gemini_test_output'] = ("ERROR", "❌ Gemini API Key Missing in Streamlit Cloud Secrets! Please add `GEMINI_API_KEY` in Secrets.")
+                except Exception as e:
+                    st.session_state['gemini_test_output'] = ("ERROR", f"❌ Gemini API Test Error: {str(e)}")
+
+        # Always render Gemini Output Banner if present in session
+        if 'gemini_test_output' in st.session_state:
+            out_type, out_msg = st.session_state['gemini_test_output']
+            if out_type == "SUCCESS":
+                st.success(out_msg)
             else:
-                st.markdown(f"""
-                <div style="background: rgba(239, 68, 68, 0.12); border: 1px solid #ef4444; border-radius: 10px; padding: 14px 18px; margin-top: 10px; margin-bottom: 10px;">
-                    <div style="display:flex; justify-content:space-between; align-items:center;">
-                        <span style="font-size:16px; font-weight:800; color:#ef4444;">🔴 GEMINI API STATUS: INACTIVE / INVALID KEY</span>
-                        <span style="background: #ef4444; color:#fff; font-weight:700; font-size:11px; padding:3px 10px; border-radius:12px;">ERROR</span>
-                    </div>
-                    <div style="font-size:13px; color:#fca5a5; margin-top:6px;">
-                        ⏱️ <b>Tested At:</b> {g_info['time']}<br>
-                        ⚠️ <b>Reason:</b> {g_info['error']}
-                    </div>
-                </div>
-                """, unsafe_allow_html=True)
+                st.error(out_msg)
 
         st.divider()
 
