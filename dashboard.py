@@ -2082,116 +2082,97 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
         st.divider()
 
         # -------------------------------------------------------------
-        # 1. TELEGRAM TESTER ENGINE WITH PERSISTENT BANNER
+        # 1. FORM-BASED TELEGRAM ALERT BOT TESTER
         # -------------------------------------------------------------
         st.markdown("### 📲 Telegram Alert Bot Connection Tester")
         
-        default_tg_token = st.secrets.get("TELEGRAM_BOT_TOKEN", "8939955418:AAFXd58Nwr84uIGeqrvIqvntveWwHjqmenE")
-        default_tg_chat = st.secrets.get("TELEGRAM_CHAT_ID", "1072750499")
-        
-        col_inp_tg1, col_inp_tg2 = st.columns(2)
-        with col_inp_tg1:
-            tg_token_val = st.text_input("Telegram Bot Token", value=default_tg_token, type="password", key="tab3_inp_tg_token")
-        with col_inp_tg2:
-            tg_chat_val = st.text_input("Telegram Chat ID", value=default_tg_chat, key="tab3_inp_tg_chat")
+        with st.form(key="form_telegram_tester_v5"):
+            col_tg1, col_tg2 = st.columns(2)
+            with col_tg1:
+                default_tg_token = st.secrets.get("TELEGRAM_BOT_TOKEN", "8939955418:AAFXd58Nwr84uIGeqrvIqvntveWwHjqmenE")
+                tg_token_val = st.text_input("Telegram Bot Token", value=default_tg_token, type="password", key="form_tg_token")
+            with col_tg2:
+                default_tg_chat = st.secrets.get("TELEGRAM_CHAT_ID", "1072750499")
+                tg_chat_val = st.text_input("Telegram Chat ID", value=default_tg_chat, key="form_tg_chat")
 
-        col_tg1, col_tg2 = st.columns([3, 1])
-        with col_tg1:
-            btn_tg = st.button("🚀 Test Telegram Connection & Send Live Message Now", key="tab3_tg_test_btn_v4", use_container_width=True)
-        with col_tg2:
-            if st.button("🔄 Clear Status", key="tab3_tg_clear_btn_v4", use_container_width=True):
-                st.session_state.pop('telegram_test_output', None)
-                st.rerun()
+            submit_tg = st.form_submit_button("🚀 Test Telegram Connection & Send Live Message Now", use_container_width=True)
 
-        if btn_tg:
-            with st.spinner("Sending live test alert to Telegram..."):
+        if submit_tg:
+            with st.spinner("Pinging Telegram API & sending live test message..."):
                 try:
                     import requests
-                    token = tg_token_val or st.secrets.get("TELEGRAM_BOT_TOKEN", "8939955418:AAFXd58Nwr84uIGeqrvIqvntveWwHjqmenE")
-                    chat_id = tg_chat_val or st.secrets.get("TELEGRAM_CHAT_ID", "1072750499")
-                    
-                    url = f"https://api.telegram.org/bot{token}/sendMessage"
-                    payload = {
-                        "chat_id": chat_id,
-                        "text": "🔔 <b>ANTONY Quant AI Algo Terminal</b>\n\n✅ Live Connection Test Successful!\n⏱️ Heartbeat Ping: Passed.",
-                        "parse_mode": "HTML"
-                    }
+                    url = f"https://api.telegram.org/bot{tg_token_val}/sendMessage"
+                    payload = {"chat_id": tg_chat_val, "text": "🔔 <b>ANTONY Quant AI Algo Terminal</b>\n\n✅ Live Telegram Connection Test Successful!\n⏱️ Heartbeat: Active.", "parse_mode": "HTML"}
                     res = requests.post(url, json=payload, timeout=5)
                     
                     if res.status_code == 200 and res.json().get("ok"):
-                        st.session_state['telegram_test_output'] = ("SUCCESS", "🎉 **TELEGRAM CONNECTED SUCCESSFULLY!** Live test alert delivered to your Telegram Mobile App. Check your phone now!")
+                        st.session_state['tg_test_res'] = ("SUCCESS", "🎉 **TELEGRAM CONNECTED SUCCESSFULLY!** Live alert delivered to your phone. Check your Telegram App now!")
                     else:
-                        st.session_state['telegram_test_output'] = ("ERROR", f"❌ Telegram API Error ({res.status_code}): {res.text}")
+                        st.session_state['tg_test_res'] = ("ERROR", f"❌ Telegram API Error ({res.status_code}): {res.text}")
                 except Exception as e:
-                    st.session_state['telegram_test_output'] = ("ERROR", f"❌ Network Request Error: {str(e)}")
+                    st.session_state['tg_test_res'] = ("ERROR", f"❌ Network Exception: {str(e)}")
 
-        # Always render Telegram Output Banner if present in session
-        if 'telegram_test_output' in st.session_state:
-            out_type, out_msg = st.session_state['telegram_test_output']
-            if out_type == "SUCCESS":
-                st.success(out_msg)
+        # Display Telegram Test Result Permanently
+        if 'tg_test_res' in st.session_state:
+            res_type, res_msg = st.session_state['tg_test_res']
+            if res_type == "SUCCESS":
+                st.success(res_msg)
             else:
-                st.error(out_msg)
+                st.error(res_msg)
 
         st.divider()
 
         # -------------------------------------------------------------
-        # 2. GOOGLE GEMINI 1.5 API TESTER ENGINE WITH PERSISTENT BANNER
+        # 2. FORM-BASED GOOGLE AI STUDIO (GEMINI 1.5/2.5 FLASH) TESTER
         # -------------------------------------------------------------
-        st.markdown("### 🤖 Google AI Studio (Gemini 1.5 API) Connection Tester")
-        
-        default_gemini_key = st.secrets.get("GEMINI_API_KEY", os.getenv("GEMINI_API_KEY", ""))
-        gemini_key_val = st.text_input("Gemini API Key", value=default_gemini_key, type="password", key="tab3_inp_gemini_key")
+        st.markdown("### 🤖 Google AI Studio (Gemini 1.5/2.5 Flash API) Connection Tester")
 
-        col_gm1, col_gm2 = st.columns([3, 1])
-        with col_gm1:
-            btn_gm = st.button("🚀 Cross-Check Gemini API Key & Verify AI Connection", key="tab3_gemini_test_btn_v4", use_container_width=True)
-        with col_gm2:
-            if st.button("🔄 Clear Status", key="tab3_gemini_clear_btn_v4", use_container_width=True):
-                st.session_state.pop('gemini_test_output', None)
-                st.rerun()
+        with st.form(key="form_gemini_tester_v5"):
+            default_gemini_key = st.secrets.get("GEMINI_API_KEY", "")
+            gemini_key_val = st.text_input("Gemini API Key", value=default_gemini_key, type="password", key="form_gemini_key")
 
-        if btn_gm:
-            with st.spinner("Pinging Google AI Studio (Gemini 1.5 Flash)..."):
+            submit_gm = st.form_submit_button("🚀 Cross-Check Gemini API Key & Verify AI Connection", use_container_width=True)
+
+        if submit_gm:
+            with st.spinner("Pinging Google AI Studio (Gemini 1.5/2.5 Flash API)..."):
                 try:
                     import google.generativeai as genai
                     import time, os
-                    gemini_key = gemini_key_val or st.secrets.get("GEMINI_API_KEY", os.getenv("GEMINI_API_KEY", ""))
                     
-                    if gemini_key and "YOUR_" not in str(gemini_key):
-                        genai.configure(api_key=gemini_key)
+                    if gemini_key_val and "YOUR_" not in str(gemini_key_val):
+                        genai.configure(api_key=gemini_key_val)
                         start_t = time.time()
                         model = genai.GenerativeModel('gemini-1.5-flash')
                         res = model.generate_content("Respond in 1 short sentence confirming ANTONY Quant Terminal connection.")
                         latency = round((time.time() - start_t) * 1000, 2)
-                        st.session_state['gemini_test_output'] = ("SUCCESS", f"🎉 **GOOGLE GEMINI 1.5 API CONNECTED!** (Latency: `{latency} ms`)\n\n🤖 **Gemini Live Response:** {res.text.strip()}")
+                        
+                        st.session_state['gm_test_res'] = ("SUCCESS", f"🎉 **GOOGLE GEMINI API CONNECTED SUCCESSFULLY!** (Latency: `{latency} ms`)\n\n🤖 **Gemini Live Response:** {res.text.strip()}")
                     else:
-                        st.session_state['gemini_test_output'] = ("ERROR", "❌ Gemini API Key Missing in Streamlit Cloud Secrets! Please add `GEMINI_API_KEY` in Secrets.")
+                        st.session_state['gm_test_res'] = ("ERROR", "❌ **GEMINI API KEY MISSING!** Please paste your Gemini API Key in the text box above first.")
                 except Exception as e:
-                    st.session_state['gemini_test_output'] = ("ERROR", f"❌ Gemini API Test Error: {str(e)}")
+                    st.session_state['gm_test_res'] = ("ERROR", f"❌ **GEMINI API ERROR:** {str(e)}")
 
-        # Always render Gemini Output Banner if present in session
-        if 'gemini_test_output' in st.session_state:
-            out_type, out_msg = st.session_state['gemini_test_output']
-            if out_type == "SUCCESS":
-                st.success(out_msg)
+        # Display Gemini Test Result Permanently
+        if 'gm_test_res' in st.session_state:
+            res_type, res_msg = st.session_state['gm_test_res']
+            if res_type == "SUCCESS":
+                st.success(res_msg)
             else:
-                st.error(out_msg)
+                st.error(res_msg)
 
         st.divider()
 
         # -------------------------------------------------------------
-        # 3. LIVE BROKER CREDENTIALS MANAGER & HEALTH PANEL
+        # 3. LIVE BROKER CREDENTIALS MANAGER
         # -------------------------------------------------------------
         st.markdown("### 🔒 Live Broker Credentials Manager")
-        
         col_b1, col_b2 = st.columns(2)
         with col_b1:
-            st.text_input("Binance API Key", type="password", value=st.secrets.get("BINANCE_API_KEY", ""), key="input_binance_key_v4")
-            st.text_input("Binance API Secret", type="password", value=st.secrets.get("BINANCE_API_SECRET", ""), key="input_binance_secret_v4")
+            st.text_input("Binance API Key", type="password", value=st.secrets.get("BINANCE_API_KEY", ""), key="input_binance_key_v5")
+            st.text_input("Binance API Secret", type="password", value=st.secrets.get("BINANCE_API_SECRET", ""), key="input_binance_secret_v5")
         with col_b2:
-            st.text_input("Zerodha API Key", type="password", value=st.secrets.get("ZERODHA_API_KEY", ""), key="input_zerodha_key_v4")
-            st.text_input("Zerodha API Secret", type="password", value=st.secrets.get("ZERODHA_API_SECRET", ""), key="input_zerodha_secret_v4")
+            st.text_input("Zerodha API Key", type="password", value=st.secrets.get("ZERODHA_API_KEY", ""), key="input_zerodha_key_v5")
+            st.text_input("Zerodha API Secret", type="password", value=st.secrets.get("ZERODHA_API_SECRET", ""), key="input_zerodha_secret_v5")
 
         st.divider()
 
