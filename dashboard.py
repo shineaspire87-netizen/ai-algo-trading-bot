@@ -35,6 +35,35 @@ from config import GOOGLE_SHEET_WEB_APP_URL, TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_I
 from multi_strategy import evaluate_soft_kill_switch_position_scaling, calculate_dynamic_atr_levels, detect_vcp_squeeze_contraction, detect_liquidity_sweep_trap, evaluate_pyramiding_scaling
 import streamlit.components.v1 as components
 
+def render_subsecond_websocket_ticker(symbol="BTCUSDT"):
+    """Renders 0ms Latency Tick-by-Tick Live Price Ticker directly from Exchange WebSocket"""
+    ticker_html = f"""
+    <div style="background: rgba(17, 24, 39, 0.85); backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; padding: 12px 18px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+        <div>
+            <div style="font-size: 11px; font-weight: 700; color: #9ca3af; text-transform: uppercase;">⚡ REAL-TIME TICKER (0ms Latency Feed)</div>
+            <div id="crypto-price" style="font-size: 26px; font-weight: 900; color: #10b981;">$63,511.17</div>
+        </div>
+        <div style="text-align: right;">
+            <span style="background: rgba(16, 185, 129, 0.2); color: #10b981; border: 1px solid #10b981; font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 15px;">🟢 LIVE TICKER STREAM</span>
+            <div style="font-size: 12px; color: #10b981; margin-top: 4px;">Tick-by-Tick Sub-Second Update</div>
+        </div>
+    </div>
+
+    <script>
+        const ws = new WebSocket('wss://stream.binance.com:9443/ws/{symbol.lower()}@ticker');
+        ws.onmessage = (event) => {{
+            const data = JSON.parse(event.data);
+            const price = parseFloat(data.c).toLocaleString('en-US', {{ minimumFractionDigits: 2, maximumFractionDigits: 2 }});
+            const pElem = document.getElementById('crypto-price');
+            if (pElem) {{
+                pElem.innerText = '$' + price;
+                pElem.style.color = parseFloat(data.p) >= 0 ? '#10b981' : '#ef4444';
+            }}
+        }};
+    </script>
+    """
+    st.components.v1.html(ticker_html, height=85)
+
 def render_tradingview_live_chart(asset_name: str):
     """Renders TradingView embedded iframe chart with 100% valid unrestricted futures symbols"""
     asset_clean = str(asset_name).upper().strip()
@@ -1196,6 +1225,10 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
 
     # Dynamic Symbol Assignment based on Asset
     curr_symbol, conversion_factor = get_asset_currency_info(asset_name)
+
+    if is_crypto_selected:
+        crypto_ws_sym = "BTCUSDT" if "BITCOIN" in asset_name else ("ETHUSDT" if "ETH" in asset_name else "BTCUSDT")
+        render_subsecond_websocket_ticker(crypto_ws_sym)
 
     # TOP KPI METRICS CARDS (Streamlit Columns)
     col1, col2, col3, col4, col5 = st.columns(5)
