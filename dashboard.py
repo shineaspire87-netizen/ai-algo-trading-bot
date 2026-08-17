@@ -1044,17 +1044,7 @@ if os.path.exists(active_json_file):
     except Exception:
         pass
 
-# Force BITCOIN as the default and locked primary asset
-st.session_state['selected_asset'] = "BITCOIN"
-st.session_state['active_currency'] = "$"
-
-st.sidebar.markdown("### 🪙 Active Focus Asset")
-st.sidebar.info("🔥 **100% BITCOIN PURE FOCUS MODE ACTIVE**\n\nScanning 24/7 Global Crypto Options in USD ($).")
-
-btc_default_idx = list(WATCHLIST.keys()).index("BITCOIN") if "BITCOIN" in WATCHLIST else 0
-selected_name = st.sidebar.selectbox("Select Asset Chart to View:", list(WATCHLIST.keys()), index=btc_default_idx)
-selected_symbol = WATCHLIST[selected_name]
-timeframe = st.sidebar.selectbox("Select Candle Timeframe:", ["1m", "5m", "15m", "1h", "1d"], index=1)
+# Active Focus Asset is handled dynamically in Unified Asset Selector below
 
 st.sidebar.markdown("---")
 st.sidebar.markdown("### 🧪 Testing & Override Controls")
@@ -1101,9 +1091,12 @@ def save_testing_override_state(val: bool):
 if 'allow_extended_trades' not in st.session_state:
     st.session_state['allow_extended_trades'] = load_testing_override_state()
 
+if 'testing_toggle_widget' not in st.session_state:
+    st.session_state['testing_toggle_widget'] = st.session_state['allow_extended_trades']
+
 # Callback triggered ONLY when user manually clicks toggle
 def on_testing_toggle_change():
-    new_status = st.session_state['testing_toggle_widget']
+    new_status = st.session_state.get('testing_toggle_widget', False)
     st.session_state['allow_extended_trades'] = new_status
     save_testing_override_state(new_status)
 
@@ -1246,7 +1239,6 @@ def log_trade_to_csv_and_update(active_data, exit_price, exit_reason, live_pnl, 
     send_telegram_alert(alert_msg)
     return new_capital
 
-@st.fragment(run_every="3s")
 def render_dashboard_main(asset_name, asset_symbol, tf_str):
     import os
     import json
@@ -1395,9 +1387,14 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
 
     # CANDLE DATA & TECHNICAL INDICATORS (VWAP + PDH/PDL CALCULATION)
     period_map = {"1m": "1d", "3m": "5d", "5m": "5d", "15m": "1mo", "1d": "1y"}
-    df = yf.download(tickers=asset_symbol, period=period_map.get(tf_str, "5d"), interval=tf_str, progress=False)
-    if isinstance(df.columns, pd.MultiIndex):
-        df.columns = df.columns.get_level_values(0)
+    df = safe_get_candle_data(asset_symbol)
+    if df is None or df.empty:
+        try:
+            df = yf.download(tickers=asset_symbol, period=period_map.get(tf_str, "5d"), interval=tf_str, progress=False)
+            if isinstance(df.columns, pd.MultiIndex):
+                df.columns = df.columns.get_level_values(0)
+        except Exception:
+            df = pd.DataFrame()
     st.session_state['chart_df'] = df
 
     # 🟢 INSTITUTIONAL RULE: PREVIOUS DAY HIGH (PDH) & LOW (PDL) CALCULATION
@@ -2310,6 +2307,85 @@ selected_asset = st.sidebar.selectbox(
 
 # SYNC SESSION STATE IMMEDIATELY
 st.session_state['selected_asset'] = selected_asset
+
+def render_binance_tradingview_chart(symbol: str = "BINANCE:BTCUSDT"):
+    """Renders TradingView advanced candlestick chart embed widget"""
+    clean_sym = symbol if ":" in symbol else f"BINANCE:{symbol}"
+    tv_html = f"""
+    <div class="tradingview-widget-container" style="height:500px;width:100%">
+      <div id="tradingview_chart_div" style="height:calc(100% - 32px);width:100%"></div>
+      <script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
+      <script type="text/javascript">
+      new TradingView.widget(
+      {{
+        "autosize": true,
+        "symbol": "{clean_sym}",
+        "interval": "5",
+        "timezone": "Asia/Kolkata",
+        "theme": "dark",
+        "style": "1",
+        "locale": "en",
+        "enable_publishing": false,
+        "allow_symbol_change": true,
+        "container_id": "tradingview_chart_div"
+      }}
+      );
+      </script>
+    </div>
+    """
+    components.html(tv_html, height=520)
+
+def render_trade_history_table_safe():
+    """Renders formatted trade execution history table safely"""
+    try:
+        trades_df = pd.DataFrame()
+        if os.path.exists("trades.csv") and os.path.getsize("trades.csv") > 0:
+            trades_df = pd.read_csv("trades.csv")
+        elif "trades_memory" in st.session_state and st.session_state.trades_memory:
+            trades_df = pd.DataFrame(st.session_state.trades_memory)
+            
+        if not trades_df.empty:
+            st.dataframe(trades_df.tail(20), use_container_width=True)
+        else:
+            st.info("ℹ️ No past trades recorded yet. Bot will log live executions here.")
+    except Exception as e:
+        st.info("ℹ️ Trade history log loading...")
+
+def safe_get_candle_data(symbol_ticker: str) -> pd.DataFrame:
+    """Fetches 5m candle data with Direct Binance Klines API Fallback for 100% Uptime"""
+    # 1. Try Direct Binance Klines API First (Fastest & 100% Reliable for Crypto)
+    try:
+        is_eth = "ETH" in str(symbol_ticker).upper()
+        is_sol = "SOL" in str(symbol_ticker).upper()
+        binance_symbol = "ETHUSDT" if is_eth else ("SOLUSDT" if is_sol else "BTCUSDT")
+        
+        url = f"https://api.binance.com/api/v3/klines?symbol={binance_symbol}&interval=5m&limit=100"
+        res = requests.get(url, timeout=4)
+        if res.status_code == 200:
+            raw_klines = res.json()
+            df_b = pd.DataFrame(raw_klines, columns=['time', 'Open', 'High', 'Low', 'Close', 'Volume', 'close_time', 'qav', 'num_trades', 'taker_base_vol', 'taker_quote_vol', 'ignore'])
+            df_b['Open'] = df_b['Open'].astype(float)
+            df_b['High'] = df_b['High'].astype(float)
+            df_b['Low'] = df_b['Low'].astype(float)
+            df_b['Close'] = df_b['Close'].astype(float)
+            df_b['Volume'] = df_b['Volume'].astype(float)
+            df_b.index = pd.to_datetime(df_b['time'], unit='ms')
+            return df_b
+    except Exception:
+        pass
+
+    # 2. Fallback to YFinance
+    try:
+        import yfinance as yf
+        df_yf = yf.download(symbol_ticker, period="5d", interval="5m", progress=False)
+        if df_yf is not None and not df_yf.empty and len(df_yf) >= 20:
+            if isinstance(df_yf.columns, pd.MultiIndex):
+                df_yf.columns = df_yf.columns.get_level_values(0)
+            return df_yf
+    except Exception:
+        pass
+
+    return None
 
 # -------------------------------------------------------------
 # RENDER MAIN DASHBOARD WITH DYNAMIC ASSET CONTEXT
