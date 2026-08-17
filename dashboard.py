@@ -1390,7 +1390,8 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
     st.markdown("---")
 
     # CANDLE DATA & TECHNICAL INDICATORS (VWAP + PDH/PDL CALCULATION)
-    df = yf.download(tickers=asset_symbol, period=period_map[tf_str], interval=tf_str, progress=False)
+    period_map = {"1m": "1d", "3m": "5d", "5m": "5d", "15m": "1mo", "1d": "1y"}
+    df = yf.download(tickers=asset_symbol, period=period_map.get(tf_str, "5d"), interval=tf_str, progress=False)
     if isinstance(df.columns, pd.MultiIndex):
         df.columns = df.columns.get_level_values(0)
     st.session_state['chart_df'] = df
@@ -2219,6 +2220,71 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
     # RENDER IN TAB 3 (Fail-Safe Wrapped Blocks):
     with tab_broker:
         render_broker_integrator_tab()
+
+def render_0ms_websocket_ticker(binance_symbol: str = "BTCUSDT"):
+    """Renders 0ms Ultra-Low Latency WebSocket Live Price Ticker Component"""
+    ticker_html = f"""
+    <div style="background: rgba(17, 24, 39, 0.85); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 8px 12px; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center;">
+        <span style="color: #9ca3af; font-size: 11px; font-weight: 700;">⚡ 0MS BINANCE WEBSOCKET:</span>
+        <span id="ws-live-price" style="color: #00e5ff; font-size: 14px; font-weight: 800;">Connecting...</span>
+    </div>
+    <script>
+        const wsSymbol = "{binance_symbol.lower()}";
+        const ws = new WebSocket(`wss://stream.binance.com:9443/ws/${{wsSymbol}}@trade`);
+        ws.onmessage = (event) => {{
+            const data = JSON.parse(event.data);
+            const priceElem = document.getElementById("ws-live-price");
+            if (priceElem && data.p) {{
+                priceElem.innerText = "$" + parseFloat(data.p).toLocaleString(undefined, {{minimumFractionDigits: 2, maximumFractionDigits: 2}});
+            }}
+        }};
+    </script>
+    """
+    components.html(ticker_html, height=55)
+
+# 1. Unlocked Sidebar Asset Selector
+st.sidebar.markdown("### 🎛️ Asset & Market Selector")
+
+asset_options = ["BITCOIN", "ETHEREUM", "SOLANA", "NIFTY", "BANKNIFTY", "RELIANCE"]
+default_idx = 0
+
+selected_asset = st.sidebar.selectbox(
+    "Select Active Focus Asset:",
+    asset_options,
+    index=default_idx,
+    key="unlocked_sidebar_asset_select"
+)
+
+st.session_state['selected_asset'] = selected_asset
+
+# 2. Dynamic Symbol & Currency Mapping
+crypto_map = {
+    "BITCOIN": "BTCUSDT",
+    "ETHEREUM": "ETHUSDT",
+    "SOLANA": "SOLUSDT"
+}
+
+nse_symbol_map = {
+    "BITCOIN": "BTC-USD",
+    "ETHEREUM": "ETH-USD",
+    "SOLANA": "SOL-USD",
+    "NIFTY": "^NSEI",
+    "BANKNIFTY": "^NSEBANK",
+    "RELIANCE": "RELIANCE.NS"
+}
+
+is_crypto = selected_asset in crypto_map
+active_binance_symbol = crypto_map.get(selected_asset, "BTCUSDT")
+selected_symbol = nse_symbol_map.get(selected_asset, "BTC-USD")
+selected_name = selected_asset
+timeframe = "5m"
+curr_symbol = "$" if is_crypto else "₹"
+st.session_state['active_currency'] = curr_symbol
+
+st.sidebar.info(f"⚡ **ACTIVE FOCUS:** `{selected_asset}` ({curr_symbol} Currency Calibration)")
+
+# 3. Dynamic 0ms WebSocket Ticker for Selected Asset
+render_0ms_websocket_ticker(active_binance_symbol)
 
 # Run Cloud State Recovery before scanning
 enforce_cloud_kill_switch_guard()
