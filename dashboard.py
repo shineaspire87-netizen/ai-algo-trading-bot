@@ -677,9 +677,18 @@ if os.path.exists(active_json_file):
                     <small style="color:#cbd5e1;">Select <b>{act_sym}</b> in chart to manage position.</small>
                 </div>
                 """, unsafe_allow_html=True)
-    except:
+    except Exception:
         pass
-selected_name = st.sidebar.selectbox("Select Asset Chart to View:", list(WATCHLIST.keys()), index=0)
+
+# Force BITCOIN as the default and locked primary asset
+st.session_state['selected_asset'] = "BITCOIN"
+st.session_state['active_currency'] = "$"
+
+st.sidebar.markdown("### 🪙 Active Focus Asset")
+st.sidebar.info("🔥 **100% BITCOIN PURE FOCUS MODE ACTIVE**\n\nScanning 24/7 Global Crypto Options in USD ($).")
+
+btc_default_idx = list(WATCHLIST.keys()).index("BITCOIN") if "BITCOIN" in WATCHLIST else 0
+selected_name = st.sidebar.selectbox("Select Asset Chart to View:", list(WATCHLIST.keys()), index=btc_default_idx)
 selected_symbol = WATCHLIST[selected_name]
 timeframe = st.sidebar.selectbox("Select Candle Timeframe:", ["1m", "5m", "15m", "1h", "1d"], index=1)
 
