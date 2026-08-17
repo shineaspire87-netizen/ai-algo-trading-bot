@@ -876,7 +876,7 @@ def enforce_cloud_kill_switch_guard(trades_df=None):
             return False
 
         # Current IST Today Date String
-        today_ist = (datetime.datetime.utcnow() + datetime.timedelta(hours=5, minutes=30)).strftime('%Y-%m-%d')
+        today_ist = datetime.datetime.now(pytz.timezone('Asia/Kolkata')).strftime('%Y-%m-%d')
         
         today_trades = [t for t in trades if today_ist in str(t.get('Entry_Time', ''))]
 
@@ -898,8 +898,7 @@ def enforce_cloud_kill_switch_guard(trades_df=None):
             st.session_state['kill_switch_reason'] = f"🛑 CLOUD LOCK: TODAY ({today_ist}) HAD {consecutive_losses} CONSECUTIVE LOSSES."
             return True
     except Exception as e:
-        pass
-    return False
+        return False
 
 enforce_persistent_cloud_kill_switch = enforce_cloud_kill_switch_guard
 
@@ -997,7 +996,7 @@ def calculate_hurst_exponent(ts: pd.Series, max_lag: int = 20) -> float:
     """Calculates Hurst Exponent (H < 0.45 indicates mean-reverting sideways chop)"""
     try:
         lags = range(2, max_lag)
-        tau = [np.sqrt(np.std(np.subtract(ts[lag:], ts[:-lag]))) for lag in lags]
+        tau = [max(float(np.sqrt(np.std(np.subtract(ts[lag:], ts[:-lag])))), 1e-8) for lag in lags]
         poly = np.polyfit(np.log(lags), np.log(tau), 1)
         return float(poly[0] * 2.0)
     except:
