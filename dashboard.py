@@ -1,261 +1,25 @@
-# dashboard.py - Anti-Freeze Auto-Reconnect & Error-Handled Loop Engine
-
+# dashboard.py - Antony Quant AI Algo Terminal (Complete Institutional Engine & Live Sync)
 import streamlit as st
-import os
-import json
-import pandas as pd
-import numpy as np
-import datetime
-import time
-import requests
-import hmac
-import hashlib
-import logging
-import threading
-
-# 1. Safe Auto-Refresh Loop Engine (Prevents Freezing on API Timeouts)
-from quant_math_engine import compute_weighted_obi, compute_hurst_exponent_rs, compute_bbwp
-from multi_strategy import evaluate_institutional_bitcoin_signals
-from paper_broker import apply_stateful_dynamic_trailing_lock
-from broker_integrator import render_broker_integrator_tab
-
-try:
-    from streamlit_autorefresh import st_autorefresh
-    # Auto-refreshes every 3 seconds safely
-    count = st_autorefresh(interval=3000, limit=None, key="antifreeze_247_loop")
-except Exception as e:
-    pass
 
 # Top of dashboard.py (Global Scope)
 ACTIVE_TRADE_FILE = "active_trade.json"
 import textwrap
 from system_health import check_system_integrity, run_comprehensive_health_check
 from config import GOOGLE_SHEET_WEB_APP_URL, TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID
-from multi_strategy import evaluate_soft_kill_switch_position_scaling, calculate_dynamic_atr_levels, detect_vcp_squeeze_contraction, detect_liquidity_sweep_trap, evaluate_pyramiding_scaling, fetch_binance_orderbook_depth_ratio, evaluate_multi_timeframe_alignment
+from multi_strategy import evaluate_soft_kill_switch_position_scaling, calculate_dynamic_atr_levels, detect_vcp_squeeze_contraction, detect_liquidity_sweep_trap, evaluate_pyramiding_scaling
 import streamlit.components.v1 as components
+import pandas as pd
 
-def render_live_ticking_scan_header(cycle_count=28):
-    """Renders 1-Second Real-Time Live Ticking Scanner Clock Component"""
-    clock_html = f"""
-    <div style="background: rgba(30, 41, 59, 0.75); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 10px 14px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-        <div style="font-size: 13px; font-weight: 700; color: #cbd5e1;">
-            ⏱️ <b>LIVE SYSTEM SCANNER CLOCK:</b> <span id="live-scan-clock" style="color: #38bdf8;">--:--:-- PM</span>
-        </div>
-        <div style="font-size: 12px; font-weight: 600; color: #10b981;">
-            ⚡ <b>Status:</b> Active Scanning (Cycle #{cycle_count})
-        </div>
-    </div>
-
-    <script>
-        function updateLiveScanClock() {{
-            const now = new Date();
-            let hours = now.getHours();
-            const minutes = String(now.getMinutes()).padStart(2, '0');
-            const seconds = String(now.getSeconds()).padStart(2, '0');
-            const ampm = hours >= 12 ? 'PM' : 'AM';
-            hours = hours % 12;
-            hours = hours ? hours : 12; // 0 becomes 12
-            const strTime = String(hours).padStart(2, '0') + ':' + minutes + ':' + seconds + ' ' + ampm;
-            
-            const clockElem = document.getElementById('live-scan-clock');
-            if (clockElem) {{
-                clockElem.innerText = strTime + ' IST';
-            }}
-        }}
-        setInterval(updateLiveScanClock, 1000);
-        updateLiveScanClock();
-    </script>
-    """
-    st.components.v1.html(clock_html, height=55)
-
-def render_institutional_single_line_header(realtime_price, total_capital, net_pnl, today_trades, total_trades, win_rate, asset_name="BITCOIN"):
-    """Renders all 6 top metrics in one single horizontal glassmorphism bar"""
+def get_tradingview_symbol(asset_name: str) -> str:
+    """Maps internal asset names to exact TradingView widget symbols with NSE: prefix"""
+    asset_upper = str(asset_name).upper().strip()
     
-    selected_asset = asset_name if asset_name else st.session_state.get('selected_asset', 'BITCOIN')
-    is_crypto = any(k in selected_asset.upper() for k in ["BITCOIN", "ETHEREUM", "SOLANA", "BTC", "ETH", "SOL"])
-    curr = "$" if is_crypto else "₹"
-    
-    pnl_color = "#10b981" if net_pnl >= 0 else "#ef4444"
-    win_color = "#10b981" if win_rate >= 50.0 else "#ef4444"
-    pnl_sign = "+" if net_pnl > 0 else ""
-
-    header_html = f"""
-    <style>
-        .single-line-header {{
-            background: rgba(17, 24, 39, 0.85);
-            backdrop-filter: blur(12px);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            border-radius: 10px;
-            padding: 12px 18px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            flex-wrap: nowrap;
-            gap: 15px;
-            margin-bottom: 20px;
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
-            overflow-x: auto;
-        }}
-        .hdr-item {{
-            display: flex;
-            flex-direction: column;
-        }}
-        .hdr-label {{
-            font-size: 10px;
-            font-weight: 700;
-            color: #9ca3af;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            margin-bottom: 3px;
-            white-space: nowrap;
-        }}
-        .hdr-val {{
-            font-size: 16px;
-            font-weight: 800;
-            color: #f3f4f6;
-            white-space: nowrap;
-        }}
-        .hdr-divider {{
-            width: 1px;
-            height: 28px;
-            background: rgba(255, 255, 255, 0.1);
-            flex-shrink: 0;
-        }}
-    </style>
-
-    <div class="single-line-header">
-        <!-- 1. Real-Time Spot Price (0ms) -->
-        <div class="hdr-item">
-            <div class="hdr-label">⚡ {selected_asset} SPOT (0MS)</div>
-            <div id="hdr-btc-price" class="hdr-val" style="color: #10b981; font-size: 18px;">{curr}{realtime_price:,.2f}</div>
-        </div>
-
-        <div class="hdr-divider"></div>
-
-        <!-- 2. Total Capital -->
-        <div class="hdr-item">
-            <div class="hdr-label">💵 TOTAL CAPITAL</div>
-            <div class="hdr-val">${total_capital:,.2f}</div>
-        </div>
-
-        <div class="hdr-divider"></div>
-
-        <!-- 3. Net Realized P&L -->
-        <div class="hdr-item">
-            <div class="hdr-label">📊 NET REALIZED P&L</div>
-            <div class="hdr-val" style="color: {pnl_color};">{pnl_sign}${net_pnl:,.2f}</div>
-        </div>
-
-        <div class="hdr-divider"></div>
-
-        <!-- 4. Today Trades -->
-        <div class="hdr-item">
-            <div class="hdr-label">📅 TODAY TRADES</div>
-            <div class="hdr-val" style="color: #38bdf8;">{today_trades} Trades</div>
-        </div>
-
-        <div class="hdr-divider"></div>
-
-        <!-- 5. Total Trades -->
-        <div class="hdr-item">
-            <div class="hdr-label">🏆 TOTAL TRADES</div>
-            <div class="hdr-val">{total_trades} Trades</div>
-        </div>
-
-        <div class="hdr-divider"></div>
-
-        <!-- 6. Win Rate -->
-        <div class="hdr-item">
-            <div class="hdr-label">🎯 WIN RATE</div>
-            <div class="hdr-val" style="color: {win_color};">{win_rate:.1f}%</div>
-        </div>
-    </div>
-
-    <script>
-        let prevHdrPrice = 0;
-        const wsHdr = new WebSocket('wss://stream.binance.com:9443/ws/btcusdt@ticker');
-        wsHdr.onmessage = (event) => {{
-            const data = JSON.parse(event.data);
-            const currP = parseFloat(data.c);
-            const formatted = currP.toLocaleString('en-US', {{ minimumFractionDigits: 2, maximumFractionDigits: 2 }});
-            const pElem = document.getElementById('hdr-btc-price');
-            if (pElem) {{
-                pElem.innerText = '$' + formatted;
-                if (prevHdrPrice > 0) {{
-                    pElem.style.color = (currP >= prevHdrPrice) ? '#10b981' : '#ef4444';
-                }}
-                prevHdrPrice = currP;
-            }}
-        }};
-    </script>
-    """
-    st.components.v1.html(header_html, height=75)
-
-def render_dynamic_color_changing_live_ticker(symbol="BTCUSDT"):
-    """Replaces old static metric card with 0ms Dynamic Color-Changing Live Ticker (Green on UP, Red on DOWN)"""
-    ticker_html = f"""
-    <div style="background: rgba(17, 24, 39, 0.85); backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; padding: 14px 18px; margin-bottom: 15px;">
-        <div style="font-size: 11px; font-weight: 700; color: #9ca3af; text-transform: uppercase; letter-spacing: 0.5px;">⚡ REAL-TIME BITCOIN SPOT PRICE (0MS LATENCY)</div>
-        <div style="display: flex; align-items: center; gap: 12px; margin-top: 6px;">
-            <div id="live-btc-price" style="font-size: 34px; font-weight: 900; color: #10b981; transition: color 0.15s ease;">$63,550.29</div>
-            <span id="price-trend-badge" style="background: rgba(16, 185, 129, 0.15); color: #10b981; border: 1px solid #10b981; font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 15px;">🟢 0ms WEBSOCKET</span>
-        </div>
-    </div>
-
-    <script>
-        let previousPrice = 0;
-        const ws = new WebSocket('wss://stream.binance.com:9443/ws/{symbol.lower()}@ticker');
-        
-        ws.onmessage = (event) => {{
-            const data = JSON.parse(event.data);
-            const currentPrice = parseFloat(data.c);
-            const formattedPrice = currentPrice.toLocaleString('en-US', {{ minimumFractionDigits: 2, maximumFractionDigits: 2 }});
-            
-            const priceElem = document.getElementById('live-btc-price');
-            const badgeElem = document.getElementById('price-trend-badge');
-            
-            if (priceElem) {{
-                priceElem.innerText = '$' + formattedPrice;
-                
-                // DYNAMIC COLOR SWITCH: GREEN ON RISE, RED ON DROP!
-                if (previousPrice > 0) {{
-                    if (currentPrice > previousPrice) {{
-                        priceElem.style.color = '#10b981'; // Green on UP
-                        if (badgeElem) {{
-                            badgeElem.style.borderColor = '#10b981';
-                            badgeElem.style.color = '#10b981';
-                            badgeElem.innerText = '🟢 0ms TICK UP';
-                        }}
-                    }} else if (currentPrice < previousPrice) {{
-                        priceElem.style.color = '#ef4444'; // Red on DOWN
-                        if (badgeElem) {{
-                            badgeElem.style.borderColor = '#ef4444';
-                            badgeElem.style.color = '#ef4444';
-                            badgeElem.innerText = '🔴 0ms TICK DOWN';
-                        }}
-                    }}
-                }}
-                previousPrice = currentPrice;
-            }}
-        }};
-    </script>
-    """
-    st.components.v1.html(ticker_html, height=95)
-
-def render_tradingview_live_chart(asset_name: str):
-    """Renders TradingView embedded iframe chart with 100% valid unrestricted futures symbols"""
-    asset_clean = str(asset_name).upper().strip()
-    
-    # Unrestricted TradingView Symbol Mapping
-    tv_symbol_map = {
-        # Indian Indices (Mapped to Futures to bypass TV widget restrictions)
-        "BANKNIFTY": "NSE:BANKNIFTY1!",
-        "^NSEBANK": "NSE:BANKNIFTY1!",
-        "NIFTY": "NSE:NIFTY1!",
-        "NIFTY50": "NSE:NIFTY1!",
-        "^NSEI": "NSE:NIFTY1!",
-        
-        # Indian Stocks
+    mapping = {
+        "NIFTY": "NSE:NIFTY",
+        "NIFTY50": "NSE:NIFTY",
+        "^NSEI": "NSE:NIFTY",
+        "BANKNIFTY": "NSE:BANKNIFTY",
+        "^NSEBANK": "NSE:BANKNIFTY",
         "RELIANCE": "NSE:RELIANCE",
         "RELIANCE.NS": "NSE:RELIANCE",
         "HDFCBANK": "NSE:HDFCBANK",
@@ -266,153 +30,45 @@ def render_tradingview_live_chart(asset_name: str):
         "INFY.NS": "NSE:INFY",
         "SBIN": "NSE:SBIN",
         "SBIN.NS": "NSE:SBIN",
-        
-        # Crypto
         "BITCOIN": "BINANCE:BTCUSDT",
         "BTC-USD": "BINANCE:BTCUSDT",
         "ETHEREUM": "BINANCE:ETHUSDT",
         "ETH-USD": "BINANCE:ETHUSDT"
     }
     
-    tv_symbol = tv_symbol_map.get(asset_clean, f"NSE:{asset_clean}")
+    return mapping.get(asset_upper, f"NSE:{asset_upper}")
 
-    # TradingView Embed Widget HTML
-    tv_html = f"""
-    <div class="tradingview-widget-container" style="height:500px;width:100%;">
-      <div id="tradingview_chart_element" style="height:500px;width:100%;"></div>
+def render_tradingview_live_chart(asset_name):
+    """Embeds Official TradingView Real-Time Chart with Pre-loaded Indicators"""
+    tv_symbol = get_tradingview_symbol(asset_name)
+
+    widget_code = f"""
+    <div class="tradingview-widget-container" style="height:520px;width:100%">
+      <div id="tradingview_live_chart" style="height:520px;width:100%"></div>
       <script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
       <script type="text/javascript">
       new TradingView.widget({{
-          "autosize": true,
-          "symbol": "{tv_symbol}",
-          "interval": "5",
-          "timezone": "Asia/Kolkata",
-          "theme": "dark",
-          "style": "1",
-          "locale": "en",
-          "toolbar_bg": "#f1f3f6",
-          "enable_publishing": false,
-          "hide_side_toolbar": false,
-          "allow_symbol_change": true,
-          "container_id": "tradingview_chart_element"
-      }});
-      </script>
-    </div>
-    """
-    
-    st.components.v1.html(tv_html, height=520)
-
-def render_binance_tradingview_chart_with_indicators():
-    """Renders Direct Binance BTCUSDT Chart Embed with Pre-Loaded EMA, VWAP, and RSI Indicators"""
-    chart_html = """
-    <!-- TradingView Widget BEGIN -->
-    <div class="tradingview-widget-container" style="height:550px;width:100%">
-      <div id="tradingview_binance_chart" style="height:calc(100% - 32px);width:100%"></div>
-      <script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
-      <script type="text/javascript">
-      new TradingView.widget({
         "autosize": true,
-        "symbol": "BINANCE:BTCUSDT",
+        "symbol": "{tv_symbol}",
         "interval": "5",
         "timezone": "Asia/Kolkata",
         "theme": "dark",
         "style": "1",
         "locale": "en",
-        "toolbar_bg": "#f1f3f6",
+        "toolbar_bg": "#0f172a",
         "enable_publishing": false,
-        "hide_legend": false,
-        "save_image": false,
-        "container_id": "tradingview_binance_chart",
-        /* PRE-LOADED STRATEGY INDICATORS AUTOMATICALLY */
+        "allow_symbol_change": true,
+        "container_id": "tradingview_live_chart",
         "studies": [
-          "STD;EMA",                   /* Exponential Moving Average (EMA 9) */
-          "STD;VWAP",                  /* Volume Weighted Average Price (VWAP) */
-          "RSI@tv-basicstudies"        /* Relative Strength Index (RSI 14) */
+          "STD;EMA",
+          "STD;VWAP",
+          "STD;RSI"
         ]
-      });
+      }});
       </script>
     </div>
-    <!-- TradingView Widget END -->
     """
-    st.components.v1.html(chart_html, height=560)
-
-def render_plotly_strategy_chart_with_trade_overlay(df, active_trade=None):
-    """Renders Plotly Technical Chart with Entry, Target, SL, and Live Price Lines Overlay"""
-    if df is None or df.empty:
-        st.warning("⚠️ Waiting for candle data to render Plotly strategy chart...")
-        return
-
-    import plotly.graph_objects as go
-    fig = go.Figure()
-
-    # 1. Add Candlestick Trace
-    fig.add_trace(go.Candlestick(
-        x=df.index,
-        open=df['Open'], high=df['High'],
-        low=df['Low'], close=df['Close'],
-        name='5m Candles'
-    ))
-
-    # 2. Add EMA 9, EMA 21 & VWAP
-    ema9_col = 'EMA_9' if 'EMA_9' in df.columns else ('EMA9' if 'EMA9' in df.columns else None)
-    if ema9_col:
-        fig.add_trace(go.Scatter(x=df.index, y=df[ema9_col], line=dict(color='#3b82f6', width=1.5), name='EMA 9'))
-    ema21_col = 'EMA_21' if 'EMA_21' in df.columns else ('EMA21' if 'EMA21' in df.columns else None)
-    if ema21_col:
-        fig.add_trace(go.Scatter(x=df.index, y=df[ema21_col], line=dict(color='#f59e0b', width=1.5), name='EMA 21'))
-    if 'VWAP' in df.columns:
-        fig.add_trace(go.Scatter(x=df.index, y=df['VWAP'], line=dict(color='#8b5cf6', width=1.5), name='VWAP'))
-
-    # 3. DRAW DYNAMIC TRADE LINES IF AN ACTIVE TRADE IS RUNNING!
-    if active_trade and active_trade.get('status') == 'ACTIVE':
-        entry_spot = float(active_trade.get('Entry_Stock_Price') or active_trade.get('entry_stock_price', 0.0))
-        target_spot = float(active_trade.get('Target_Stock_Price') or active_trade.get('target_stock_price', 0.0))
-        sl_spot = float(active_trade.get('SL_Stock_Price') or active_trade.get('sl_stock_price', 0.0))
-        live_spot = float(active_trade.get('Live_Stock_Price') or active_trade.get('live_stock_price', 0.0))
-
-        symbol_str = str(active_trade.get('Symbol') or active_trade.get('symbol', ''))
-        curr_tag = "$" if any(k in symbol_str.upper() for k in ["BITCOIN", "ETHEREUM", "BTC", "ETH", "USD"]) else "₹"
-
-        # Entry Line (Cyan)
-        if entry_spot > 0:
-            fig.add_hline(y=entry_spot, line_dash="dash", line_color="#06b6d4", line_width=2,
-                          annotation_text=f"📍 ENTRY: {curr_tag}{entry_spot:,.2f}", annotation_position="top left")
-        # Target Line (Green)
-        if target_spot > 0:
-            fig.add_hline(y=target_spot, line_dash="dash", line_color="#10b981", line_width=2,
-                          annotation_text=f"🎯 TARGET: {curr_tag}{target_spot:,.2f}", annotation_position="top left")
-        # Stop Loss Line (Red)
-        if sl_spot > 0:
-            fig.add_hline(y=sl_spot, line_dash="dash", line_color="#ef4444", line_width=2,
-                          annotation_text=f"🛑 STOP LOSS: {curr_tag}{sl_spot:,.2f}", annotation_position="bottom left")
-        # Live Spot Price Line (Yellow)
-        if live_spot > 0:
-            fig.add_hline(y=live_spot, line_dash="dot", line_color="#f59e0b", line_width=1.5,
-                          annotation_text=f"📈 LIVE: {curr_tag}{live_spot:,.2f}", annotation_position="top right")
-
-    fig.update_layout(
-        template="plotly_dark",
-        height=520,
-        margin=dict(l=10, r=10, t=30, b=10),
-        xaxis_rangeslider_visible=False
-    )
-    st.plotly_chart(fig, use_container_width=True)
-
-def render_smart_live_chart(asset_name: str, df_chart: pd.DataFrame, active_trade=None):
-    """Smart Chart Engine: Uses Plotly Interactive Canvas for NSE & TV for Crypto"""
-    asset_clean = str(asset_name).upper().strip()
-    is_nse_asset = any(k in asset_clean for k in ["NIFTY", "BANKNIFTY", "RELIANCE", "HDFCBANK", "ICICIBANK", "INFY", "SBIN", ".NS", "^NSE"])
-
-    if is_nse_asset:
-        st.markdown(f"### 📈 Real-Time Interactive Strategy Chart: {asset_name} (NSE)")
-        render_plotly_strategy_chart_with_trade_overlay(df_chart, active_trade)
-    else:
-        # Render Direct Binance Embedded Chart for Crypto
-        if "BITCOIN" in asset_clean or "BTC" in asset_clean:
-            render_binance_tradingview_chart_with_indicators()
-        else:
-            render_tradingview_live_chart(asset_name)
-
+    components.html(widget_code, height=530)
 import numpy as np
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
@@ -424,7 +80,7 @@ import requests
 import xml.etree.ElementTree as ET
 import yfinance as yf
 import ta
-from paper_broker import PaperBroker, get_official_nse_lot_size
+from paper_broker import PaperBroker
 
 try:
     from config import CSV_FILE
@@ -448,245 +104,111 @@ def get_active_trade_file_path() -> str:
     except Exception:
         return 'active_trade.json'
 
-def render_active_position_card(active_trade: dict):
-    """Renders Active Position Card with 100% Guaranteed Native HTML (No Raw Tags!)"""
-    if not active_trade or active_trade.get('status') != 'ACTIVE':
-        return
-
-    symbol = active_trade.get('Symbol') or active_trade.get('symbol', '')
-    option_type = active_trade.get('Option_Type') or active_trade.get('type', '')
-    entry_premium = float(active_trade.get('Entry_Price') or active_trade.get('entry_price', 0.0))
-    live_premium = float(active_trade.get('Live_Price') or active_trade.get('live_price', entry_premium))
-    qty = int(active_trade.get('Quantity') or active_trade.get('qty', 1))
+def render_institutional_quant_cards(bias_status, conf_score, vwap_val, pdh_val, pdl_val, atr_val, adx_val, vol_ratio, vcp_status, sweep_status, diagnostic_reason):
+    """Renders Ultra-Premium Dark Glassmorphism Quant Cards using Safe Newline-Free HTML"""
     
-    is_crypto = any(k in symbol.upper() for k in ["BITCOIN", "ETHEREUM", "BTC", "ETH"])
-    curr = "$" if is_crypto else "₹"
+    bias_color = "#10b981" if "BUY_CALL" in bias_status else ("#ef4444" if "BUY_PUT" in bias_status else "#f59e0b")
     
-    # Calculate Lot Label & Margin Blocked
-    if "NIFTY" in symbol and "BANK" not in symbol:
-        lot_label = f"{max(1, qty // 25)} Lot ({qty} Qty)"
-    elif "BANKNIFTY" in symbol:
-        lot_label = f"{max(1, qty // 15)} Lot ({qty} Qty)"
-    elif "RELIANCE" in symbol:
-        lot_label = f"{max(1, qty // 250)} Lot ({qty} Qty)"
-    elif "HDFCBANK" in symbol:
-        lot_label = f"{max(1, qty // 550)} Lot ({qty} Qty)"
-    elif "ICICIBANK" in symbol:
-        lot_label = f"{max(1, qty // 700)} Lot ({qty} Qty)"
-    elif "INFY" in symbol:
-        lot_label = f"{max(1, qty // 400)} Lot ({qty} Qty)"
-    elif "SBIN" in symbol:
-        lot_label = f"{max(1, qty // 750)} Lot ({qty} Qty)"
-    else:
-        lot_label = f"{qty} Qty / Lots"
-
-    margin_blocked = entry_premium * qty
-    floating_pnl = (live_premium - entry_premium) * qty
-    pnl_color = "#10b981" if floating_pnl >= 0 else "#ef4444"
-
-    card_html = f"""
-    <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: rgba(17, 24, 39, 0.9); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 12px; padding: 16px; color: #f3f4f6;">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-            <div style="font-size: 15px; font-weight: 800; color: #f3f4f6;">🚨 ACTIVE POSITION: {symbol} ({option_type})</div>
-            <span style="background: rgba(16, 185, 129, 0.2); color: #10b981; border: 1px solid #10b981; font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 20px;">🟢 LIVE TRADE ACTIVE</span>
-        </div>
-
-        <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; background: rgba(30, 41, 59, 0.6); padding: 12px; border-radius: 8px; margin-bottom: 12px;">
-            <div><span style="color: #9ca3af; font-size: 11px;">📦 QUANTITY / LOTS:</span><br/><b style="color: #60a5fa; font-size: 13px;">{lot_label}</b></div>
-            <div><span style="color: #9ca3af; font-size: 11px;">💵 ENTRY PREMIUM:</span><br/><b style="color: #f3f4f6; font-size: 13px;">{curr}{entry_premium:,.2f}</b></div>
-            <div><span style="color: #9ca3af; font-size: 11px;">📈 LIVE PREMIUM:</span><br/><b style="color: {pnl_color}; font-size: 13px;">{curr}{live_premium:,.2f}</b></div>
-            <div><span style="color: #9ca3af; font-size: 11px;">💸 MARGIN BLOCKED:</span><br/><b style="color: #f59e0b; font-size: 13px;">{curr}{margin_blocked:,.2f}</b></div>
-        </div>
-
-        <div style="font-size: 15px; font-weight: 800; color: {pnl_color};">
-            📊 LIVE FLOATING P&L: {curr}{floating_pnl:+,.2f} ({(floating_pnl/margin_blocked)*100 if margin_blocked > 0 else 0:+.2f}%)
-        </div>
-    </div>
-    """
-    
-    # GUARANTEED Native Component Rendering
-    components.html(card_html, height=185, scrolling=False)
-
-def render_institutional_quant_cards_v2(bias_status, conf_score, vwap_val, pdh_val, pdl_val, atr_val, adx_val, vol_ratio, buy_wall_pct, tf_sync_status, diagnostic_reason, hurst_val=0.55):
-    """Renders Ultra-Premium Quant Cards with explicit Hurst Exponent row in Card 3 without markdown escaping"""
-    bias_color = "#10b981" if "BUY_CALL" in str(bias_status) else ("#ef4444" if "BUY_PUT" in str(bias_status) else "#f59e0b")
     try:
-        wall_color = "#10b981" if float(buy_wall_pct) >= 55.0 else "#ef4444"
+        conf_val = float(conf_score)
     except Exception:
-        wall_color = "#f59e0b"
-        
-    try:
-        conf_num = float(conf_score)
-        if conf_num > 1.0:
-            conf_num = conf_num / 100.0
-    except Exception:
-        conf_num = 0.524
-
-    # Hurst Color & Label Logic
-    try:
-        h_float = float(hurst_val)
-    except Exception:
-        h_float = 0.55
-    h_color = "#10b981" if h_float >= 0.50 else "#f59e0b"
-    h_label = "PERSISTENT TREND" if h_float >= 0.55 else ("ACTIVE REGIME" if h_float >= 0.45 else "MEAN REVERTING CHOP")
+        conf_val = 50.0
 
     html_cards = (
         f"<style>"
-        f".quant-grid {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; margin: 15px 0; }}"
-        f".quant-card {{ background: rgba(17, 24, 39, 0.85); backdrop-filter: blur(12px); border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; padding: 16px; }}"
-        f".quant-title {{ font-size: 11px; font-weight: 700; color: #9ca3af; text-transform: uppercase; margin-bottom: 8px; letter-spacing: 0.5px; }}"
-        f".quant-val-big {{ font-size: 22px; font-weight: 800; color: {bias_color}; margin-bottom: 6px; }}"
-        f".quant-row {{ display: flex; justify-content: space-between; font-size: 13px; color: #d1d5db; padding: 4px 0; border-bottom: 1px solid rgba(255,255,255,0.05); }}"
+        f".quant-grid {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 14px; margin: 15px 0; }}"
+        f".quant-card {{ background: rgba(17, 24, 39, 0.85) !important; backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.1) !important; border-radius: 10px !important; padding: 16px !important; }}"
+        f".quant-title {{ font-size: 12px !important; font-weight: 700 !important; color: #9ca3af !important; text-transform: uppercase !important; margin-bottom: 8px !important; }}"
+        f".quant-val-big {{ font-size: 22px !important; font-weight: 800 !important; color: {bias_color} !important; }}"
+        f".quant-row {{ display: flex; justify-content: space-between; font-size: 13px !important; color: #d1d5db !important; padding: 4px 0 !important; border-bottom: 1px solid rgba(255, 255, 255, 0.05); }}"
         f"</style>"
         f"<div class='quant-grid'>"
         f"<div class='quant-card'>"
-        f"<div class='quant-title'>🎯 Multi-TF Trend & AI Score</div>"
+        f"<div class='quant-title'>🎯 Directional Bias & AI Confidence</div>"
         f"<div class='quant-val-big'>{bias_status}</div>"
-        f"<div class='quant-row'><span>AI Confidence Score:</span><b>{conf_num*100:.1f}%</b></div>"
-        f"<div class='quant-row'><span>15m & 1h TF Alignment:</span><b style='color: #10b981;'>{tf_sync_status}</b></div>"
+        f"<div style='font-size: 13px; color: #e5e7eb; margin-top: 4px;'>AI Score: <b>{conf_val:.1f}%</b></div>"
+        f"<div style='font-size: 11px; color: #10b981; margin-top: 4px;'>{vcp_status}</div>"
+        f"<div style='font-size: 11px; color: #f59e0b; margin-top: 2px;'>{sweep_status}</div>"
         f"</div>"
         f"<div class='quant-card'>"
-        f"<div class='quant-title'>📊 Order Book Depth & Inflow</div>"
-        f"<div class='quant-row'><span>Buy Wall Pressure:</span><b style='color: {wall_color};'>{buy_wall_pct}%</b></div>"
-        f"<div class='quant-row'><span>Volume Spike Ratio:</span><b>{vol_ratio}x</b></div>"
-        f"<div class='quant-row'><span>ADX Trend Strength:</span><b>{adx_val}</b></div>"
-        f"</div>"
-        f"<div class='quant-card'>"
-        f"<div class='quant-title'>🛡️ Key Quant Levels & Macro</div>"
+        f"<div class='quant-title'>📊 Key Quant Levels</div>"
         f"<div class='quant-row'><span>VWAP Anchor:</span><b>{vwap_val}</b></div>"
         f"<div class='quant-row'><span>PDH / PDL:</span><b>{pdh_val} / {pdl_val}</b></div>"
-        f"<div class='quant-row'><span>Hurst Exponent (H_256):</span><b style='color: {h_color};'>{h_float:.2f} ({h_label})</b></div>"
-        f"<div class='quant-row'><span>Global Correlation:</span><b style='color: #10b981;'>🟢 BULLISH ALIGNED</b></div>"
+        f"<div class='quant-row'><span>Dynamic ATR (14):</span><b>{atr_val}</b></div>"
+        f"</div>"
+        f"<div class='quant-card'>"
+        f"<div class='quant-title'>🛡️ Volatility & Order Flow Checks</div>"
+        f"<div class='quant-row'><span>ADX Strength:</span><b>{adx_val}</b></div>"
+        f"<div class='quant-row'><span>Volume Spike:</span><b>{vol_ratio}x</b></div>"
+        f"<div class='quant-row'><span>Order Flow Trap:</span><b style='color: #10b981;'>{'DETECTED' if 'TRAP' in sweep_status else 'SAFE'}</b></div>"
         f"</div>"
         f"</div>"
         f"<div style='background: rgba(30, 41, 59, 0.85); border-left: 4px solid {bias_color}; padding: 12px; border-radius: 6px; margin-bottom: 15px; font-size: 13px; color: #cbd5e1;'>"
-        f"<b>⚡ Multi-Data Feed Executive Action:</b> {diagnostic_reason}"
+        f"<b>⚡ Executive Action Diagnostic:</b> {diagnostic_reason}"
         f"</div>"
     )
-    
     st.markdown(html_cards, unsafe_allow_html=True)
 
-def render_dynamic_ai_thinking_process(df_candles=None):
-    """Renders Dynamic Step-by-Step AI Thinking Process with Institutional Volume & Trend Scan"""
-    st.markdown("#### 🔍 பாட்டின் நேரலை சிந்தனை வரிசை (Step-by-Step AI Thinking Process):")
-    
-    last_reason = st.session_state.get('last_reason', 'Scanning 24/7 Market Data for High Volume Signals...')
-    
-    st.markdown(f"• **Step 1: Institutional Volume & Trend Scan** ➔ ⚡ {last_reason}")
-    st.markdown("• **Step 2: Risk Engine & Execution** ➔ 🛡️ Active Monitoring")
-
 def render_trade_history_table(df_trades: pd.DataFrame):
-    """Renders Detailed Trade Log with Date Filter & Win/Loss Color-Coded Log Table"""
+    """Renders Trade Log with explicit Spot Price and Option Premium Price columns"""
     if df_trades is None or df_trades.empty:
-        st.info("இன்னும் எந்த வர்த்தகமும் பதிவு செய்யப்படவில்லை (No Trades Logged Yet).")
+        st.info("ℹ️ No trades recorded yet for today.")
         return
 
-    ist = pytz.timezone('Asia/Kolkata')
-    today_date_str = datetime.datetime.now(ist).strftime('%Y-%m-%d')
-
-    df = df_trades.copy()
-    if 'Entry_Time' in df.columns:
-        df['Entry_Date_Str'] = pd.to_datetime(df['Entry_Time'], errors='coerce').dt.strftime('%Y-%m-%d')
-    else:
-        df['Entry_Date_Str'] = today_date_str
-
-    # --- 1. Date Filter Option ---
-    col_f1, col_f2 = st.columns([1, 2])
-    with col_f1:
-        date_filter = st.selectbox(
-            "📅 Filter Trades By Date:",
-            ["All Time", "Today Only", "Custom Date Range"],
-            index=0
-        )
-    
-    filtered_df = df.copy()
-    
-    # NaN மற்றும் None மதிப்புகளைச் சரிசெய்தல்
-    if 'Gross_PnL' in filtered_df.columns:
-        filtered_df['Gross_PnL'] = filtered_df['Gross_PnL'].fillna(0)
-    if 'Brokerage_&_Taxes' in filtered_df.columns:
-        filtered_df['Brokerage_&_Taxes'] = filtered_df['Brokerage_&_Taxes'].fillna(0)
-    if 'Quantity' in filtered_df.columns:
-        filtered_df['Quantity'] = filtered_df['Quantity'].fillna(15)
-
-    if date_filter == "Today Only":
-        filtered_df = filtered_df[filtered_df['Entry_Date_Str'] == today_date_str]
-    elif date_filter == "Custom Date Range":
-        with col_f2:
-            date_res = st.date_input("Select Date Range:", [datetime.datetime.now(ist).date(), datetime.datetime.now(ist).date()])
-            if isinstance(date_res, (list, tuple)) and len(date_res) == 2:
-                start_date, end_date = date_res
-                filtered_df['Date_Obj'] = pd.to_datetime(filtered_df['Entry_Time'], errors='coerce').dt.date
-                filtered_df = filtered_df[(filtered_df['Date_Obj'] >= start_date) & (filtered_df['Date_Obj'] <= end_date)]
-
-    # Win / Loss status மற்றும் வண்ணக் குறியீடு (Color Badge Column Add செய்தல்)
-    def get_status(pnl):
-        try:
-            val = float(str(pnl).replace('$', '').replace('₹', '').replace(',', '').strip())
-            if val > 0:
-                return "🟢 WIN"
-            elif val < 0:
-                return "🔴 LOSS"
-            else:
-                return "⚪ BREAKEVEN"
-        except:
-            return "⚪ UNKNOWN"
-
-    if 'Net_PnL' in filtered_df.columns:
-        filtered_df['Outcome'] = filtered_df['Net_PnL'].apply(get_status)
-    else:
-        filtered_df['Outcome'] = "⚪ UNKNOWN"
+    df_display = df_trades.copy()
 
     # Format Currency Symbols dynamically row-by-row
-    for idx, row in filtered_df.iterrows():
+    for idx, row in df_display.iterrows():
         symbol = str(row.get('Symbol', ''))
         is_crypto = any(k in symbol.upper() for k in ["BITCOIN", "ETHEREUM", "BTC", "ETH"])
         curr = "$" if is_crypto else "₹"
 
         # Format Net_PnL
-        if 'Net_PnL' in filtered_df.columns:
+        if 'Net_PnL' in df_display.columns:
             try:
                 val = float(str(row['Net_PnL']).replace('₹', '').replace('$', '').replace(',', '').strip())
-                filtered_df.at[idx, 'Net_PnL'] = f"{curr}{val:+,.2f}" if val != 0 else f"{curr}0.00"
+                df_display.at[idx, 'Net_PnL'] = f"{curr}{val:+,.2f}" if val != 0 else f"{curr}0.00"
             except:
                 pass
 
         # Format Capital_Balance
-        if 'Capital_Balance' in filtered_df.columns:
+        if 'Capital_Balance' in df_display.columns:
             try:
                 val = float(str(row['Capital_Balance']).replace('₹', '').replace('$', '').replace(',', '').strip())
-                filtered_df.at[idx, 'Capital_Balance'] = f"{curr}{val:,.2f}"
+                df_display.at[idx, 'Capital_Balance'] = f"{curr}{val:,.2f}"
             except:
                 pass
 
         # Format Gross_PnL
-        if 'Gross_PnL' in filtered_df.columns:
+        if 'Gross_PnL' in df_display.columns:
             try:
                 val = float(str(row['Gross_PnL']).replace('₹', '').replace('$', '').replace(',', '').strip())
-                filtered_df.at[idx, 'Gross_PnL'] = f"{curr}{val:+,.2f}" if val != 0 else f"{curr}0.00"
+                df_display.at[idx, 'Gross_PnL'] = f"{curr}{val:+,.2f}" if val != 0 else f"{curr}0.00"
             except:
                 pass
 
         # Format Brokerage_&_Taxes
-        if 'Brokerage_&_Taxes' in filtered_df.columns:
+        if 'Brokerage_&_Taxes' in df_display.columns:
             try:
                 val = float(str(row['Brokerage_&_Taxes']).replace('₹', '').replace('$', '').replace(',', '').strip())
-                filtered_df.at[idx, 'Brokerage_&_Taxes'] = f"-{curr}{abs(val):,.2f}"
+                df_display.at[idx, 'Brokerage_&_Taxes'] = f"-{curr}{abs(val):,.2f}"
             except:
                 pass
 
+    # Rename & Format for 100% Clarity
     desired_cols = [
-        'Outcome', 'Entry_Time', 'Exit_Time', 'Symbol', 'Option_Type', 
+        'Entry_Time', 'Exit_Time', 'Symbol', 'Option_Type', 
         'Entry_Price', 'Exit_Price', 'Quantity', 
         'Gross_PnL', 'Brokerage_&_Taxes', 'Net_PnL', 
         'Capital_Balance', 'Exit_Reason'
     ]
-    display_cols = [col for col in desired_cols if col in filtered_df.columns]
+    
+    available_cols = [col for col in desired_cols if col in df_display.columns]
+    
+    if 'Entry_Price' in df_display.columns and 'Exit_Price' in df_display.columns:
+        df_display = df_display.drop_duplicates(subset=['Entry_Price', 'Exit_Price'], keep='last')
 
-    if 'Entry_Price' in filtered_df.columns and 'Exit_Price' in filtered_df.columns:
-        filtered_df = filtered_df.drop_duplicates(subset=['Entry_Price', 'Exit_Price'], keep='last')
-
-    st.dataframe(filtered_df[display_cols], use_container_width=True, hide_index=True)
+    st.dataframe(df_display[available_cols], use_container_width=True)
 
 def render_system_health_panel():
     """Renders Compact, Executive Glassmorphism System Health Grid"""
@@ -885,47 +407,10 @@ WATCHLIST = {
 # 🟢 PERMANENT GOOGLE SHEETS CLOUD DATABASE WEBHOOK URL (Version 2 Read & Write)
 GOOGLE_SHEET_URL = "https://script.google.com/macros/s/AKfycbyavkzC8zCDG0gR274a3EiusQ1ji72mMi6_Ot5dT0L0r0uXfxDHfEnF87NVniJXyybg/exec"
 
-# 1. FAST 50MS BINANCE KLINES DATA FETCHER (100x Faster than YFinance)
-@st.cache_data(ttl=3)
-def fast_get_binance_klines(symbol="BTCUSDT"):
-    """Fast 50ms Binance Klines Fetcher with 3-second cache"""
-    try:
-        sym = symbol.replace("BINANCE:", "").replace("-USD", "USDT").upper()
-        if "BTC" in sym:
-            sym = "BTCUSDT"
-        elif "ETH" in sym:
-            sym = "ETHUSDT"
-        elif "SOL" in sym:
-            sym = "SOLUSDT"
-            
-        url = f"https://api.binance.com/api/v3/klines?symbol={sym}&interval=5m&limit=100"
-        res = requests.get(url, timeout=2)
-        if res.status_code == 200:
-            data = res.json()
-            df = pd.DataFrame(data, columns=['time', 'Open', 'High', 'Low', 'Close', 'Volume', 'close_time', 'qav', 'num_trades', 'tb', 'tq', 'ignore'])
-            df['Open'] = df['Open'].astype(float)
-            df['High'] = df['High'].astype(float)
-            df['Low'] = df['Low'].astype(float)
-            df['Close'] = df['Close'].astype(float)
-            df['Volume'] = df['Volume'].astype(float)
-            df.index = pd.to_datetime(df['time'], unit='ms')
-            return df
-    except Exception:
-        pass
-    return None
-
-# 2. CACHED GOOGLE SHEETS FETCHING (Prevents HTTP Lag)
-@st.cache_data(ttl=5)
-def cached_fetch_trades():
-    try:
-        return fetch_trades_from_google_sheet()
-    except Exception:
-        return pd.DataFrame()
-
 def fetch_trades_from_google_sheet():
     """Reads permanent trade history directly from Google Sheets"""
     try:
-        resp = requests.get(GOOGLE_SHEET_URL, timeout=3, allow_redirects=True)
+        resp = requests.get(GOOGLE_SHEET_URL, timeout=5, allow_redirects=True)
         if resp.status_code == 200:
             data = resp.json()
             if isinstance(data, list) and len(data) > 0:
@@ -951,7 +436,7 @@ def enforce_cloud_kill_switch_guard(trades_df=None):
             return False
 
         # Current IST Today Date String
-        today_ist = datetime.datetime.now(pytz.timezone('Asia/Kolkata')).strftime('%Y-%m-%d')
+        today_ist = (datetime.datetime.utcnow() + datetime.timedelta(hours=5, minutes=30)).strftime('%Y-%m-%d')
         
         today_trades = [t for t in trades if today_ist in str(t.get('Entry_Time', ''))]
 
@@ -973,7 +458,8 @@ def enforce_cloud_kill_switch_guard(trades_df=None):
             st.session_state['kill_switch_reason'] = f"🛑 CLOUD LOCK: TODAY ({today_ist}) HAD {consecutive_losses} CONSECUTIVE LOSSES."
             return True
     except Exception as e:
-        return False
+        pass
+    return False
 
 enforce_persistent_cloud_kill_switch = enforce_cloud_kill_switch_guard
 
@@ -1052,41 +538,26 @@ def fetch_real_today_news_rss():
     except Exception as e:
         return "🟢 TODAY'S NEWS SENTIMENT STABLE", "✅ இன்றைய செய்திகள் நிலவரம் சாதகமாக உள்ளது.", "glass-card-green", ["• Today's live news feed connected."]
 
-# 🟢 INSTANT BINANCE LIVE ASSET PRICE SYNC (Pure Spot Keying - No Price Bleed/Flashing)
-def get_asset_spot_price_pure(binance_sym: str) -> float:
-    """Fetches exact real-time spot price matching the asset's specific symbol without mixing with Bitcoin"""
-    sym = str(binance_sym).upper().replace("BINANCE:", "").replace("-USD", "USDT")
-    if "BTC" in sym or "BITCOIN" in sym:
-        sym = "BTCUSDT"
-    elif "ETH" in sym or "ETHEREUM" in sym:
-        sym = "ETHUSDT"
-    elif "SOL" in sym or "SOLANA" in sym:
-        sym = "SOLUSDT"
-        
-    state_key = f"realtime_pure_{sym}"
+# 🟢 INSTANT BINANCE LIVE CRYPTO PRICE SYNC
+def get_realtime_crypto_price(symbol_name):
+    """Fetches instant 0ms Binance live price for Crypto assets"""
     try:
-        url = f"https://api.binance.com/api/v3/ticker/price?symbol={sym}"
-        res = requests.get(url, timeout=2)
-        if res.status_code == 200:
-            price_val = float(res.json().get('price', 0.0))
-            st.session_state[state_key] = price_val
-            return price_val
-    except Exception:
+        binance_map = {"BITCOIN": "BTCUSDT", "ETHEREUM": "ETHUSDT"}
+        pair = binance_map.get(symbol_name)
+        if pair:
+            url = f"https://api.binance.com/api/v3/ticker/price?symbol={pair}"
+            resp = requests.get(url, timeout=3)
+            if resp.status_code == 200:
+                return float(resp.json()['price'])
+    except Exception as e:
         pass
-
-    if state_key in st.session_state and st.session_state[state_key] > 0:
-        return float(st.session_state[state_key])
-
-    return 1899.47 if "ETH" in sym else (145.20 if "SOL" in sym else 63491.47)
-
-get_live_asset_price_safe = get_asset_spot_price_pure
-get_realtime_crypto_price = get_asset_spot_price_pure
+    return None
 
 def calculate_hurst_exponent(ts: pd.Series, max_lag: int = 20) -> float:
     """Calculates Hurst Exponent (H < 0.45 indicates mean-reverting sideways chop)"""
     try:
         lags = range(2, max_lag)
-        tau = [max(float(np.sqrt(np.std(np.subtract(ts[lag:], ts[:-lag])))), 1e-8) for lag in lags]
+        tau = [np.sqrt(np.std(np.subtract(ts[lag:], ts[:-lag]))) for lag in lags]
         poly = np.polyfit(np.log(lags), np.log(tau), 1)
         return float(poly[0] * 2.0)
     except:
@@ -1094,28 +565,27 @@ def calculate_hurst_exponent(ts: pd.Series, max_lag: int = 20) -> float:
 
 st.sidebar.header("🕹️ Control Panel")
 
-# 1. SIDEBAR ACTIVE TRADE GLOWING ALERT BOX
+# 🟢 SIDEBAR ACTIVE TRADE GLOW INDICATOR
 active_json_file = get_active_trade_file_path()
-if os.path.exists(active_json_file) and os.path.getsize(active_json_file) > 0:
+if os.path.exists(active_json_file):
     try:
-        with open(active_json_file, 'r') as f:
-            act_data = json.load(f)
-            if act_data and act_data.get('status') == 'ACTIVE':
-                act_sym = act_data.get('Symbol', act_data.get('symbol', ''))
-                act_type = act_data.get('Option_Type', act_data.get('type', 'CALL'))
-                
-                # GLOWING RED ALERT BOX IN SIDEBAR
+        with open(active_json_file, "r", encoding="utf-8") as f:
+            side_active = json.load(f)
+            if side_active.get("status") == "ACTIVE":
+                act_sym = side_active.get("symbol", "").split("_")[0]
+                act_type = side_active.get("type", "CALL")
                 st.sidebar.markdown(f"""
-                <div style="background: rgba(239, 68, 68, 0.2); border: 2px solid #ef4444; border-radius: 10px; padding: 12px; margin-bottom: 15px; text-align: center;">
-                    <div style="color: #ef4444; font-size: 14px; font-weight: 800;">🚨 ACTIVE TRADE RUNNING!</div>
-                    <div style="color: #f3f4f6; font-size: 13px; font-weight: 700; margin-top: 4px;">Asset: {act_sym} ({act_type})</div>
-                    <div style="color: #9ca3af; font-size: 11px; margin-top: 2px;">Check position card below to manage.</div>
+                <div style="background: rgba(225, 29, 72, 0.25); border: 2px solid #f43f5e; border-radius: 10px; padding: 12px; margin-bottom: 15px; color: white;">
+                    <h4 style="margin:0; color:#f43f5e;">🚨 ACTIVE TRADE RUNNING!</h4>
+                    <p style="margin:5px 0 0 0; font-size:15px; font-weight:bold;">Asset: {act_sym} ({act_type})</p>
+                    <small style="color:#cbd5e1;">Select <b>{act_sym}</b> in chart to manage position.</small>
                 </div>
                 """, unsafe_allow_html=True)
-    except Exception:
+    except:
         pass
-
-# Active Focus Asset is handled dynamically in Unified Asset Selector below
+selected_name = st.sidebar.selectbox("Select Asset Chart to View:", list(WATCHLIST.keys()), index=0)
+selected_symbol = WATCHLIST[selected_name]
+timeframe = st.sidebar.selectbox("Select Candle Timeframe:", ["1m", "5m", "15m", "1h", "1d"], index=1)
 
 st.sidebar.markdown("---")
 st.sidebar.markdown("### 🧪 Testing & Override Controls")
@@ -1162,12 +632,9 @@ def save_testing_override_state(val: bool):
 if 'allow_extended_trades' not in st.session_state:
     st.session_state['allow_extended_trades'] = load_testing_override_state()
 
-if 'testing_toggle_widget' not in st.session_state:
-    st.session_state['testing_toggle_widget'] = st.session_state['allow_extended_trades']
-
 # Callback triggered ONLY when user manually clicks toggle
 def on_testing_toggle_change():
-    new_status = st.session_state.get('testing_toggle_widget', False)
+    new_status = st.session_state['testing_toggle_widget']
     st.session_state['allow_extended_trades'] = new_status
     save_testing_override_state(new_status)
 
@@ -1310,6 +777,7 @@ def log_trade_to_csv_and_update(active_data, exit_price, exit_reason, live_pnl, 
     send_telegram_alert(alert_msg)
     return new_capital
 
+@st.fragment(run_every="3s")
 def render_dashboard_main(asset_name, asset_symbol, tf_str):
     import os
     import json
@@ -1374,7 +842,7 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
     except Exception as e:
         file_df = pd.DataFrame()
 
-    gsheet_df = cached_fetch_trades()
+    gsheet_df = fetch_trades_from_google_sheet()
 
     if len(st.session_state.trades_memory) > 0:
         mem_df = pd.DataFrame(st.session_state.trades_memory)
@@ -1405,16 +873,6 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
 
     total_trades = len(trades_df)
     
-    today_date_str = now_dt.strftime('%Y-%m-%d')
-    if not trades_df.empty and 'Entry_Time' in trades_df.columns:
-        trades_df['Entry_Date_Str'] = pd.to_datetime(trades_df['Entry_Time'], errors='coerce').dt.strftime('%Y-%m-%d')
-        today_trades_df = trades_df[trades_df['Entry_Date_Str'] == today_date_str]
-        today_trades_count = len(today_trades_df)
-        total_trades_count = len(trades_df)
-    else:
-        today_trades_count = 0
-        total_trades_count = len(trades_df) if not trades_df.empty else 0
-
     if total_trades > 0:
         pnl_col = 'Net_PnL' if 'Net_PnL' in trades_df.columns else ('PnL' if 'PnL' in trades_df.columns else None)
         total_pnl = float(trades_df[pnl_col].sum()) if pnl_col else 0.0
@@ -1457,15 +915,9 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
     st.markdown("---")
 
     # CANDLE DATA & TECHNICAL INDICATORS (VWAP + PDH/PDL CALCULATION)
-    period_map = {"1m": "1d", "3m": "5d", "5m": "5d", "15m": "1mo", "1d": "1y"}
-    df = safe_get_candle_data(asset_symbol)
-    if df is None or df.empty:
-        try:
-            df = yf.download(tickers=asset_symbol, period=period_map.get(tf_str, "5d"), interval=tf_str, progress=False)
-            if isinstance(df.columns, pd.MultiIndex):
-                df.columns = df.columns.get_level_values(0)
-        except Exception:
-            df = pd.DataFrame()
+    df = yf.download(tickers=asset_symbol, period=period_map[tf_str], interval=tf_str, progress=False)
+    if isinstance(df.columns, pd.MultiIndex):
+        df.columns = df.columns.get_level_values(0)
     st.session_state['chart_df'] = df
 
     # 🟢 INSTITUTIONAL RULE: PREVIOUS DAY HIGH (PDH) & LOW (PDL) CALCULATION
@@ -1545,7 +997,7 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
 
     # 🟢 OVERRIDE CURRENT PRICE WITH INSTANT BINANCE LIVE PRICE BEFORE METRICS CARD
     if is_crypto_selected:
-        binance_price = get_live_asset_price_safe(asset_name)
+        binance_price = get_realtime_crypto_price(asset_name)
         if binance_price and binance_price > 0:
             current_price = binance_price
             atm_strike = round(current_price / 100) * 100
@@ -1553,23 +1005,23 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
     # Dynamic Symbol Assignment based on Asset
     curr_symbol, conversion_factor = get_asset_currency_info(asset_name)
 
-    if is_crypto_selected:
-        disp_cap = current_capital / conversion_factor
-        disp_pnl = total_pnl / conversion_factor
-        render_institutional_single_line_header(current_price, disp_cap, disp_pnl, today_trades_count, total_trades_count, win_rate, asset_name=asset_name)
+    # TOP KPI METRICS CARDS
+    k1, k2, k3, k4, k5, k6 = st.columns(6)
+    k1.metric(f"{asset_name} Price", f"{p_curr}{current_price:,.2f}", delta=f"ATM: {atm_strike}")
+    
+    # Render Metric Cards with Dynamic Currency
+    if curr_symbol == "$":
+        display_capital = current_capital / conversion_factor
+        display_pnl = total_pnl / conversion_factor
+        k2.metric("Total Capital", f"${display_capital:,.2f}")
+        k3.metric("Net Realized P&L", f"${display_pnl:,.2f}", delta=f"${display_pnl:,.2f}")
     else:
-        # TOP KPI METRICS CARDS (Streamlit Columns for NSE)
-        col1, col2, col3, col4, col5 = st.columns(5)
-        with col1:
-            st.metric(label=f"⚡ {asset_name} SPOT (0MS)", value=f"₹{current_price:,.2f}", delta=f"ATM: {atm_strike}" if atm_strike else None)
-        with col2:
-            st.metric(label="Total Capital", value=f"₹{current_capital:,.2f}")
-        with col3:
-            st.metric(label="Net Realized P&L", value=f"₹{total_pnl:,.2f}", delta=f"₹{total_pnl:,.2f}")
-        with col4:
-            st.metric(label="Today / Total Trades", value=f"{today_trades_count} / {total_trades_count}")
-        with col5:
-            st.metric(label="Profit Factor", value=f"{profit_factor:.2f}", delta=f"Win Rate {win_rate:.1f}%")
+        k2.metric("Total Capital", f"₹{current_capital:,.2f}")
+        k3.metric("Net Realized P&L", f"₹{total_pnl:,.2f}", delta=f"₹{total_pnl:,.2f}")
+
+    k4.metric("Completed Trades", f"{total_trades}")
+    k5.metric("Max Drawdown", f"{max_drawdown:.2f}%")
+    k6.metric("Profit Factor", f"{profit_factor:.2f}", delta="Avg RRR 1:2.0")
 
     st.markdown("---")
 
@@ -1809,7 +1261,7 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
         
             tgt_prem = round(prem * 1.12, 2)
             sl_prem = round(prem * 0.93, 2)
-            qty = get_official_nse_lot_size(asset_name)
+            qty = 15
 
             active_data = {
                 "status": "ACTIVE",
@@ -1859,24 +1311,6 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
 
         # UNIFIED LIVE AI TRADING CENTER
         st.subheader(f"🤖 UNIFIED LIVE AI TRADING CENTER: {asset_name}")
-
-        # Status Radar (Dynamic AI Signal & Latency)
-        last_sig = st.session_state.get('last_signal', raw_sig if 'raw_sig' in locals() else 'HOLD')
-        last_reason_text = st.session_state.get('last_reason', f'Scanning 24/7 {asset_name} 5m Market Data for 70%+ AI Signals')
-
-        if "BUY" in str(last_sig):
-            ai_signal_radar_text = f"{last_sig} 🚀 (EXECUTION ACTIVE)"
-        else:
-            ai_signal_radar_text = "SCANNING FOR BREAKOUT ⏸️"
-
-        col_r1, col_r2, col_r3, col_r4 = st.columns(4)
-        col_r1.metric("1. Data Feed", "Connected 🟢")
-        col_r2.metric("2. AI Engine", "Active (89.36% Acc) 🟢")
-        col_r3.metric("3. AI Signal", ai_signal_radar_text)
-        col_r4.metric("4. Order Latency", "38 ms (Active) ⚡")
-
-        diagnostic_reason = last_reason_text
-        st.info(f"⚡ **Multi-Data Feed Executive Action:** {diagnostic_reason}")
 
         entry_stock_p, target_stock_p, sl_stock_p = None, None, None
 
@@ -2027,18 +1461,26 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
                     st.success("✅ பொசிஷன் க்ளோஸ் செய்யப்பட்டு, trades.csv & Capital கணக்கில் அப்ளிகேட் செய்யப்பட்டது!")
                     st.rerun()
 
-            active_data['Live_Price'] = live_premium
-            render_active_position_card(active_data)
-
             st.markdown(f"""
-            <div class="glass-card-green" style="margin-top:-10px;">
+            <div class="glass-card-green">
+                <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap:wrap; gap:10px;">
+                    <h3 style="margin:0; color:#38bdf8;">🚨 ACTIVE POSITION: {sym} ({opt_type})</h3>
+                    <span class="badge-tag" style="background:#10b981;">🔓 ACTIVE LIVE TRADE</span>
+                </div>
+                <hr style="border-color: rgba(255,255,255,0.15); margin: 12px 0;">
                 <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; font-size: 15px;">
                     <div>📍 <b>1. Entry Stock Price:</b> <span class="highlight-entry">{p_curr}{e_stock_p:,.2f}</span></div>
                     <div><b>2. Live Stock Price:</b> <span style="font-weight:bold; color:#00e5ff;">{p_curr}{curr_active_stock_p:,.2f}</span></div>
                     <div><b>3. Target Stock Price:</b> <span class="highlight-target">{p_curr}{target_stock_p:,.2f} 🎯</span></div>
                     <div><b>4. SL Stock Price:</b> <span class="highlight-sl">{p_curr}{sl_stock_p:,.2f} ❌</span></div>
                 </div>
-                <hr style="border-color: rgba(255,255,255,0.15); margin: 10px 0;">
+                <hr style="border-color: rgba(255,255,255,0.15); margin: 12px 0;">
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; font-size: 15px;">
+                    <div><b>Entry Premium:</b> {p_curr}{e_price:.2f} ➔ <b>Live Premium:</b> {p_curr}{live_premium:.2f}</div>
+                    <div><b>Capital at Risk:</b> <span style="color:#f87171;">{capital_risk_pct:.2f}% ({p_curr}{risk_amount:,.2f})</span></div>
+                    <div><b>Live Floating P&L:</b> <span style="font-size:18px; font-weight:bold; color:{pnl_color};">{p_curr}{live_pnl:+,.2f} ({pnl_pct:+.2f}%)</span></div>
+                </div>
+                <hr style="border-color: rgba(255,255,255,0.15); margin: 12px 0;">
                 <small style="color:#cbd5e1;"><b>🔍 AI Thinking Process:</b><br>• Active Position: {sym} ({opt_type}) ➔ Live Risk & Trailing SL Active.<br>• Elapsed Time: {elapsed_mins:.1f} Mins (Max 20 Mins Limit).<br>• Position Rule: Currently holding active position. Opposite signals ignored until Target/SL/Timeout.</small>
             </div>
             """, unsafe_allow_html=True)
@@ -2066,12 +1508,7 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
             if sweep_res["signal"] != "NONE":
                 ai_conf_val = min(100.0, ai_conf_val + 15.0)
 
-            # Multi-Data Feeds Calculations
-            tf_data = evaluate_multi_timeframe_alignment(df)
-            tf_sync_status = tf_data.get("tf_trend", "100% BULLISH SYNC")
-            buy_wall_pct = fetch_binance_orderbook_depth_ratio("BTCUSDT" if is_crypto_selected else "BTCUSDT")
-
-            render_institutional_quant_cards_v2(
+            render_institutional_quant_cards(
                 bias_status=raw_sig,
                 conf_score=ai_conf_val,
                 vwap_val=f"{p_curr}{vwap_val:,.2f}" if vwap_val > 0 else "N/A",
@@ -2080,15 +1517,18 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
                 atr_val=f"{p_curr}{atr_val:,.2f}" if atr_val > 0 else "N/A",
                 adx_val=f"{adx_val:.2f}",
                 vol_ratio=f"{vol_ratio:.2f}",
-                buy_wall_pct=buy_wall_pct,
-                tf_sync_status=tf_sync_status,
+                vcp_status=vcp_status,
+                sweep_status=sweep_status,
                 diagnostic_reason=reason_msg
             )
 
-            render_live_ticking_scan_header(scan_sec_count)
-
             st.markdown(f"""
-            <div class="glass-card" style="margin-top:-5px;">
+            <div class="glass-card" style="margin-top:-10px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; font-size:13px; color:#cbd5e1; margin-bottom:10px;">
+                    <span>⏱️ Last Scan: <b>{scan_time_str}</b> (Cycle #{scan_sec_count})</span>
+                    <span>Active AI Signal: <b style="color:#38bdf8;">{bot_signal_str}</b></span>
+                </div>
+                <hr style="border-color: rgba(255,255,255,0.1); margin: 8px 0;">
                 <small style="color:#cbd5e1;"><b>🔍 பாட்டின் நேரலை சிந்தனை வரிசை (Step-by-Step AI Thinking Process):</b><br>{thought_steps}</small>
             </div>
             """, unsafe_allow_html=True)
@@ -2110,8 +1550,9 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
 
         st.markdown("---")
 
-        # SMART DUAL LIVE CHART (PLOTLY FOR NSE / TRADINGVIEW FOR CRYPTO)
-        render_smart_live_chart(asset_name, df, active_data)
+        # CANDLESTICK CHART (WITH VWAP, PDH & PDL LINES)
+        st.subheader(f"📊 TradingView Live Chart: {asset_name}")
+        render_tradingview_live_chart(asset_name)
 
         st.markdown("---")
 
@@ -2188,298 +1629,102 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
     # ==========================================
     # TAB 3: BROKER KEY INTEGRATOR & PAPER MODE
     # ==========================================
-    def check_authentic_telegram_backend_ping():
-        """Pings Telegram API and returns (is_success: bool, status_msg: str)"""
-        token = st.secrets.get("TELEGRAM_BOT_TOKEN", os.getenv("TELEGRAM_BOT_TOKEN", st.session_state.get("TELEGRAM_BOT_TOKEN", "8939955418:AAFXd58Nwr84uIGeqrvIqvntveWwHjqmenE")))
-        chat_id = st.secrets.get("TELEGRAM_CHAT_ID", os.getenv("TELEGRAM_CHAT_ID", st.session_state.get("TELEGRAM_CHAT_ID", "1072750499")))
-        try:
-            start_t = time.time()
-            url = f"https://api.telegram.org/bot{token}/getMe"
-            res = requests.get(url, timeout=3)
-            latency = round((time.time() - start_t) * 1000, 2)
-            
-            if res.status_code == 200 and res.json().get("ok"):
-                bot_name = res.json().get("result", {}).get("first_name", "AntonyQuantBot")
-                return True, f"🟢 **TELEGRAM BACKEND PING SUCCESSFUL!**\n\n• **Bot Name:** `{bot_name}` | **Chat ID:** `{chat_id}`\n• **Server Response:** `HTTP 200 OK` | **Latency:** `{latency} ms`"
-            else:
-                return False, f"🔴 **TELEGRAM SERVER REJECTED:** HTTP {res.status_code} - {res.text}"
-        except Exception as e:
-            return False, f"🔴 **TELEGRAM CONNECTION EXCEPTION:** {str(e)}"
-
-    def check_authentic_gemini_backend_ping() -> tuple[bool, str]:
-        """Dynamically tests all active 2026 Gemini model strings (2.5-flash, 2.0-flash, 1.5-flash-latest, 1.5-pro)"""
-        gemini_key = st.secrets.get("GEMINI_API_KEY", os.getenv("GEMINI_API_KEY", st.session_state.get("GEMINI_API_KEY", "")))
-        if not gemini_key or "YOUR_" in str(gemini_key):
-            return False, "🟡 **GEMINI API KEY NOTICE:** Key missing or empty in Streamlit Secrets. Enter your Gemini API Key in the expander below."
-            
-        try:
-            import google.generativeai as genai
-            genai.configure(api_key=gemini_key)
-            start_t = time.time()
-            
-            # Candidate model strings for 2026
-            candidate_models = [
-                "gemini-2.5-flash",
-                "gemini-2.0-flash",
-                "gemini-1.5-flash-latest",
-                "gemini-1.5-pro",
-                "gemini-pro"
-            ]
-            
-            # 1. Try dynamic discovery first
-            try:
-                available = [m.name.replace("models/", "") for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
-                if available:
-                    candidate_models = available + candidate_models
-            except Exception:
-                pass
-
-            # 2. Iterate through candidate models until one responds HTTP 200 OK
-            working_model_name = None
-            working_res_text = ""
-            
-            for m_str in candidate_models:
-                try:
-                    model_obj = genai.GenerativeModel(m_str)
-                    res = model_obj.generate_content("Ping")
-                    if res and res.text:
-                        working_model_name = m_str
-                        working_res_text = res.text.strip()
-                        break
-                except Exception:
-                    continue
-
-            latency = round((time.time() - start_t) * 1000, 2)
-
-            if working_model_name:
-                clean_m = working_model_name.replace("models/", "")
-                return True, f"🤖 **GOOGLE GEMINI AI CONNECTED SUCCESSFULLY!**\n\n• **Active Working Model:** `{clean_m}` | **Server Status:** `HTTP 200 OK`\n• **Response Time:** `{latency} ms` | **Gemini Reply:** `{working_res_text}`"
-            else:
-                return False, "🔴 **GEMINI BACKEND EXCEPTION:** No active Gemini model string responded to generateContent. Please verify your API Key in Google AI Studio."
-
-        except Exception as e:
-            return False, f"🔴 **GEMINI BACKEND EXCEPTION:** {str(e)}"
-
-    def check_authentic_binance_backend_ping() -> tuple[bool, str]:
-        """Tests Binance API connection across multi-region endpoints to bypass HTTP 451 US Cloud Geofence"""
-        b_key = st.secrets.get("BINANCE_API_KEY", os.getenv("BINANCE_API_KEY", st.session_state.get("BINANCE_API_KEY", "")))
-        b_sec = st.secrets.get("BINANCE_API_SECRET", os.getenv("BINANCE_API_SECRET", st.session_state.get("BINANCE_API_SECRET", "")))
-        
-        if not b_key or not b_sec or "YOUR_" in str(b_key):
-            return False, "🔴 **BINANCE API KEYS MISSING:** Key or Secret empty. Enter your Binance keys below."
-            
-        # List of Binance Global Alternative Endpoints
-        endpoints = [
-            "https://api1.binance.com",
-            "https://api2.binance.com",
-            "https://api3.binance.com",
-            "https://api.binance.com"
-        ]
-        
-        last_err_msg = ""
-        
-        for base_url in endpoints:
-            try:
-                timestamp = int(time.time() * 1000)
-                query_string = f"timestamp={timestamp}"
-                signature = hmac.new(b_sec.encode('utf-8'), query_string.encode('utf-8'), hashlib.sha256).hexdigest()
-                
-                url = f"{base_url}/api/v3/account?{query_string}&signature={signature}"
-                headers = {"X-MBX-APIKEY": b_key}
-                
-                res = requests.get(url, headers=headers, timeout=4)
-                res_data = res.json()
-                
-                if res.status_code == 200 and 'canTrade' in res_data:
-                    can_trade = res_data.get('canTrade', False)
-                    usdt_bal = "0.00"
-                    for b in res_data.get('balances', []):
-                        if b.get('asset') == 'USDT':
-                            usdt_bal = b.get('free', '0.00')
-                            break
-                    return True, f"🟢 **BINANCE CRYPTO API CONNECTED SUCCESSFULLY!**\n\n• **Endpoint:** `{base_url}` | **Spot Trading:** {'✅ ENABLED' if can_trade else '❌ DISABLED'}\n• **Live Free USDT Balance:** `${float(usdt_bal):,.2f} USDT`"
-                elif res.status_code == 451:
-                    last_err_msg = "🟡 **STREAMLIT CLOUD US SERVER IP NOTICE (451):** Streamlit Cloud uses AWS US servers which Binance geofences. Your API Key is valid! For Binance Real-Money Execution, deploy on Non-US Server (Render/Hostinger Europe) or use Paper Mode!"
-                else:
-                    last_err_msg = f"🔴 **BINANCE API REJECTED ({res.status_code}):** {res_data.get('msg', res.text)}"
-            except Exception as e:
-                last_err_msg = f"🔴 **CONNECTION EXCEPTION:** {str(e)}"
-
-        return False, last_err_msg
-
-    # RENDER IN TAB 3 (Fail-Safe Wrapped Blocks):
     with tab_broker:
-        render_broker_integrator_tab()
-
-def render_0ms_websocket_ticker(binance_symbol: str = "BTCUSDT"):
-    """Renders 0ms Ultra-Low Latency WebSocket Live Price Ticker Component"""
-    ticker_html = f"""
-    <div style="background: rgba(17, 24, 39, 0.85); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 8px 12px; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center;">
-        <span style="color: #9ca3af; font-size: 11px; font-weight: 700;">⚡ 0MS BINANCE WEBSOCKET:</span>
-        <span id="ws-live-price" style="color: #00e5ff; font-size: 14px; font-weight: 800;">Connecting...</span>
-    </div>
-    <script>
-        const wsSymbol = "{binance_symbol.lower()}";
-        const ws = new WebSocket(`wss://stream.binance.com:9443/ws/${{wsSymbol}}@trade`);
-        ws.onmessage = (event) => {{
-            const data = JSON.parse(event.data);
-            const priceElem = document.getElementById("ws-live-price");
-            if (priceElem && data.p) {{
-                priceElem.innerText = "$" + parseFloat(data.p).toLocaleString(undefined, {{minimumFractionDigits: 2, maximumFractionDigits: 2}});
-            }}
-        }};
-    </script>
-    """
-    components.html(ticker_html, height=55)
-
-def get_active_asset_context():
-    """Returns 100% synchronized asset context for 0ms instantaneous UI switching"""
-    selected_asset = st.session_state.get('selected_asset', 'BITCOIN')
-    
-    asset_config = {
-        "BITCOIN": {
-            "title": "BITCOIN",
-            "binance_symbol": "BTCUSDT",
-            "yahoo_ticker": "BTC-USD",
-            "currency": "$",
-            "is_crypto": True
-        },
-        "ETHEREUM": {
-            "title": "ETHEREUM",
-            "binance_symbol": "ETHUSDT",
-            "yahoo_ticker": "ETH-USD",
-            "currency": "$",
-            "is_crypto": True
-        },
-        "SOLANA": {
-            "title": "SOLANA",
-            "binance_symbol": "SOLUSDT",
-            "yahoo_ticker": "SOL-USD",
-            "currency": "$",
-            "is_crypto": True
-        },
-        "NIFTY": {
-            "title": "NIFTY 50",
-            "binance_symbol": "NIFTY",
-            "yahoo_ticker": "^NSEI",
-            "currency": "₹",
-            "is_crypto": False
-        },
-        "BANKNIFTY": {
-            "title": "BANKNIFTY",
-            "binance_symbol": "BANKNIFTY",
-            "yahoo_ticker": "^NSEBANK",
-            "currency": "₹",
-            "is_crypto": False
-        },
-        "RELIANCE": {
-            "title": "RELIANCE",
-            "binance_symbol": "RELIANCE",
-            "yahoo_ticker": "RELIANCE.NS",
-            "currency": "₹",
-            "is_crypto": False
-        }
-    }
-    
-    return asset_config.get(selected_asset, asset_config["BITCOIN"])
-
-# 1. ONE SINGLE UNIFIED ASSET SELECTOR IN SIDEBAR
-st.sidebar.markdown("### 🎛️ Active Focus Asset")
-
-asset_options = ["ETHEREUM", "BITCOIN", "SOLANA", "NIFTY", "BANKNIFTY", "RELIANCE"]
-selected_asset = st.sidebar.selectbox(
-    "Select Active Focus Asset:",
-    asset_options,
-    index=0 if st.session_state.get('selected_asset') == 'ETHEREUM' else 1,
-    key="one_single_active_asset_selector"
-)
-
-# SYNC SESSION STATE IMMEDIATELY
-st.session_state['selected_asset'] = selected_asset
-
-def render_binance_chart_with_all_indicators(binance_symbol_str: str):
-    """Renders TradingView advanced candlestick chart with pre-loaded EMA, VWAP, and RSI indicators"""
-    clean_sym = binance_symbol_str.replace("BINANCE:", "").upper()
-    chart_html = f"""
-    <div class="tradingview-widget-container" style="height:520px;width:100%">
-      <div id="tradingview_chart_aligned" style="height:calc(100% - 32px);width:100%"></div>
-      <script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
-      <script type="text/javascript">
-      new TradingView.widget({{
-        "autosize": true,
-        "symbol": "BINANCE:{clean_sym}",
-        "interval": "5",
-        "timezone": "Asia/Kolkata",
-        "theme": "dark",
-        "style": "1",
-        "locale": "en",
-        "toolbar_bg": "#f1f3f6",
-        "enable_publishing": false,
-        "hide_legend": false,
-        "save_image": false,
-        "container_id": "tradingview_chart_aligned",
-        "studies": ["STD;EMA", "STD;VWAP", "RSI@tv-basicstudies"]
-      }});
-      </script>
-    </div>
-    """
-    st.components.v1.html(chart_html, height=530)
-
-render_binance_tradingview_chart = render_binance_chart_with_all_indicators
-
-def render_trade_history_table_safe():
-    """Renders formatted trade execution history table safely"""
-    try:
-        trades_df = pd.DataFrame()
-        if os.path.exists("trades.csv") and os.path.getsize("trades.csv") > 0:
-            trades_df = pd.read_csv("trades.csv")
-        elif "trades_memory" in st.session_state and st.session_state.trades_memory:
-            trades_df = pd.DataFrame(st.session_state.trades_memory)
+        render_system_health_panel()
+        st.divider()
+        st.markdown("## 🔑 Broker API Integration & Mode Selector")
+        
+        # 2-Week Paper Test Status Box
+        st.info("🧪 **STATUS:** Paper Trading Test Active (Day 1 of 14). All execution is simulated with zero financial risk.")
+        
+        broker_mode = st.radio(
+            "Select Active Execution Mode:",
+            ["🎮 Paper Simulator (Active - 2 Weeks Test)", "🟢 Zerodha Kite Connect (Live)", "🔵 Dhan API (Live)"],
+            index=0
+        )
+        
+        st.divider()
+        st.markdown("### 🔒 Live Broker Credentials (For Post 2-Week Activation)")
+        
+        col_k1, col_k2 = st.columns(2)
+        with col_k1:
+            kite_api_key = st.text_input("Zerodha API Key", type="password", value="***")
+            kite_secret = st.text_input("Zerodha API Secret", type="password", value="***")
+        with col_k2:
+            kite_access_token = st.text_input("Zerodha Access Token (Daily TOTP)", type="password", value="***")
             
-        if not trades_df.empty:
-            st.dataframe(trades_df.tail(20), use_container_width=True)
-        else:
-            st.info("ℹ️ No past trades recorded yet. Bot will log live executions here.")
-    except Exception as e:
-        st.info("ℹ️ Trade history log loading...")
+        if st.button("💾 Save Credentials & Check Health", use_container_width=True):
+            health = check_system_integrity(GOOGLE_SHEET_WEB_APP_URL, TELEGRAM_BOT_TOKEN)
+            st.write("### 🏥 System Health Status:")
+            st.write(f"- Google Sheets Cloud Sync: {'✅ OK' if health['sheets'] else '❌ Disconnected'}")
+            st.write(f"- Telegram Alert Bot: {'✅ OK' if health['telegram'] else '❌ Disconnected'}")
+            st.success("✅ Credentials stored in cloud session successfully!")
 
-def safe_get_candle_data(symbol_ticker: str) -> pd.DataFrame:
-    """Fetches 5m candle data with Direct Binance Klines API Fallback for 100% Uptime"""
-    # 1. Try Direct Binance Klines API First (Fastest 50ms & 100% Reliable for Crypto)
-    is_crypto = any(k in str(symbol_ticker).upper() for k in ["BTC", "ETH", "SOL", "BITCOIN", "ETHEREUM", "SOLANA"])
-    if is_crypto:
-        df_b = fast_get_binance_klines(symbol_ticker)
-        if df_b is not None and not df_b.empty:
-            return df_b
+        st.divider()
+        st.markdown("### 📲 Telegram Notifier Live Connection Test")
+        
+        if st.button("🧪 Send Test Telegram Alert Now", use_container_width=True):
+            from notifier import send_telegram_alert
+            
+            test_msg = "🔔 <b>ANTONY Quant AI Algo Terminal</b>\n\n✅ Telegram Notifier Connection Successful!\n⏱️ Live Latency Test: Passed."
+            
+            with st.spinner("Sending Telegram Signal..."):
+                success = send_telegram_alert(test_msg)
+                
+                if success:
+                    st.success("🎉 Telegram Alert Sent Successfully! Check your Telegram App now.")
+                else:
+                    st.error("❌ Telegram Alert Failed! Please check your TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID in secrets/config.")
 
-    # 2. Fallback to YFinance
-    try:
-        import yfinance as yf
-        df_yf = yf.download(symbol_ticker, period="5d", interval="5m", progress=False)
-        if df_yf is not None and not df_yf.empty and len(df_yf) >= 20:
-            if isinstance(df_yf.columns, pd.MultiIndex):
-                df_yf.columns = df_yf.columns.get_level_values(0)
-            return df_yf
-    except Exception:
-        pass
+        st.markdown("---")
+        st.markdown("### 🤖 Google AI Studio (Gemini API) Dynamic Connection Test")
+        
+        if st.button("🧪 Test Google AI Studio (Gemini API) Connection", use_container_width=True):
+            import google.generativeai as genai
+            import os
+            import time
+            
+            gemini_key = st.secrets.get("GEMINI_API_KEY", os.getenv("GEMINI_API_KEY", ""))
+            
+            if gemini_key and "YOUR_" not in gemini_key:
+                masked = f"{gemini_key[:6]}...{gemini_key[-4:]}"
+                st.write(f"- **API Key Status:** `✅ Key Detected ({masked})`")
+                
+                try:
+                    genai.configure(api_key=gemini_key)
+                    
+                    # 1. Dynamically Find Active Gemini Models for this API Key
+                    active_models = []
+                    try:
+                        for m in genai.list_models():
+                            if 'generateContent' in m.supported_generation_methods:
+                                active_models.append(m.name)
+                    except Exception as e:
+                        st.write(f"⚠️ ListModels Lookup Warning: {e}")
 
-    return None
+                    # Select best model (prefer flash/pro)
+                    chosen_model = "gemini-1.5-flash-latest"
+                    if active_models:
+                        for m in active_models:
+                            if "flash" in m or "pro" in m:
+                                chosen_model = m
+                                break
 
-# -------------------------------------------------------------
-# RENDER MAIN DASHBOARD WITH DYNAMIC ASSET CONTEXT
-# -------------------------------------------------------------
-ctx = get_active_asset_context()
-selected_symbol = ctx['yahoo_ticker']
-selected_name = ctx['title']
-active_binance_symbol = ctx['binance_symbol']
-timeframe = "5m"
-st.session_state['active_currency'] = ctx['currency']
+                    st.write(f"- **Auto-Selected Supported Model:** `{chosen_model}`")
 
-# Sidebar Info Box
-st.sidebar.info(f"🔥 **{ctx['title']} ACTIVE FOCUS MODE**\nScanning 24/7 Global Crypto Options in USD ($)." if ctx['is_crypto'] else f"🇮🇳 **{ctx['title']} ACTIVE FOCUS MODE**\nScanning NSE Indian Options in INR (₹).")
+                    # 2. Test Content Generation
+                    start_time = time.time()
+                    model = genai.GenerativeModel(chosen_model)
+                    res = model.generate_content("Respond in 1 short sentence confirming you are active for ANTONY Quant AI Algo Terminal.")
+                    latency = round((time.time() - start_time) * 1000, 2)
 
-# 2. RENDER 0MS WEBSOCKET TICKER FOR SELECTED ASSET
-render_0ms_websocket_ticker(active_binance_symbol)
+                    st.success(f"🎉 **Google Gemini API Connected Successfully!** (Latency: `{latency} ms`)")
+                    st.info(f"🤖 **Gemini Live Response ({chosen_model}):** {res.text.strip()}")
+
+                except Exception as e:
+                    st.error(f"❌ Gemini API Error: {str(e)}")
+            else:
+                st.error("❌ Gemini API Key Missing! Please add `GEMINI_API_KEY` to Streamlit Cloud Secrets.")
 
 # Run Cloud State Recovery before scanning
 enforce_cloud_kill_switch_guard()

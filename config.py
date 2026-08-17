@@ -1,18 +1,4 @@
-# config.py - Locked 100% Bitcoin Pure Focus Configuration
-
-ACTIVE_ASSET_MODE = "BITCOIN_PURE_FOCUS"
-DEFAULT_ASSET = "BITCOIN"
-
-# Crypto Bitcoin Specific Risk Calibration ($)
-CRYPTO_RISK_RULES = {
-    "LOT_QUANTITY": 15,
-    "MAX_LOSS_CAP_USD": -25.00,       # Strict -$25.00 Cut Loss
-    "PROFIT_LOCK_TRIGGER_USD": 35.00, # Trigger +$35.00 Floating Gain
-    "PROFIT_LOCK_AMOUNT_USD": 15.00,  # Lock +$15.00 Net Profit
-    "TARGET_1_USD": 50.00,            # +$50.00 Target 1 (+6%)
-    "TARGET_2_USD": 100.00,           # +$100.00 Target 2 (+12%)
-}
-
+# config.py - Zerodha API & Institutional Trading Parameters
 API_KEY = "your_api_key_here"
 API_SECRET = "your_api_secret_here"
 USER_ID = "your_zerodha_user_id"
