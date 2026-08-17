@@ -184,15 +184,31 @@ def evaluate_institutional_bitcoin_signals(df_5m: pd.DataFrame, asset_symbol: st
     pdh_val = df['High'].iloc[-288:].max()
     pdl_val = df['Low'].iloc[-288:].min()
 
-    # 1. Regime Classifier Gate (Hurst Exponent)
-    if hurst_val < 0.42 and adx_14 < 18.0:
+    # 1. FIXED HURST VETO: Ignore Hurst if H == 0.00 or if Volume Spike >= 1.5x
+    is_high_vol_breakout = (vol_ratio >= 1.50) and (adx_14 >= 22.0)
+    
+    if (0.05 < hurst_val < 0.42) and adx_14 < 18.0 and not is_high_vol_breakout:
         return {
             "signal": "HOLD",
             "confidence": 0.40,
-            "reason": f"⏸️ REJECTED: Hurst Exponent (H={hurst_val:.2f} < 0.42) Indicates Mean-Reverting Sideways Chop Range."
+            "reason": f"⏸️ Hurst Chop Range (H={hurst_val:.2f})"
         }
 
-    # 2. Check Liquidity Sweep Traps (SFP)
+    # 2. HIGH VOLUME OVERRIDE EXECUTION (Volume >= 1.5x)
+    if is_high_vol_breakout and last_row['Close'] > last_row['Open']:
+        return {
+            "signal": "BUY_CALL",
+            "confidence": 0.85, # High Conviction
+            "reason": f"🔥 HIGH VOLUME MOMENTUM BREAKOUT: Vol {vol_ratio:.2f}x | ADX {adx_14:.1f} | 100% Bullish Sync"
+        }
+    elif is_high_vol_breakout and last_row['Close'] < last_row['Open']:
+        return {
+            "signal": "BUY_PUT",
+            "confidence": 0.85, # High Conviction
+            "reason": f"🔥 HIGH VOLUME BEARISH BREAKOUT: Vol {vol_ratio:.2f}x | ADX {adx_14:.1f} | 100% Bearish Sync"
+        }
+
+    # 3. Check Liquidity Sweep Traps (SFP)
     sfp_data = detect_liquidity_sweep_sfp_trap(df, pdh_val, pdl_val, atr_14)
     if sfp_data['is_sweep']:
         return {
