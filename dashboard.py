@@ -502,26 +502,55 @@ def render_institutional_quant_cards_v2(bias_status, conf_score, vwap_val, pdh_v
     """Renders Ultra-Premium Quant Cards displaying 4 Advanced Data Feeds Live"""
     
     bias_color = "#10b981" if "BUY_CALL" in str(bias_status) else ("#ef4444" if "BUY_PUT" in str(bias_status) else "#f59e0b")
-    
     try:
-        conf_val = float(conf_score)
-        if conf_val <= 1.0:
-            conf_val = conf_val * 100.0
+        wall_color = "#10b981" if float(buy_wall_pct) >= 55.0 else "#ef4444"
     except Exception:
-        conf_val = 52.4
+        wall_color = "#f59e0b"
         
     try:
-        b_wall_val = float(buy_wall_pct)
+        conf_num = float(conf_score)
+        if conf_num > 1.0:
+            conf_num = conf_num / 100.0
     except Exception:
-        b_wall_val = 50.0
+        conf_num = 0.524
     
     html_cards = f"""
     <style>
-        .quant-grid {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; margin: 15px 0; }}
-        .quant-card {{ background: rgba(17, 24, 39, 0.85); backdrop-filter: blur(12px); border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; padding: 16px; }}
-        .quant-title {{ font-size: 11px; font-weight: 700; color: #9ca3af; text-transform: uppercase; margin-bottom: 8px; letter-spacing: 0.5px; }}
-        .quant-val-big {{ font-size: 22px; font-weight: 800; color: {bias_color}; }}
-        .quant-row {{ display: flex; justify-content: space-between; font-size: 13px; color: #d1d5db; padding: 4px 0; border-bottom: 1px solid rgba(255,255,255,0.05); }}
+        .quant-grid {{
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+            gap: 14px;
+            margin: 15px 0;
+        }}
+        .quant-card {{
+            background: rgba(17, 24, 39, 0.85);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 10px;
+            padding: 16px;
+        }}
+        .quant-title {{
+            font-size: 11px;
+            font-weight: 700;
+            color: #9ca3af;
+            text-transform: uppercase;
+            margin-bottom: 8px;
+            letter-spacing: 0.5px;
+        }}
+        .quant-val-big {{
+            font-size: 22px;
+            font-weight: 800;
+            color: {bias_color};
+            margin-bottom: 6px;
+        }}
+        .quant-row {{
+            display: flex;
+            justify-content: space-between;
+            font-size: 13px;
+            color: #d1d5db;
+            padding: 4px 0;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+        }}
     </style>
 
     <div class="quant-grid">
@@ -529,14 +558,14 @@ def render_institutional_quant_cards_v2(bias_status, conf_score, vwap_val, pdh_v
         <div class="quant-card">
             <div class="quant-title">🎯 Multi-TF Trend & AI Score</div>
             <div class="quant-val-big">{bias_status}</div>
-            <div class="quant-row"><span>AI Confidence Score:</span><b>{conf_val:.1f}%</b></div>
+            <div class="quant-row"><span>AI Confidence Score:</span><b>{conf_num*100:.1f}%</b></div>
             <div class="quant-row"><span>15m & 1h TF Alignment:</span><b style="color: #10b981;">{tf_sync_status}</b></div>
         </div>
 
         <!-- Card 2: Order Book Depth & Capital Inflow -->
         <div class="quant-card">
             <div class="quant-title">📊 Order Book Depth & Inflow</div>
-            <div class="quant-row"><span>Buy Wall Pressure:</span><b style="color: {'#10b981' if b_wall_val >= 55 else '#ef4444'};">{b_wall_val:.1f}%</b></div>
+            <div class="quant-row"><span>Buy Wall Pressure:</span><b style="color: {wall_color};">{buy_wall_pct}%</b></div>
             <div class="quant-row"><span>Volume Spike Ratio:</span><b>{vol_ratio}x</b></div>
             <div class="quant-row"><span>ADX Trend Strength:</span><b>{adx_val}</b></div>
         </div>
@@ -554,6 +583,7 @@ def render_institutional_quant_cards_v2(bias_status, conf_score, vwap_val, pdh_v
         <b>⚡ Multi-Data Feed Executive Action:</b> {diagnostic_reason}
     </div>
     """
+    
     st.markdown(html_cards, unsafe_allow_html=True)
 
 def render_trade_history_table(df_trades: pd.DataFrame):
