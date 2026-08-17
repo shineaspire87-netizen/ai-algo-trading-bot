@@ -124,11 +124,11 @@ def render_tradingview_live_chart(asset_name: str):
     
     st.components.v1.html(tv_html, height=520)
 
-def render_binance_direct_tradingview_chart():
-    """Renders Direct Binance Embedded Chart (BINANCE:BTCUSDT)"""
+def render_binance_tradingview_chart_with_indicators():
+    """Renders Direct Binance BTCUSDT Chart Embed with Pre-Loaded EMA, VWAP, and RSI Indicators"""
     chart_html = """
     <!-- TradingView Widget BEGIN -->
-    <div class="tradingview-widget-container" style="height:500px;width:100%">
+    <div class="tradingview-widget-container" style="height:550px;width:100%">
       <div id="tradingview_binance_chart" style="height:calc(100% - 32px);width:100%"></div>
       <script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
       <script type="text/javascript">
@@ -144,13 +144,19 @@ def render_binance_direct_tradingview_chart():
         "enable_publishing": false,
         "hide_legend": false,
         "save_image": false,
-        "container_id": "tradingview_binance_chart"
+        "container_id": "tradingview_binance_chart",
+        /* PRE-LOADED STRATEGY INDICATORS AUTOMATICALLY */
+        "studies": [
+          "STD;EMA",                   /* Exponential Moving Average (EMA 9) */
+          "STD;VWAP",                  /* Volume Weighted Average Price (VWAP) */
+          "RSI@tv-basicstudies"        /* Relative Strength Index (RSI 14) */
+        ]
       });
       </script>
     </div>
     <!-- TradingView Widget END -->
     """
-    st.components.v1.html(chart_html, height=520)
+    st.components.v1.html(chart_html, height=560)
 
 def render_plotly_strategy_chart_with_trade_overlay(df, active_trade=None):
     """Renders Plotly Technical Chart with Entry, Target, SL, and Live Price Lines Overlay"""
@@ -225,7 +231,7 @@ def render_smart_live_chart(asset_name: str, df_chart: pd.DataFrame, active_trad
     else:
         # Render Direct Binance Embedded Chart for Crypto
         if "BITCOIN" in asset_clean or "BTC" in asset_clean:
-            render_binance_direct_tradingview_chart()
+            render_binance_tradingview_chart_with_indicators()
         else:
             render_tradingview_live_chart(asset_name)
 
