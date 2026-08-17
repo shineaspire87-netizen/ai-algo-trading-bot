@@ -4,7 +4,13 @@ import streamlit as st
 import os
 import json
 import pandas as pd
+import numpy as np
+import datetime
 import time
+import requests
+import hmac
+import hashlib
+import logging
 import threading
 
 # 1. Safe Auto-Refresh Loop Engine (Prevents Freezing on API Timeouts)
@@ -2121,8 +2127,8 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
         except Exception as e:
             return False, f"🔴 **GEMINI BACKEND EXCEPTION:** {str(e)}"
 
-    def check_authentic_binance_backend_ping():
-        """Pings Binance API and returns (is_success: bool, status_msg: str)"""
+    def check_authentic_binance_backend_ping() -> tuple[bool, str]:
+        """Tests Binance API connection with hmac signature and fetches live USDT balance"""
         b_key = st.secrets.get("BINANCE_API_KEY", os.getenv("BINANCE_API_KEY", st.session_state.get("BINANCE_API_KEY", "")))
         b_sec = st.secrets.get("BINANCE_API_SECRET", os.getenv("BINANCE_API_SECRET", st.session_state.get("BINANCE_API_SECRET", "")))
         
@@ -2130,9 +2136,11 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
             return False, "🔴 **BINANCE API KEYS MISSING:** Key or Secret empty. Enter your Binance keys below."
             
         try:
+            import hmac, hashlib # Double safety import inside function!
             timestamp = int(time.time() * 1000)
             query_string = f"timestamp={timestamp}"
             signature = hmac.new(b_sec.encode('utf-8'), query_string.encode('utf-8'), hashlib.sha256).hexdigest()
+            
             url = f"https://api.binance.com/api/v3/account?{query_string}&signature={signature}"
             headers = {"X-MBX-APIKEY": b_key}
             
@@ -2146,7 +2154,7 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
                     if b.get('asset') == 'USDT':
                         usdt_bal = b.get('free', '0.00')
                         break
-                return True, f"🟢 **BINANCE CRYPTO API CONNECTED!**\n\n• **Spot Trading:** {'✅ ENABLED' if can_trade else '❌ DISABLED'}\n• **Live Free USDT Balance:** `${float(usdt_bal):,.2f} USDT`"
+                return True, f"🟢 **BINANCE CRYPTO API CONNECTED SUCCESSFULLY!**\n\n• **Spot Trading:** {'✅ ENABLED' if can_trade else '❌ DISABLED'}\n• **Live Free USDT Balance:** `${float(usdt_bal):,.2f} USDT`"
             else:
                 return False, f"🔴 **BINANCE API ERROR ({res.status_code}):** {res_data.get('msg', res.text)}"
         except Exception as e:
