@@ -2076,6 +2076,84 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
     # ==========================================
     # TAB 3: BROKER KEY INTEGRATOR & PAPER MODE
     # ==========================================
+    def on_test_telegram_click():
+        import requests, time
+        start_t = time.time()
+        now_ist = datetime.datetime.now(pytz.timezone('Asia/Kolkata')).strftime('%I:%M:%S %p IST, %d-%b-%Y')
+        bot_token = st.session_state.get('input_direct_tg_token_v4') or st.secrets.get("TELEGRAM_BOT_TOKEN", "8939955418:AAFXd58Nwr84uIGeqrvIqvntveWwHjqmenE")
+        chat_id = st.session_state.get('input_direct_tg_chat_v4') or st.secrets.get("TELEGRAM_CHAT_ID", "1072750499")
+        try:
+            url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
+            test_text = (
+                f"🔔 <b>ANTONY Quant AI Algo Terminal</b>\n\n"
+                f"🟢 <b>STATUS: ACTIVE & CONNECTED</b>\n"
+                f"⏰ <b>Time:</b> {now_ist}\n"
+                f"👤 <b>Trader:</b> ANTONY\n"
+                f"📱 <b>Chat ID:</b> <code>{chat_id}</code>\n\n"
+                f"✅ <i>Live Telegram Signal Notifier is Active & Running 24/7!</i>"
+            )
+            payload = {"chat_id": chat_id, "text": test_text, "parse_mode": "HTML"}
+            res = requests.post(url, json=payload, timeout=6)
+            lat_ms = round((time.time() - start_t) * 1000, 1)
+
+            if res.status_code == 200:
+                st.session_state['tg_diag_status'] = {
+                    "state": "ACTIVE",
+                    "time": now_ist,
+                    "latency": lat_ms,
+                    "msg": "Telegram Alert Delivered Successfully! Check your Telegram App now."
+                }
+            else:
+                st.session_state['tg_diag_status'] = {
+                    "state": "INACTIVE",
+                    "time": now_ist,
+                    "latency": lat_ms,
+                    "error": f"API Error ({res.status_code}): {res.text}"
+                }
+        except Exception as e:
+            st.session_state['tg_diag_status'] = {
+                "state": "INACTIVE",
+                "time": now_ist,
+                "latency": 0,
+                "error": f"Network Exception: {str(e)}"
+            }
+
+    def on_test_gemini_click():
+        import time
+        start_t = time.time()
+        now_ist = datetime.datetime.now(pytz.timezone('Asia/Kolkata')).strftime('%I:%M:%S %p IST, %d-%b-%Y')
+        gemini_key = st.session_state.get('input_direct_gemini_key_v4') or st.secrets.get("GEMINI_API_KEY", os.getenv("GEMINI_API_KEY", ""))
+        try:
+            import google.generativeai as genai
+            if gemini_key and "YOUR_" not in str(gemini_key):
+                genai.configure(api_key=gemini_key)
+                model = genai.GenerativeModel('gemini-1.5-flash')
+                res = model.generate_content("Respond in 1 short sentence confirming ANTONY Quant Terminal connection.")
+                lat_ms = round((time.time() - start_t) * 1000, 1)
+
+                st.session_state['gemini_diag_status'] = {
+                    "state": "ACTIVE",
+                    "time": now_ist,
+                    "latency": lat_ms,
+                    "model": "gemini-1.5-flash",
+                    "response": res.text.strip()
+                }
+            else:
+                st.session_state['gemini_diag_status'] = {
+                    "state": "INACTIVE",
+                    "time": now_ist,
+                    "latency": 0,
+                    "error": "Gemini API Key is missing or invalid! Please paste a valid key from Google AI Studio."
+                }
+        except Exception as e:
+            lat_ms = round((time.time() - start_t) * 1000, 1)
+            st.session_state['gemini_diag_status'] = {
+                "state": "INACTIVE",
+                "time": now_ist,
+                "latency": lat_ms,
+                "error": f"Gemini API Error: {str(e)}"
+            }
+
     with tab_broker:
         st.markdown("## 🔑 Broker API Integrator & Direct Diagnostic Center")
         st.info("🧪 **STATUS:** Paper Trading Test Active (Day 1 of 14). All execution is simulated with zero financial risk.")
@@ -2098,49 +2176,7 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
 
         col_btn_tg, col_reset_tg = st.columns([0.75, 0.25])
         with col_btn_tg:
-            if st.button("🚀 Test Telegram Connection & Send Live Message Now", key="btn_direct_tg_test_v4", use_container_width=True):
-                with st.spinner("Connecting to Telegram Server and sending test message..."):
-                    import requests, time
-                    start_t = time.time()
-                    now_ist = datetime.datetime.now(pytz.timezone('Asia/Kolkata')).strftime('%I:%M:%S %p IST, %d-%b-%Y')
-                    try:
-                        url = f"https://api.telegram.org/bot{tg_token_input}/sendMessage"
-                        test_text = (
-                            f"🔔 <b>ANTONY Quant AI Algo Terminal</b>\n\n"
-                            f"🟢 <b>STATUS: ACTIVE & CONNECTED</b>\n"
-                            f"⏰ <b>Time:</b> {now_ist}\n"
-                            f"👤 <b>Trader:</b> ANTONY\n"
-                            f"📱 <b>Chat ID:</b> <code>{tg_chat_input}</code>\n\n"
-                            f"✅ <i>Live Telegram Signal Notifier is Active & Running 24/7!</i>"
-                        )
-                        payload = {"chat_id": tg_chat_input, "text": test_text, "parse_mode": "HTML"}
-                        res = requests.post(url, json=payload, timeout=6)
-                        lat_ms = round((time.time() - start_t) * 1000, 1)
-
-                        if res.status_code == 200:
-                            st.session_state['tg_diag_status'] = {
-                                "state": "ACTIVE",
-                                "time": now_ist,
-                                "latency": lat_ms,
-                                "msg": "Telegram Alert Delivered Successfully! Check your Telegram App now."
-                            }
-                            st.toast("🎉 TELEGRAM ACTIVE: Alert Delivered!", icon="🟢")
-                        else:
-                            st.session_state['tg_diag_status'] = {
-                                "state": "INACTIVE",
-                                "time": now_ist,
-                                "latency": lat_ms,
-                                "error": f"API Error ({res.status_code}): {res.text}"
-                            }
-                            st.toast(f"❌ TELEGRAM INACTIVE ({res.status_code})", icon="🔴")
-                    except Exception as e:
-                        st.session_state['tg_diag_status'] = {
-                            "state": "INACTIVE",
-                            "time": now_ist,
-                            "latency": 0,
-                            "error": f"Network Exception: {str(e)}"
-                        }
-                        st.toast("❌ TELEGRAM CONNECTION FAILED", icon="🔴")
+            st.button("🚀 Test Telegram Connection & Send Live Message Now", key="btn_direct_tg_test_v4", on_click=on_test_telegram_click, use_container_width=True)
 
         with col_reset_tg:
             if st.button("🔄 Clear Status", key="btn_reset_tg", use_container_width=True):
@@ -2189,44 +2225,7 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
 
         col_btn_gm, col_reset_gm = st.columns([0.75, 0.25])
         with col_btn_gm:
-            if st.button("🚀 Cross-Check Gemini API Key & Verify AI Connection", key="btn_direct_gemini_test_v4", use_container_width=True):
-                with st.spinner("Pinging Google AI Studio and testing Gemini 1.5 Flash model..."):
-                    import time
-                    start_t = time.time()
-                    now_ist = datetime.datetime.now(pytz.timezone('Asia/Kolkata')).strftime('%I:%M:%S %p IST, %d-%b-%Y')
-                    try:
-                        import google.generativeai as genai
-                        if gemini_key_input and "YOUR_" not in str(gemini_key_input):
-                            genai.configure(api_key=gemini_key_input)
-                            model = genai.GenerativeModel('gemini-1.5-flash')
-                            res = model.generate_content("Respond in 1 short sentence confirming ANTONY Quant Terminal connection.")
-                            lat_ms = round((time.time() - start_t) * 1000, 1)
-
-                            st.session_state['gemini_diag_status'] = {
-                                "state": "ACTIVE",
-                                "time": now_ist,
-                                "latency": lat_ms,
-                                "model": "gemini-1.5-flash",
-                                "response": res.text.strip()
-                            }
-                            st.toast(f"🎉 GEMINI ACTIVE! Latency: {lat_ms} ms", icon="🟢")
-                        else:
-                            st.session_state['gemini_diag_status'] = {
-                                "state": "INACTIVE",
-                                "time": now_ist,
-                                "latency": 0,
-                                "error": "Gemini API Key is missing or invalid! Please paste a valid key from Google AI Studio."
-                            }
-                            st.toast("❌ GEMINI API KEY MISSING", icon="🔴")
-                    except Exception as e:
-                        lat_ms = round((time.time() - start_t) * 1000, 1)
-                        st.session_state['gemini_diag_status'] = {
-                            "state": "INACTIVE",
-                            "time": now_ist,
-                            "latency": lat_ms,
-                            "error": f"Gemini API Error: {str(e)}"
-                        }
-                        st.toast("❌ GEMINI API ERROR", icon="🔴")
+            st.button("🚀 Cross-Check Gemini API Key & Verify AI Connection", key="btn_direct_gemini_test_v4", on_click=on_test_gemini_click, use_container_width=True)
 
         with col_reset_gm:
             if st.button("🔄 Clear Status", key="btn_reset_gemini", use_container_width=True):
