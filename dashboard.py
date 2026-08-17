@@ -2095,7 +2095,7 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
         st.divider()
 
         # -------------------------------------------------------------
-        # 1. DIRECT TELEGRAM BOT TESTER WITH INSTANT TOAST POPUP
+        # 1. DIRECT TELEGRAM BOT TESTER WITH PERSISTENT ACTIVE/INACTIVE STATUS
         # -------------------------------------------------------------
         st.markdown("### 📲 Telegram Alert Bot Connection Tester")
         
@@ -2104,54 +2104,176 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
         
         col_tg1, col_tg2 = st.columns(2)
         with col_tg1:
-            tg_token_input = st.text_input("Telegram Bot Token", value=default_tg_token, type="password", key="input_direct_tg_token_v3")
+            tg_token_input = st.text_input("Telegram Bot Token", value=default_tg_token, type="password", key="input_direct_tg_token_v4")
         with col_tg2:
-            tg_chat_input = st.text_input("Telegram Chat ID", value=default_tg_chat, key="input_direct_tg_chat_v3")
+            tg_chat_input = st.text_input("Telegram Chat ID", value=default_tg_chat, key="input_direct_tg_chat_v4")
 
-        if st.button("🚀 Send Test Telegram Message Now", key="btn_direct_tg_test_v3", use_container_width=True):
-            try:
-                import requests
-                url = f"https://api.telegram.org/bot{tg_token_input}/sendMessage"
-                payload = {"chat_id": tg_chat_input, "text": "🔔 <b>ANTONY Quant Terminal</b>\n\n✅ Live Connection Test Successful!", "parse_mode": "HTML"}
-                res = requests.post(url, json=payload, timeout=5)
-                
-                if res.status_code == 200:
-                    st.toast("🎉 TELEGRAM SUCCESS: Alert delivered to your phone!", icon="🚀")
-                    st.success("🎉 **SUCCESS (200 OK):** Telegram Alert delivered! Check your Telegram Mobile App now.")
-                else:
-                    st.toast(f"❌ TELEGRAM ERROR ({res.status_code})", icon="⚠️")
-                    st.error(f"❌ **FAILED ({res.status_code}):** {res.text}")
-            except Exception as e:
-                st.error(f"❌ **CONNECTION ERROR:** {str(e)}")
+        col_btn_tg, col_reset_tg = st.columns([0.75, 0.25])
+        with col_btn_tg:
+            if st.button("🚀 Test Telegram Connection & Send Live Message Now", key="btn_direct_tg_test_v4", use_container_width=True):
+                with st.spinner("Connecting to Telegram Server and sending test message..."):
+                    import requests, time
+                    start_t = time.time()
+                    now_ist = datetime.datetime.now(pytz.timezone('Asia/Kolkata')).strftime('%I:%M:%S %p IST, %d-%b-%Y')
+                    try:
+                        url = f"https://api.telegram.org/bot{tg_token_input}/sendMessage"
+                        test_text = (
+                            f"🔔 <b>ANTONY Quant AI Algo Terminal</b>\n\n"
+                            f"🟢 <b>STATUS: ACTIVE & CONNECTED</b>\n"
+                            f"⏰ <b>Time:</b> {now_ist}\n"
+                            f"👤 <b>Trader:</b> ANTONY\n"
+                            f"📱 <b>Chat ID:</b> <code>{tg_chat_input}</code>\n\n"
+                            f"✅ <i>Live Telegram Signal Notifier is Active & Running 24/7!</i>"
+                        )
+                        payload = {"chat_id": tg_chat_input, "text": test_text, "parse_mode": "HTML"}
+                        res = requests.post(url, json=payload, timeout=6)
+                        lat_ms = round((time.time() - start_t) * 1000, 1)
+
+                        if res.status_code == 200:
+                            st.session_state['tg_diag_status'] = {
+                                "state": "ACTIVE",
+                                "time": now_ist,
+                                "latency": lat_ms,
+                                "msg": "Telegram Alert Delivered Successfully! Check your Telegram App now."
+                            }
+                            st.toast("🎉 TELEGRAM ACTIVE: Alert Delivered!", icon="🟢")
+                        else:
+                            st.session_state['tg_diag_status'] = {
+                                "state": "INACTIVE",
+                                "time": now_ist,
+                                "latency": lat_ms,
+                                "error": f"API Error ({res.status_code}): {res.text}"
+                            }
+                            st.toast(f"❌ TELEGRAM INACTIVE ({res.status_code})", icon="🔴")
+                    except Exception as e:
+                        st.session_state['tg_diag_status'] = {
+                            "state": "INACTIVE",
+                            "time": now_ist,
+                            "latency": 0,
+                            "error": f"Network Exception: {str(e)}"
+                        }
+                        st.toast("❌ TELEGRAM CONNECTION FAILED", icon="🔴")
+
+        with col_reset_tg:
+            if st.button("🔄 Clear Status", key="btn_reset_tg", use_container_width=True):
+                st.session_state.pop('tg_diag_status', None)
+                st.rerun()
+
+        # PERSISTENT TELEGRAM ACTIVE / INACTIVE DISPLAY CARD
+        if 'tg_diag_status' in st.session_state:
+            info = st.session_state['tg_diag_status']
+            if info["state"] == "ACTIVE":
+                st.markdown(f"""
+                <div style="background: rgba(16, 185, 129, 0.12); border: 1px solid #10b981; border-radius: 10px; padding: 14px 18px; margin-top: 10px; margin-bottom: 10px;">
+                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                        <span style="font-size:16px; font-weight:800; color:#10b981;">🟢 TELEGRAM STATUS: ACTIVE & CONNECTED</span>
+                        <span style="background: #10b981; color:#000; font-weight:700; font-size:11px; padding:3px 10px; border-radius:12px;">200 OK</span>
+                    </div>
+                    <div style="font-size:13px; color:#e2e8f0; margin-top:6px;">
+                        ⏱️ <b>Tested At:</b> {info['time']} | ⚡ <b>Latency:</b> {info['latency']} ms<br>
+                        📬 <b>Notification:</b> {info['msg']}
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+            else:
+                st.markdown(f"""
+                <div style="background: rgba(239, 68, 68, 0.12); border: 1px solid #ef4444; border-radius: 10px; padding: 14px 18px; margin-top: 10px; margin-bottom: 10px;">
+                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                        <span style="font-size:16px; font-weight:800; color:#ef4444;">🔴 TELEGRAM STATUS: INACTIVE / ERROR</span>
+                        <span style="background: #ef4444; color:#fff; font-weight:700; font-size:11px; padding:3px 10px; border-radius:12px;">FAILED</span>
+                    </div>
+                    <div style="font-size:13px; color:#fca5a5; margin-top:6px;">
+                        ⏱️ <b>Tested At:</b> {info['time']}<br>
+                        ⚠️ <b>Reason:</b> {info['error']}
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
 
         st.divider()
 
         # -------------------------------------------------------------
-        # 2. DIRECT GOOGLE GEMINI API TESTER WITH INSTANT TOAST POPUP
+        # 2. DIRECT GOOGLE GEMINI API TESTER WITH PERSISTENT ACTIVE/INACTIVE STATUS
         # -------------------------------------------------------------
         st.markdown("### 🤖 Google AI Studio (Gemini 1.5 API) Connection Tester")
         
-        default_gemini_key = st.secrets.get("GEMINI_API_KEY", "")
-        gemini_key_input = st.text_input("Gemini API Key", value=default_gemini_key, type="password", key="input_direct_gemini_key_v3")
+        default_gemini_key = st.secrets.get("GEMINI_API_KEY", os.getenv("GEMINI_API_KEY", ""))
+        gemini_key_input = st.text_input("Gemini API Key", value=default_gemini_key, type="password", key="input_direct_gemini_key_v4")
 
-        if st.button("🚀 Test Google Gemini API Connection Now", key="btn_direct_gemini_test_v3", use_container_width=True):
-            try:
-                import google.generativeai as genai
-                import time
-                if gemini_key_input and "YOUR_" not in gemini_key_input:
-                    genai.configure(api_key=gemini_key_input)
+        col_btn_gm, col_reset_gm = st.columns([0.75, 0.25])
+        with col_btn_gm:
+            if st.button("🚀 Cross-Check Gemini API Key & Verify AI Connection", key="btn_direct_gemini_test_v4", use_container_width=True):
+                with st.spinner("Pinging Google AI Studio and testing Gemini 1.5 Flash model..."):
+                    import time
                     start_t = time.time()
-                    model = genai.GenerativeModel('gemini-1.5-flash')
-                    res = model.generate_content("Respond in 1 short sentence confirming ANTONY Quant Terminal connection.")
-                    latency = round((time.time() - start_t) * 1000, 2)
-                    
-                    st.toast(f"🎉 GEMINI CONNECTED! Latency: {latency} ms", icon="🤖")
-                    st.success(f"🎉 **GEMINI CONNECTED SUCCESSFULLY!** (Latency: `{latency} ms`)")
-                    st.info(f"🤖 **Gemini Live Response:** {res.text.strip()}")
-                else:
-                    st.error("❌ **KEY MISSING:** Please paste your Gemini API Key in the box above first!")
-            except Exception as e:
-                st.error(f"❌ **GEMINI API ERROR:** {str(e)}")
+                    now_ist = datetime.datetime.now(pytz.timezone('Asia/Kolkata')).strftime('%I:%M:%S %p IST, %d-%b-%Y')
+                    try:
+                        import google.generativeai as genai
+                        if gemini_key_input and "YOUR_" not in str(gemini_key_input):
+                            genai.configure(api_key=gemini_key_input)
+                            model = genai.GenerativeModel('gemini-1.5-flash')
+                            res = model.generate_content("Respond in 1 short sentence confirming ANTONY Quant Terminal connection.")
+                            lat_ms = round((time.time() - start_t) * 1000, 1)
+
+                            st.session_state['gemini_diag_status'] = {
+                                "state": "ACTIVE",
+                                "time": now_ist,
+                                "latency": lat_ms,
+                                "model": "gemini-1.5-flash",
+                                "response": res.text.strip()
+                            }
+                            st.toast(f"🎉 GEMINI ACTIVE! Latency: {lat_ms} ms", icon="🟢")
+                        else:
+                            st.session_state['gemini_diag_status'] = {
+                                "state": "INACTIVE",
+                                "time": now_ist,
+                                "latency": 0,
+                                "error": "Gemini API Key is missing or invalid! Please paste a valid key from Google AI Studio."
+                            }
+                            st.toast("❌ GEMINI API KEY MISSING", icon="🔴")
+                    except Exception as e:
+                        lat_ms = round((time.time() - start_t) * 1000, 1)
+                        st.session_state['gemini_diag_status'] = {
+                            "state": "INACTIVE",
+                            "time": now_ist,
+                            "latency": lat_ms,
+                            "error": f"Gemini API Error: {str(e)}"
+                        }
+                        st.toast("❌ GEMINI API ERROR", icon="🔴")
+
+        with col_reset_gm:
+            if st.button("🔄 Clear Status", key="btn_reset_gemini", use_container_width=True):
+                st.session_state.pop('gemini_diag_status', None)
+                st.rerun()
+
+        # PERSISTENT GEMINI ACTIVE / INACTIVE DISPLAY CARD
+        if 'gemini_diag_status' in st.session_state:
+            g_info = st.session_state['gemini_diag_status']
+            if g_info["state"] == "ACTIVE":
+                st.markdown(f"""
+                <div style="background: rgba(16, 185, 129, 0.12); border: 1px solid #10b981; border-radius: 10px; padding: 14px 18px; margin-top: 10px; margin-bottom: 10px;">
+                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                        <span style="font-size:16px; font-weight:800; color:#10b981;">🟢 GEMINI API STATUS: ACTIVE & VERIFIED</span>
+                        <span style="background: #10b981; color:#000; font-weight:700; font-size:11px; padding:3px 10px; border-radius:12px;">{g_info.get('model', 'gemini-1.5-flash')}</span>
+                    </div>
+                    <div style="font-size:13px; color:#e2e8f0; margin-top:6px;">
+                        ⏱️ <b>Verified At:</b> {g_info['time']} | ⚡ <b>Latency:</b> {g_info['latency']} ms<br>
+                        🤖 <b>Live AI Response:</b> <i>"{g_info['response']}"</i>
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+            else:
+                st.markdown(f"""
+                <div style="background: rgba(239, 68, 68, 0.12); border: 1px solid #ef4444; border-radius: 10px; padding: 14px 18px; margin-top: 10px; margin-bottom: 10px;">
+                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                        <span style="font-size:16px; font-weight:800; color:#ef4444;">🔴 GEMINI API STATUS: INACTIVE / INVALID KEY</span>
+                        <span style="background: #ef4444; color:#fff; font-weight:700; font-size:11px; padding:3px 10px; border-radius:12px;">ERROR</span>
+                    </div>
+                    <div style="font-size:13px; color:#fca5a5; margin-top:6px;">
+                        ⏱️ <b>Tested At:</b> {g_info['time']}<br>
+                        ⚠️ <b>Reason:</b> {g_info['error']}
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
 
         st.divider()
 
@@ -2162,11 +2284,11 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
         
         col_b1, col_b2 = st.columns(2)
         with col_b1:
-            st.text_input("Binance API Key", type="password", value=st.secrets.get("BINANCE_API_KEY", ""), key="input_binance_key_v3")
-            st.text_input("Binance API Secret", type="password", value=st.secrets.get("BINANCE_API_SECRET", ""), key="input_binance_secret_v3")
+            st.text_input("Binance API Key", type="password", value=st.secrets.get("BINANCE_API_KEY", ""), key="input_binance_key_v4")
+            st.text_input("Binance API Secret", type="password", value=st.secrets.get("BINANCE_API_SECRET", ""), key="input_binance_secret_v4")
         with col_b2:
-            st.text_input("Zerodha API Key", type="password", value=st.secrets.get("ZERODHA_API_KEY", ""), key="input_zerodha_key_v3")
-            st.text_input("Zerodha API Secret", type="password", value=st.secrets.get("ZERODHA_API_SECRET", ""), key="input_zerodha_secret_v3")
+            st.text_input("Zerodha API Key", type="password", value=st.secrets.get("ZERODHA_API_KEY", ""), key="input_zerodha_key_v4")
+            st.text_input("Zerodha API Secret", type="password", value=st.secrets.get("ZERODHA_API_SECRET", ""), key="input_zerodha_secret_v4")
 
         st.divider()
 
