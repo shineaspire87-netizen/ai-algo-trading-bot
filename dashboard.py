@@ -142,7 +142,7 @@ def get_active_trade_file_path() -> str:
         return 'active_trade.json'
 
 def render_active_position_card(active_trade: dict):
-    """Renders Active Position Card displaying exact Lots, Quantity, Premium & Margin Blocked"""
+    """Renders Active Position Card with 100% Guaranteed Native HTML (No Raw Tags!)"""
     if not active_trade or active_trade.get('status') != 'ACTIVE':
         return
 
@@ -155,28 +155,21 @@ def render_active_position_card(active_trade: dict):
     is_crypto = any(k in symbol.upper() for k in ["BITCOIN", "ETHEREUM", "BTC", "ETH"])
     curr = "$" if is_crypto else "₹"
     
-    # Calculate Lot Count & Total Margin Blocked
+    # Calculate Lot Label & Margin Blocked
     if "NIFTY" in symbol and "BANK" not in symbol:
-        lot_count = max(1, qty // 25)
-        lot_label = f"{lot_count} Lot ({qty} Qty)"
+        lot_label = f"{max(1, qty // 25)} Lot ({qty} Qty)"
     elif "BANKNIFTY" in symbol:
-        lot_count = max(1, qty // 15)
-        lot_label = f"{lot_count} Lot ({qty} Qty)"
+        lot_label = f"{max(1, qty // 15)} Lot ({qty} Qty)"
     elif "RELIANCE" in symbol:
-        lot_count = max(1, qty // 250)
-        lot_label = f"{lot_count} Lot ({qty} Qty)"
+        lot_label = f"{max(1, qty // 250)} Lot ({qty} Qty)"
     elif "HDFCBANK" in symbol:
-        lot_count = max(1, qty // 550)
-        lot_label = f"{lot_count} Lot ({qty} Qty)"
+        lot_label = f"{max(1, qty // 550)} Lot ({qty} Qty)"
     elif "ICICIBANK" in symbol:
-        lot_count = max(1, qty // 700)
-        lot_label = f"{lot_count} Lot ({qty} Qty)"
+        lot_label = f"{max(1, qty // 700)} Lot ({qty} Qty)"
     elif "INFY" in symbol:
-        lot_count = max(1, qty // 400)
-        lot_label = f"{lot_count} Lot ({qty} Qty)"
+        lot_label = f"{max(1, qty // 400)} Lot ({qty} Qty)"
     elif "SBIN" in symbol:
-        lot_count = max(1, qty // 750)
-        lot_label = f"{lot_count} Lot ({qty} Qty)"
+        lot_label = f"{max(1, qty // 750)} Lot ({qty} Qty)"
     else:
         lot_label = f"{qty} Qty / Lots"
 
@@ -185,17 +178,17 @@ def render_active_position_card(active_trade: dict):
     pnl_color = "#10b981" if floating_pnl >= 0 else "#ef4444"
 
     card_html = f"""
-    <div style="background: rgba(17, 24, 39, 0.85); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 12px; padding: 18px; margin-bottom: 20px;">
+    <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: rgba(17, 24, 39, 0.9); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 12px; padding: 16px; color: #f3f4f6;">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-            <div style="font-size: 16px; font-weight: 800; color: #f3f4f6;">🚨 ACTIVE POSITION: {symbol} ({option_type})</div>
+            <div style="font-size: 15px; font-weight: 800; color: #f3f4f6;">🚨 ACTIVE POSITION: {symbol} ({option_type})</div>
             <span style="background: rgba(16, 185, 129, 0.2); color: #10b981; border: 1px solid #10b981; font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 20px;">🟢 LIVE TRADE ACTIVE</span>
         </div>
 
-        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; background: rgba(30, 41, 59, 0.6); padding: 12px; border-radius: 8px; margin-bottom: 12px;">
-            <div><span style="color: #9ca3af; font-size: 11px;">📦 QUANTITY / LOTS:</span><br/><b style="color: #60a5fa; font-size: 14px;">{lot_label}</b></div>
-            <div><span style="color: #9ca3af; font-size: 11px;">💵 ENTRY PREMIUM:</span><br/><b style="color: #f3f4f6; font-size: 14px;">{curr}{entry_premium:,.2f}</b></div>
-            <div><span style="color: #9ca3af; font-size: 11px;">📈 LIVE PREMIUM:</span><br/><b style="color: {pnl_color}; font-size: 14px;">{curr}{live_premium:,.2f}</b></div>
-            <div><span style="color: #9ca3af; font-size: 11px;">💸 MARGIN BLOCKED:</span><br/><b style="color: #f59e0b; font-size: 14px;">{curr}{margin_blocked:,.2f}</b></div>
+        <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; background: rgba(30, 41, 59, 0.6); padding: 12px; border-radius: 8px; margin-bottom: 12px;">
+            <div><span style="color: #9ca3af; font-size: 11px;">📦 QUANTITY / LOTS:</span><br/><b style="color: #60a5fa; font-size: 13px;">{lot_label}</b></div>
+            <div><span style="color: #9ca3af; font-size: 11px;">💵 ENTRY PREMIUM:</span><br/><b style="color: #f3f4f6; font-size: 13px;">{curr}{entry_premium:,.2f}</b></div>
+            <div><span style="color: #9ca3af; font-size: 11px;">📈 LIVE PREMIUM:</span><br/><b style="color: {pnl_color}; font-size: 13px;">{curr}{live_premium:,.2f}</b></div>
+            <div><span style="color: #9ca3af; font-size: 11px;">💸 MARGIN BLOCKED:</span><br/><b style="color: #f59e0b; font-size: 13px;">{curr}{margin_blocked:,.2f}</b></div>
         </div>
 
         <div style="font-size: 15px; font-weight: 800; color: {pnl_color};">
@@ -203,7 +196,9 @@ def render_active_position_card(active_trade: dict):
         </div>
     </div>
     """
-    st.markdown(card_html, unsafe_allow_html=True)
+    
+    # GUARANTEED Native Component Rendering
+    components.html(card_html, height=185, scrolling=False)
 
 def render_institutional_quant_cards(bias_status, conf_score, vwap_val, pdh_val, pdl_val, atr_val, adx_val, vol_ratio, vcp_status, sweep_status, diagnostic_reason):
     """Renders Ultra-Premium Dark Glassmorphism Quant Cards using Safe Newline-Free HTML"""
