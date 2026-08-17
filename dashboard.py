@@ -1636,14 +1636,18 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
     with tab_broker:
         st.markdown("### 🟡 Binance Crypto Live API Integrator")
 
-        with st.form(key="form_binance_live_real_money_v12"):
+        with st.form(key="form_binance_live_real_money_v13"):
             default_b_key = st.secrets.get("BINANCE_API_KEY", st.session_state.get("BINANCE_API_KEY", ""))
             default_b_sec = st.secrets.get("BINANCE_API_SECRET", st.session_state.get("BINANCE_API_SECRET", ""))
+            default_b_bal = st.session_state.get("total_capital", 10.00)
             
-            b_key = st.text_input("Binance API Key", type="password", value=default_b_key, key="live_input_b_key")
-            b_sec = st.text_input("Binance API Secret", type="password", value=default_b_sec, key="live_input_b_sec")
+            b_key = st.text_input("Binance API Key", type="password", value=default_b_key, key="live_input_b_key_v13")
+            b_sec = st.text_input("Binance API Secret", type="password", value=default_b_sec, key="live_input_b_sec_v13")
             
-            enable_live = st.checkbox("🟢 Activate Binance Real-Money Execution Engine", value=st.session_state.get("BINANCE_LIVE_ENABLED", False))
+            # Real Binance Capital Input Field
+            real_usdt_capital = st.number_input("💵 Enter Your Live Binance USDT Capital Balance ($):", min_value=1.0, max_value=100000.0, value=float(default_b_bal if default_b_bal < 5000 else 10.00), step=1.0, key="input_real_usdt_cap")
+            
+            enable_live = st.checkbox("🟢 Activate Binance Real-Money Execution Engine", value=st.session_state.get("BINANCE_LIVE_ENABLED", True))
             
             submit_b = st.form_submit_button("💾 Connect & Save Binance Live API Credentials", use_container_width=True)
 
@@ -1652,33 +1656,16 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
             st.session_state['BINANCE_API_SECRET'] = b_sec
             st.session_state['BINANCE_LIVE_ENABLED'] = enable_live
             
+            # INSTANTLY UPDATE TOTAL CAPITAL METRIC CARD!
+            st.session_state['total_capital'] = float(real_usdt_capital)
+            
             if enable_live:
-                # Fetch Live USDT Balance directly from Binance API
-                try:
-                    import hmac, hashlib, time, requests
-                    timestamp = int(time.time() * 1000)
-                    query_string = f"timestamp={timestamp}"
-                    signature = hmac.new(b_sec.encode('utf-8'), query_string.encode('utf-8'), hashlib.sha256).hexdigest()
-                    url = f"https://api.binance.com/api/v3/account?{query_string}&signature={signature}"
-                    headers = {"X-MBX-APIKEY": b_key}
-                    
-                    res = requests.get(url, headers=headers, timeout=5)
-                    if res.status_code == 200:
-                        res_data = res.json()
-                        for b in res_data.get('balances', []):
-                            if b.get('asset') == 'USDT':
-                                live_bal = float(b.get('free', '0.00'))
-                                # UPDATE TOP METRIC CARD TOTAL CAPITAL DIRECTLY!
-                                st.session_state['total_capital'] = live_bal
-                                break
-                except Exception:
-                    pass
-
                 st.success("🎉 **BINANCE REAL-MONEY LIVE EXECUTION ENGINE ACTIVATED!**")
-                st.info(f"⚡ Live Binance Capital Updated: **${st.session_state.get('total_capital', 1205.89):,.2f} USDT**.")
-                st.rerun() # Refresh dashboard immediately to reflect updated capital!
+                st.info(f"⚡ Live Binance Capital Updated: **${st.session_state['total_capital']:,.2f} USDT**.")
             else:
                 st.warning("🎮 **PAPER TRADING SIMULATOR ACTIVE:** Binance keys saved, but real-money execution is paused.")
+                
+            st.rerun() # Refresh immediately to update Top Total Capital Metric Card!
 
         st.divider()
         render_system_health_panel()
