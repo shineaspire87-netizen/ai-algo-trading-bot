@@ -2116,50 +2116,56 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
             return False, f"🔴 **TELEGRAM CONNECTION EXCEPTION:** {str(e)}"
 
     def check_authentic_gemini_backend_ping() -> tuple[bool, str]:
-        """Performs authentic API ping to Google AI Studio with Gemini 2.5 Flash / 2.0 Flash dynamic fallback"""
+        """Dynamically tests all active 2026 Gemini model strings (2.5-flash, 2.0-flash, 1.5-flash-latest, 1.5-pro)"""
         gemini_key = st.secrets.get("GEMINI_API_KEY", os.getenv("GEMINI_API_KEY", st.session_state.get("GEMINI_API_KEY", "")))
         if not gemini_key or "YOUR_" in str(gemini_key):
-            return False, "🟡 **GEMINI API KEY NOTICE:** Key missing in secrets. Please add `GEMINI_API_KEY` in Streamlit Cloud Secrets."
+            return False, "🟡 **GEMINI API KEY NOTICE:** Key missing or empty in Streamlit Secrets. Enter your Gemini API Key in the expander below."
             
         try:
             import google.generativeai as genai
             genai.configure(api_key=gemini_key)
             start_t = time.time()
             
-            # Prioritized Models (Gemini 2.5 Flash / 2.0 Flash First)
-            candidates = [
+            # Candidate model strings for 2026
+            candidate_models = [
                 "gemini-2.5-flash",
                 "gemini-2.0-flash",
-                "gemini-2.0-flash-exp",
-                "gemini-2.5-pro",
                 "gemini-1.5-flash-latest",
-                "gemini-1.5-pro-latest",
                 "gemini-1.5-pro",
                 "gemini-pro"
             ]
             
+            # 1. Try dynamic discovery first
             try:
-                for m in genai.list_models():
-                    if 'generateContent' in m.supported_generation_methods:
-                        clean = m.name.replace("models/", "")
-                        if clean not in candidates:
-                            candidates.append(clean)
+                available = [m.name.replace("models/", "") for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
+                if available:
+                    candidate_models = available + candidate_models
             except Exception:
                 pass
 
-            last_error = ""
-            for cand in candidates:
+            # 2. Iterate through candidate models until one responds HTTP 200 OK
+            working_model_name = None
+            working_res_text = ""
+            
+            for m_str in candidate_models:
                 try:
-                    model = genai.GenerativeModel(cand)
-                    res = model.generate_content("Ping")
+                    model_obj = genai.GenerativeModel(m_str)
+                    res = model_obj.generate_content("Ping")
                     if res and res.text:
-                        latency = round((time.time() - start_t) * 1000, 2)
-                        return True, f"🤖 **GOOGLE GEMINI AI ({cand.upper()}) CONNECTED SUCCESSFULLY!**\n\n• **Active Model:** `{cand}` | **Server Status:** `HTTP 200 OK`\n• **Response Time:** `{latency} ms` | **Gemini Reply:** `{res.text.strip()}`"
-                except Exception as e_cand:
-                    last_error = str(e_cand)
+                        working_model_name = m_str
+                        working_res_text = res.text.strip()
+                        break
+                except Exception:
                     continue
 
-            return False, f"🔴 **GEMINI BACKEND EXCEPTION:** {last_error}"
+            latency = round((time.time() - start_t) * 1000, 2)
+
+            if working_model_name:
+                clean_m = working_model_name.replace("models/", "")
+                return True, f"🤖 **GOOGLE GEMINI AI CONNECTED SUCCESSFULLY!**\n\n• **Active Working Model:** `{clean_m}` | **Server Status:** `HTTP 200 OK`\n• **Response Time:** `{latency} ms` | **Gemini Reply:** `{working_res_text}`"
+            else:
+                return False, "🔴 **GEMINI BACKEND EXCEPTION:** No active Gemini model string responded to generateContent. Please verify your API Key in Google AI Studio."
+
         except Exception as e:
             return False, f"🔴 **GEMINI BACKEND EXCEPTION:** {str(e)}"
 
