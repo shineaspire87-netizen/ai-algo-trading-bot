@@ -141,6 +141,70 @@ def get_active_trade_file_path() -> str:
     except Exception:
         return 'active_trade.json'
 
+def render_active_position_card(active_trade: dict):
+    """Renders Active Position Card displaying exact Lots, Quantity, Premium & Margin Blocked"""
+    if not active_trade or active_trade.get('status') != 'ACTIVE':
+        return
+
+    symbol = active_trade.get('Symbol') or active_trade.get('symbol', '')
+    option_type = active_trade.get('Option_Type') or active_trade.get('type', '')
+    entry_premium = float(active_trade.get('Entry_Price') or active_trade.get('entry_price', 0.0))
+    live_premium = float(active_trade.get('Live_Price') or active_trade.get('live_price', entry_premium))
+    qty = int(active_trade.get('Quantity') or active_trade.get('qty', 1))
+    
+    is_crypto = any(k in symbol.upper() for k in ["BITCOIN", "ETHEREUM", "BTC", "ETH"])
+    curr = "$" if is_crypto else "₹"
+    
+    # Calculate Lot Count & Total Margin Blocked
+    if "NIFTY" in symbol and "BANK" not in symbol:
+        lot_count = max(1, qty // 25)
+        lot_label = f"{lot_count} Lot ({qty} Qty)"
+    elif "BANKNIFTY" in symbol:
+        lot_count = max(1, qty // 15)
+        lot_label = f"{lot_count} Lot ({qty} Qty)"
+    elif "RELIANCE" in symbol:
+        lot_count = max(1, qty // 250)
+        lot_label = f"{lot_count} Lot ({qty} Qty)"
+    elif "HDFCBANK" in symbol:
+        lot_count = max(1, qty // 550)
+        lot_label = f"{lot_count} Lot ({qty} Qty)"
+    elif "ICICIBANK" in symbol:
+        lot_count = max(1, qty // 700)
+        lot_label = f"{lot_count} Lot ({qty} Qty)"
+    elif "INFY" in symbol:
+        lot_count = max(1, qty // 400)
+        lot_label = f"{lot_count} Lot ({qty} Qty)"
+    elif "SBIN" in symbol:
+        lot_count = max(1, qty // 750)
+        lot_label = f"{lot_count} Lot ({qty} Qty)"
+    else:
+        lot_label = f"{qty} Qty / Lots"
+
+    margin_blocked = entry_premium * qty
+    floating_pnl = (live_premium - entry_premium) * qty
+    pnl_color = "#10b981" if floating_pnl >= 0 else "#ef4444"
+
+    card_html = f"""
+    <div style="background: rgba(17, 24, 39, 0.85); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 12px; padding: 18px; margin-bottom: 20px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+            <div style="font-size: 16px; font-weight: 800; color: #f3f4f6;">🚨 ACTIVE POSITION: {symbol} ({option_type})</div>
+            <span style="background: rgba(16, 185, 129, 0.2); color: #10b981; border: 1px solid #10b981; font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 20px;">🟢 LIVE TRADE ACTIVE</span>
+        </div>
+
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; background: rgba(30, 41, 59, 0.6); padding: 12px; border-radius: 8px; margin-bottom: 12px;">
+            <div><span style="color: #9ca3af; font-size: 11px;">📦 QUANTITY / LOTS:</span><br/><b style="color: #60a5fa; font-size: 14px;">{lot_label}</b></div>
+            <div><span style="color: #9ca3af; font-size: 11px;">💵 ENTRY PREMIUM:</span><br/><b style="color: #f3f4f6; font-size: 14px;">{curr}{entry_premium:,.2f}</b></div>
+            <div><span style="color: #9ca3af; font-size: 11px;">📈 LIVE PREMIUM:</span><br/><b style="color: {pnl_color}; font-size: 14px;">{curr}{live_premium:,.2f}</b></div>
+            <div><span style="color: #9ca3af; font-size: 11px;">💸 MARGIN BLOCKED:</span><br/><b style="color: #f59e0b; font-size: 14px;">{curr}{margin_blocked:,.2f}</b></div>
+        </div>
+
+        <div style="font-size: 15px; font-weight: 800; color: {pnl_color};">
+            📊 LIVE FLOATING P&L: {curr}{floating_pnl:+,.2f} ({(floating_pnl/margin_blocked)*100 if margin_blocked > 0 else 0:+.2f}%)
+        </div>
+    </div>
+    """
+    st.markdown(card_html, unsafe_allow_html=True)
+
 def render_institutional_quant_cards(bias_status, conf_score, vwap_val, pdh_val, pdl_val, atr_val, adx_val, vol_ratio, vcp_status, sweep_status, diagnostic_reason):
     """Renders Ultra-Premium Dark Glassmorphism Quant Cards using Safe Newline-Free HTML"""
     
@@ -1498,26 +1562,18 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
                     st.success("✅ பொசிஷன் க்ளோஸ் செய்யப்பட்டு, trades.csv & Capital கணக்கில் அப்ளிகேட் செய்யப்பட்டது!")
                     st.rerun()
 
+            active_data['Live_Price'] = live_premium
+            render_active_position_card(active_data)
+
             st.markdown(f"""
-            <div class="glass-card-green">
-                <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap:wrap; gap:10px;">
-                    <h3 style="margin:0; color:#38bdf8;">🚨 ACTIVE POSITION: {sym} ({opt_type})</h3>
-                    <span class="badge-tag" style="background:#10b981;">🔓 ACTIVE LIVE TRADE</span>
-                </div>
-                <hr style="border-color: rgba(255,255,255,0.15); margin: 12px 0;">
+            <div class="glass-card-green" style="margin-top:-10px;">
                 <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; font-size: 15px;">
                     <div>📍 <b>1. Entry Stock Price:</b> <span class="highlight-entry">{p_curr}{e_stock_p:,.2f}</span></div>
                     <div><b>2. Live Stock Price:</b> <span style="font-weight:bold; color:#00e5ff;">{p_curr}{curr_active_stock_p:,.2f}</span></div>
                     <div><b>3. Target Stock Price:</b> <span class="highlight-target">{p_curr}{target_stock_p:,.2f} 🎯</span></div>
                     <div><b>4. SL Stock Price:</b> <span class="highlight-sl">{p_curr}{sl_stock_p:,.2f} ❌</span></div>
                 </div>
-                <hr style="border-color: rgba(255,255,255,0.15); margin: 12px 0;">
-                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; font-size: 15px;">
-                    <div><b>Entry Premium:</b> {p_curr}{e_price:.2f} ➔ <b>Live Premium:</b> {p_curr}{live_premium:.2f}</div>
-                    <div><b>Capital at Risk:</b> <span style="color:#f87171;">{capital_risk_pct:.2f}% ({p_curr}{risk_amount:,.2f})</span></div>
-                    <div><b>Live Floating P&L:</b> <span style="font-size:18px; font-weight:bold; color:{pnl_color};">{p_curr}{live_pnl:+,.2f} ({pnl_pct:+.2f}%)</span></div>
-                </div>
-                <hr style="border-color: rgba(255,255,255,0.15); margin: 12px 0;">
+                <hr style="border-color: rgba(255,255,255,0.15); margin: 10px 0;">
                 <small style="color:#cbd5e1;"><b>🔍 AI Thinking Process:</b><br>• Active Position: {sym} ({opt_type}) ➔ Live Risk & Trailing SL Active.<br>• Elapsed Time: {elapsed_mins:.1f} Mins (Max 20 Mins Limit).<br>• Position Rule: Currently holding active position. Opposite signals ignored until Target/SL/Timeout.</small>
             </div>
             """, unsafe_allow_html=True)
