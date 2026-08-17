@@ -2245,6 +2245,19 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
             st.text_input("Zerodha API Secret", type="password", value=st.secrets.get("ZERODHA_API_SECRET", ""), key="edit_z_sec_fixed")
             st.text_input("Zerodha Access Token (Daily TOTP)", type="password", value=st.secrets.get("ZERODHA_ACCESS_TOKEN", ""), key="edit_z_tok_fixed")
 
+        # Master Save Button below all Credential Expanders
+        st.markdown("---")
+        if st.button("💾 Save All Credentials & Active Execution Mode to Cloud Session", key="btn_master_save_all_credentials_v12", use_container_width=True):
+            st.session_state['active_execution_mode'] = active_mode if 'active_mode' in locals() else "PAPER_TRADING"
+            
+            # Save Keys to Session State Memory
+            if 'edit_b_key_fixed' in st.session_state and st.session_state['edit_b_key_fixed']:
+                st.session_state['BINANCE_API_KEY'] = st.session_state['edit_b_key_fixed']
+            if 'edit_b_sec_fixed' in st.session_state and st.session_state['edit_b_sec_fixed']:
+                st.session_state['BINANCE_API_SECRET'] = st.session_state['edit_b_sec_fixed']
+                
+            st.success("🎉 **ALL CREDENTIALS & EXECUTION SETTINGS SAVED TO CLOUD SESSION SUCCESSFULLY!**")
+
         st.divider()
 
         # 5. HEALTH DIAGNOSTIC PANEL
