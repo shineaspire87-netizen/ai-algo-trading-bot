@@ -1,5 +1,17 @@
-# dashboard.py - Antony Quant AI Algo Terminal (Complete Institutional Engine & Live Sync)
+# dashboard.py - 24/7 Auto-Refresh Background Loop Engine
+
 import streamlit as st
+import os
+import json
+import pandas as pd
+
+# 1. Official Streamlit Auto-Refresh Component (Runs Every 3 Seconds Automatically)
+try:
+    from streamlit_autorefresh import st_autorefresh
+    # Auto-refreshes every 3000ms (3 seconds) continuously in background
+    count = st_autorefresh(interval=3000, limit=None, key="autobot_247_loop")
+except Exception as e:
+    pass
 
 # Top of dashboard.py (Global Scope)
 ACTIVE_TRADE_FILE = "active_trade.json"
@@ -8,7 +20,6 @@ from system_health import check_system_integrity, run_comprehensive_health_check
 from config import GOOGLE_SHEET_WEB_APP_URL, TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID
 from multi_strategy import evaluate_soft_kill_switch_position_scaling, calculate_dynamic_atr_levels, detect_vcp_squeeze_contraction, detect_liquidity_sweep_trap, evaluate_pyramiding_scaling
 import streamlit.components.v1 as components
-import pandas as pd
 
 def render_tradingview_live_chart(asset_name: str):
     """Renders TradingView embedded iframe chart with 100% valid unrestricted futures symbols"""
