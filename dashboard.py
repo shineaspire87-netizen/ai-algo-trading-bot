@@ -117,7 +117,7 @@ import requests
 import xml.etree.ElementTree as ET
 import yfinance as yf
 import ta
-from paper_broker import PaperBroker
+from paper_broker import PaperBroker, get_official_nse_lot_size
 
 try:
     from config import CSV_FILE
@@ -1298,7 +1298,7 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
         
             tgt_prem = round(prem * 1.12, 2)
             sl_prem = round(prem * 0.93, 2)
-            qty = 15
+            qty = get_official_nse_lot_size(asset_name)
 
             active_data = {
                 "status": "ACTIVE",

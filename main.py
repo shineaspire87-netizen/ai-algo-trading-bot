@@ -1,7 +1,7 @@
 # main.py - Stock Price Sync Fix
 import time
 from multi_strategy import scan_all_assets
-from paper_broker import PaperBroker
+from paper_broker import PaperBroker, get_official_nse_lot_size
 
 def run_multi_asset_bot():
     print("==========================================================")
@@ -31,7 +31,7 @@ def run_multi_asset_bot():
                     option_type=opt_type, 
                     entry_price=premium, 
                     stock_price=price, 
-                    qty=15
+                    qty=get_official_nse_lot_size(name)
                 )
 
             elif broker.position is not None:

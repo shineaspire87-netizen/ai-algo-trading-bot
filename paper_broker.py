@@ -11,6 +11,25 @@ ACTIVE_JSON = "active_trade.json"
 STATE_JSON = "live_state.json"
 BROKERAGE_PER_TRADE = 45.0
 
+def get_official_nse_lot_size(symbol: str) -> int:
+    """Returns official NSE Exchange Lot Size for Options"""
+    sym = str(symbol).upper()
+    if "NIFTY" in sym and "BANK" not in sym:
+        return 25  # Nifty 50 Lot Size
+    elif "BANKNIFTY" in sym:
+        return 15  # BankNifty Lot Size
+    elif "RELIANCE" in sym:
+        return 250 # Reliance Stock Option Lot Size
+    elif "HDFCBANK" in sym:
+        return 550 # HDFC Bank Option Lot Size
+    elif "ICICIBANK" in sym:
+        return 700 # ICICI Bank Option Lot Size
+    elif "INFY" in sym:
+        return 400 # Infosys Option Lot Size
+    elif "SBIN" in sym:
+        return 750 # SBI Option Lot Size
+    return 15      # Crypto / Default Lot Size
+
 def slice_order_quantity(symbol, total_qty):
     """SEBI Order Slicing Engine: Splits large parent orders into compliant child slices"""
     asset_key = "BANKNIFTY" if "BANK" in symbol else ("NIFTY50" if "NIFTY" in symbol else "DEFAULT")
@@ -222,7 +241,10 @@ class PaperBroker:
             json.dump({"status": "NO_POSITION"}, f, indent=4)
         self._update_active_json()
 
-    def buy_option(self, symbol, option_type, entry_price, stock_price=0.0, qty=15, stop_loss_pct=0.15, target_pct=0.30):
+    def buy_option(self, symbol, option_type, entry_price, stock_price=0.0, qty=None, stop_loss_pct=0.15, target_pct=0.30):
+        if qty is None:
+            qty = get_official_nse_lot_size(symbol)
+
         if self.daily_trades_count >= self.max_trades_per_day:
             print(f"\n[RISK GUARD] 🚫 Max Trades Limit ({self.max_trades_per_day}) reached for today.")
             return
