@@ -1035,8 +1035,8 @@ def fetch_real_today_news_rss():
     except Exception as e:
         return "🟢 TODAY'S NEWS SENTIMENT STABLE", "✅ இன்றைய செய்திகள் நிலவரம் சாதகமாக உள்ளது.", "glass-card-green", ["• Today's live news feed connected."]
 
-# 🟢 INSTANT BINANCE LIVE ASSET PRICE SYNC (Asset-Specific Keying)
-def get_live_asset_price_safe(binance_sym: str) -> float:
+# 🟢 INSTANT BINANCE LIVE ASSET PRICE SYNC (Pure Spot Keying - No Price Bleed/Flashing)
+def get_asset_spot_price_pure(binance_sym: str) -> float:
     """Fetches exact real-time spot price matching the asset's specific symbol without mixing with Bitcoin"""
     sym = str(binance_sym).upper().replace("BINANCE:", "").replace("-USD", "USDT")
     if "BTC" in sym or "BITCOIN" in sym:
@@ -1046,16 +1046,24 @@ def get_live_asset_price_safe(binance_sym: str) -> float:
     elif "SOL" in sym or "SOLANA" in sym:
         sym = "SOLUSDT"
         
+    state_key = f"realtime_pure_{sym}"
     try:
         url = f"https://api.binance.com/api/v3/ticker/price?symbol={sym}"
         res = requests.get(url, timeout=2)
         if res.status_code == 200:
-            return float(res.json().get('price', 0.0))
+            price_val = float(res.json().get('price', 0.0))
+            st.session_state[state_key] = price_val
+            return price_val
     except Exception:
         pass
-    return 1897.10 if "ETH" in sym else (145.20 if "SOL" in sym else 63491.47)
 
-get_realtime_crypto_price = get_live_asset_price_safe
+    if state_key in st.session_state and st.session_state[state_key] > 0:
+        return float(st.session_state[state_key])
+
+    return 1899.47 if "ETH" in sym else (145.20 if "SOL" in sym else 63491.47)
+
+get_live_asset_price_safe = get_asset_spot_price_pure
+get_realtime_crypto_price = get_asset_spot_price_pure
 
 def calculate_hurst_exponent(ts: pd.Series, max_lag: int = 20) -> float:
     """Calculates Hurst Exponent (H < 0.45 indicates mean-reverting sideways chop)"""
@@ -1069,20 +1077,22 @@ def calculate_hurst_exponent(ts: pd.Series, max_lag: int = 20) -> float:
 
 st.sidebar.header("🕹️ Control Panel")
 
-# 🟢 SIDEBAR ACTIVE TRADE GLOW INDICATOR
+# 1. SIDEBAR ACTIVE TRADE GLOWING ALERT BOX
 active_json_file = get_active_trade_file_path()
-if os.path.exists(active_json_file):
+if os.path.exists(active_json_file) and os.path.getsize(active_json_file) > 0:
     try:
-        with open(active_json_file, "r", encoding="utf-8") as f:
-            side_active = json.load(f)
-            if side_active.get("status") == "ACTIVE":
-                act_sym = side_active.get("symbol", "").split("_")[0]
-                act_type = side_active.get("type", "CALL")
+        with open(active_json_file, 'r') as f:
+            act_data = json.load(f)
+            if act_data and act_data.get('status') == 'ACTIVE':
+                act_sym = act_data.get('Symbol', act_data.get('symbol', ''))
+                act_type = act_data.get('Option_Type', act_data.get('type', 'CALL'))
+                
+                # GLOWING RED ALERT BOX IN SIDEBAR
                 st.sidebar.markdown(f"""
-                <div style="background: rgba(225, 29, 72, 0.25); border: 2px solid #f43f5e; border-radius: 10px; padding: 12px; margin-bottom: 15px; color: white;">
-                    <h4 style="margin:0; color:#f43f5e;">🚨 ACTIVE TRADE RUNNING!</h4>
-                    <p style="margin:5px 0 0 0; font-size:15px; font-weight:bold;">Asset: {act_sym} ({act_type})</p>
-                    <small style="color:#cbd5e1;">Select <b>{act_sym}</b> in chart to manage position.</small>
+                <div style="background: rgba(239, 68, 68, 0.2); border: 2px solid #ef4444; border-radius: 10px; padding: 12px; margin-bottom: 15px; text-align: center;">
+                    <div style="color: #ef4444; font-size: 14px; font-weight: 800;">🚨 ACTIVE TRADE RUNNING!</div>
+                    <div style="color: #f3f4f6; font-size: 13px; font-weight: 700; margin-top: 4px;">Asset: {act_sym} ({act_type})</div>
+                    <div style="color: #9ca3af; font-size: 11px; margin-top: 2px;">Check position card below to manage.</div>
                 </div>
                 """, unsafe_allow_html=True)
     except Exception:
@@ -2352,32 +2362,35 @@ selected_asset = st.sidebar.selectbox(
 # SYNC SESSION STATE IMMEDIATELY
 st.session_state['selected_asset'] = selected_asset
 
-def render_binance_tradingview_chart(symbol: str = "BINANCE:BTCUSDT"):
-    """Renders TradingView advanced candlestick chart embed widget"""
-    clean_sym = symbol if ":" in symbol else f"BINANCE:{symbol}"
-    tv_html = f"""
-    <div class="tradingview-widget-container" style="height:500px;width:100%">
-      <div id="tradingview_chart_div" style="height:calc(100% - 32px);width:100%"></div>
+def render_binance_chart_with_all_indicators(binance_symbol_str: str):
+    """Renders TradingView advanced candlestick chart with pre-loaded EMA, VWAP, and RSI indicators"""
+    clean_sym = binance_symbol_str.replace("BINANCE:", "").upper()
+    chart_html = f"""
+    <div class="tradingview-widget-container" style="height:520px;width:100%">
+      <div id="tradingview_chart_aligned" style="height:calc(100% - 32px);width:100%"></div>
       <script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
       <script type="text/javascript">
-      new TradingView.widget(
-      {{
+      new TradingView.widget({{
         "autosize": true,
-        "symbol": "{clean_sym}",
+        "symbol": "BINANCE:{clean_sym}",
         "interval": "5",
         "timezone": "Asia/Kolkata",
         "theme": "dark",
         "style": "1",
         "locale": "en",
+        "toolbar_bg": "#f1f3f6",
         "enable_publishing": false,
-        "allow_symbol_change": true,
-        "container_id": "tradingview_chart_div"
-      }}
-      );
+        "hide_legend": false,
+        "save_image": false,
+        "container_id": "tradingview_chart_aligned",
+        "studies": ["STD;EMA", "STD;VWAP", "RSI@tv-basicstudies"]
+      }});
       </script>
     </div>
     """
-    components.html(tv_html, height=520)
+    st.components.v1.html(chart_html, height=530)
+
+render_binance_tradingview_chart = render_binance_chart_with_all_indicators
 
 def render_trade_history_table_safe():
     """Renders formatted trade execution history table safely"""
