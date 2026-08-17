@@ -2229,13 +2229,18 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
             st.warning(f"⚠️ Binance Status Check Notice: {e_b}")
 
         with st.expander("✏️ Edit / Update Binance API Credentials", expanded=not is_b_ok):
-            edit_b_key = st.text_input("Binance API Key", value=st.secrets.get("BINANCE_API_KEY", ""), type="password", key="edit_b_key_fixed")
-            edit_b_sec = st.text_input("Binance API Secret", value=st.secrets.get("BINANCE_API_SECRET", ""), type="password", key="edit_b_sec_fixed")
-            if st.button("💾 Update Binance Keys", key="btn_save_b_edit_fixed", use_container_width=True):
-                st.session_state['BINANCE_API_KEY'] = edit_b_key
-                st.session_state['BINANCE_API_SECRET'] = edit_b_sec
-                st.success("✅ Binance API Keys Updated!")
-                st.rerun()
+            edit_b_k = st.text_input("Binance API Key", value=st.secrets.get("BINANCE_API_KEY", ""), type="password", key="b_k_persist_v15")
+            edit_b_s = st.text_input("Binance API Secret", value=st.secrets.get("BINANCE_API_SECRET", ""), type="password", key="b_s_persist_v15")
+            
+            if st.button("💾 Update Binance Keys", key="btn_b_update_v15", use_container_width=True):
+                st.session_state['BINANCE_API_KEY'] = edit_b_k
+                st.session_state['BINANCE_API_SECRET'] = edit_b_s
+                st.session_state['b_save_banner_msg'] = "✅ **BINANCE API KEYS SAVED TO CLOUD SESSION SUCCESSFULLY!**"
+                st.toast("✅ Binance Keys Saved!", icon="💾")
+
+        # Display Binance Save Banner Permanently
+        if 'b_save_banner_msg' in st.session_state:
+            st.success(st.session_state['b_save_banner_msg'])
 
         st.divider()
 
@@ -2247,16 +2252,18 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
 
         # Master Save Button below all Credential Expanders
         st.markdown("---")
-        if st.button("💾 Save All Credentials & Active Execution Mode to Cloud Session", key="btn_master_save_all_credentials_v12", use_container_width=True):
+        if st.button("💾 Save All Credentials & Active Execution Mode to Cloud Session", key="btn_master_save_persist_v15", use_container_width=True):
             st.session_state['active_execution_mode'] = active_mode if 'active_mode' in locals() else "PAPER_TRADING"
-            
-            # Save Keys to Session State Memory
-            if 'edit_b_key_fixed' in st.session_state and st.session_state['edit_b_key_fixed']:
-                st.session_state['BINANCE_API_KEY'] = st.session_state['edit_b_key_fixed']
-            if 'edit_b_sec_fixed' in st.session_state and st.session_state['edit_b_sec_fixed']:
-                st.session_state['BINANCE_API_SECRET'] = st.session_state['edit_b_sec_fixed']
-                
-            st.success("🎉 **ALL CREDENTIALS & EXECUTION SETTINGS SAVED TO CLOUD SESSION SUCCESSFULLY!**")
+            if 'b_k_persist_v15' in st.session_state and st.session_state['b_k_persist_v15']:
+                st.session_state['BINANCE_API_KEY'] = st.session_state['b_k_persist_v15']
+            if 'b_s_persist_v15' in st.session_state and st.session_state['b_s_persist_v15']:
+                st.session_state['BINANCE_API_SECRET'] = st.session_state['b_s_persist_v15']
+            st.session_state['master_save_banner_msg'] = "🎉 **ALL CREDENTIALS & EXECUTION SETTINGS SAVED TO CLOUD SESSION SUCCESSFULLY!**"
+            st.toast("🎉 ALL CREDENTIALS SAVED!", icon="💾")
+
+        # Display Master Save Banner Permanently (Never disappears on auto-refresh!)
+        if 'master_save_banner_msg' in st.session_state:
+            st.success(st.session_state['master_save_banner_msg'])
 
         st.divider()
 
