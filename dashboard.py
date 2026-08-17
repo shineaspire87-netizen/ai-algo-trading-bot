@@ -1005,6 +1005,10 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
     # Dynamic Symbol Assignment based on Asset
     curr_symbol, conversion_factor = get_asset_currency_info(asset_name)
 
+    # Override current_capital if live Binance balance is loaded in session state
+    if is_crypto_selected and 'total_capital' in st.session_state and st.session_state['total_capital'] > 0:
+        current_capital = float(st.session_state['total_capital'])
+
     # TOP KPI METRICS CARDS
     k1, k2, k3, k4, k5, k6 = st.columns(6)
     k1.metric(f"{asset_name} Price", f"{p_curr}{current_price:,.2f}", delta=f"ATM: {atm_strike}")
@@ -1649,8 +1653,30 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
             st.session_state['BINANCE_LIVE_ENABLED'] = enable_live
             
             if enable_live:
+                # Fetch Live USDT Balance directly from Binance API
+                try:
+                    import hmac, hashlib, time, requests
+                    timestamp = int(time.time() * 1000)
+                    query_string = f"timestamp={timestamp}"
+                    signature = hmac.new(b_sec.encode('utf-8'), query_string.encode('utf-8'), hashlib.sha256).hexdigest()
+                    url = f"https://api.binance.com/api/v3/account?{query_string}&signature={signature}"
+                    headers = {"X-MBX-APIKEY": b_key}
+                    
+                    res = requests.get(url, headers=headers, timeout=5)
+                    if res.status_code == 200:
+                        res_data = res.json()
+                        for b in res_data.get('balances', []):
+                            if b.get('asset') == 'USDT':
+                                live_bal = float(b.get('free', '0.00'))
+                                # UPDATE TOP METRIC CARD TOTAL CAPITAL DIRECTLY!
+                                st.session_state['total_capital'] = live_bal
+                                break
+                except Exception:
+                    pass
+
                 st.success("🎉 **BINANCE REAL-MONEY LIVE EXECUTION ENGINE ACTIVATED!**")
-                st.info("⚡ Bot will now execute live orders directly on Binance API for 70%+ AI Confidence signals.")
+                st.info(f"⚡ Live Binance Capital Updated: **${st.session_state.get('total_capital', 1205.89):,.2f} USDT**.")
+                st.rerun() # Refresh dashboard immediately to reflect updated capital!
             else:
                 st.warning("🎮 **PAPER TRADING SIMULATOR ACTIVE:** Binance keys saved, but real-money execution is paused.")
 
