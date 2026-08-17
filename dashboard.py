@@ -2088,6 +2088,48 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
     # ==========================================
     # TAB 3: BROKER KEY INTEGRATOR & PAPER MODE
     # ==========================================
+    def run_telegram_test_callback():
+        """Callback function executed immediately when Telegram Test button is clicked"""
+        import requests
+        bot_token = st.secrets.get("TELEGRAM_BOT_TOKEN", "8939955418:AAFXd58Nwr84uIGeqrvIqvntveWwHjqmenE")
+        chat_id = st.secrets.get("TELEGRAM_CHAT_ID", "1072750499")
+        
+        url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
+        payload = {"chat_id": chat_id, "text": "🔔 <b>ANTONY Quant Terminal</b>\n\n✅ Telegram Connection Successful!", "parse_mode": "HTML"}
+        try:
+            res = requests.post(url, json=payload, timeout=5)
+            if res.status_code == 200:
+                st.session_state['telegram_status_msg'] = "🎉 Telegram Alert Delivered Successfully! Check your Telegram App now."
+                st.session_state['telegram_status_type'] = "success"
+            else:
+                st.session_state['telegram_status_msg'] = f"❌ Telegram API Error ({res.status_code}): {res.text}"
+                st.session_state['telegram_status_type'] = "error"
+        except Exception as e:
+            st.session_state['telegram_status_msg'] = f"❌ Network Exception: {str(e)}"
+            st.session_state['telegram_status_type'] = "error"
+
+    def run_gemini_test_callback():
+        """Callback function executed immediately when Gemini Test button is clicked"""
+        import time, os
+        try:
+            import google.generativeai as genai
+            gemini_key = st.secrets.get("GEMINI_API_KEY", os.getenv("GEMINI_API_KEY", ""))
+            
+            if gemini_key and "YOUR_" not in str(gemini_key):
+                genai.configure(api_key=gemini_key)
+                start_t = time.time()
+                model = genai.GenerativeModel('gemini-1.5-flash')
+                res = model.generate_content("Respond in 1 short sentence confirming ANTONY Quant Terminal connection.")
+                latency = round((time.time() - start_t) * 1000, 2)
+                st.session_state['gemini_status_msg'] = f"🎉 **Gemini API Connected!** (Latency: `{latency} ms`)\n\n🤖 **Response:** {res.text.strip()}"
+                st.session_state['gemini_status_type'] = "success"
+            else:
+                st.session_state['gemini_status_msg'] = "❌ Gemini API Key Missing in Streamlit Cloud Secrets! Please add `GEMINI_API_KEY` in Secrets."
+                st.session_state['gemini_status_type'] = "error"
+        except Exception as e:
+            st.session_state['gemini_status_msg'] = f"❌ Gemini Test Exception: {str(e)}"
+            st.session_state['gemini_status_type'] = "error"
+
     with tab_broker:
         try:
             st.markdown("## 🔑 Broker API Integrator & Execution Settings")
@@ -2134,51 +2176,20 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
             col_t1, col_t2 = st.columns(2)
             
             with col_t1:
-                if st.button("🧪 Send Test Telegram Alert Now", key="tab3_btn_test_telegram", use_container_width=True):
-                    try:
-                        import requests
-                        bot_token = st.secrets.get("TELEGRAM_BOT_TOKEN", "8939955418:AAFXd58Nwr84uIGeqrvIqvntveWwHjqmenE")
-                        chat_id = st.secrets.get("TELEGRAM_CHAT_ID", "1072750499")
-                        
-                        url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
-                        payload = {"chat_id": chat_id, "text": "🔔 <b>ANTONY Quant Terminal</b>\n\n✅ Telegram Connection Successful!", "parse_mode": "HTML"}
-                        res = requests.post(url, json=payload, timeout=5)
-                        
-                        if res.status_code == 200:
-                            st.session_state['telegram_test_res'] = ("SUCCESS", "🎉 Telegram Alert Delivered Successfully!")
-                        else:
-                            st.session_state['telegram_test_res'] = ("ERROR", f"❌ Telegram API Error ({res.status_code}): {res.text}")
-                    except Exception as e:
-                        st.session_state['telegram_test_res'] = ("ERROR", f"❌ Network Exception: {str(e)}")
-
-                if 'telegram_test_res' in st.session_state:
-                    status, msg = st.session_state['telegram_test_res']
-                    if status == "SUCCESS": st.success(msg)
-                    else: st.error(msg)
+                st.button("🧪 Send Test Telegram Alert Now", on_click=run_telegram_test_callback, key="btn_tg_cb", use_container_width=True)
+                if 'telegram_status_msg' in st.session_state:
+                    if st.session_state.get('telegram_status_type') == "success":
+                        st.success(st.session_state['telegram_status_msg'])
+                    else:
+                        st.error(st.session_state['telegram_status_msg'])
 
             with col_t2:
-                if st.button("🧪 Test Google AI Studio (Gemini API) Connection", key="tab3_btn_test_gemini", use_container_width=True):
-                    try:
-                        import google.generativeai as genai
-                        import time, os
-                        gemini_key = st.secrets.get("GEMINI_API_KEY", os.getenv("GEMINI_API_KEY", ""))
-                        
-                        if gemini_key and "YOUR_" not in str(gemini_key):
-                            genai.configure(api_key=gemini_key)
-                            start_t = time.time()
-                            model = genai.GenerativeModel('gemini-1.5-flash')
-                            res = model.generate_content("Respond in 1 short sentence confirming ANTONY Quant Terminal connection.")
-                            latency = round((time.time() - start_t) * 1000, 2)
-                            st.session_state['gemini_test_res'] = ("SUCCESS", f"🎉 **Gemini API Connected!** (Latency: `{latency} ms`)\n\n🤖 **Response:** {res.text.strip()}")
-                        else:
-                            st.session_state['gemini_test_res'] = ("ERROR", "❌ Gemini API Key Missing in Streamlit Cloud Secrets!")
-                    except Exception as e:
-                        st.session_state['gemini_test_res'] = ("ERROR", f"❌ Gemini Test Error: {str(e)}")
-
-                if 'gemini_test_res' in st.session_state:
-                    status, msg = st.session_state['gemini_test_res']
-                    if status == "SUCCESS": st.success(msg)
-                    else: st.error(msg)
+                st.button("🧪 Test Google AI Studio (Gemini API) Connection", on_click=run_gemini_test_callback, key="btn_gemini_cb", use_container_width=True)
+                if 'gemini_status_msg' in st.session_state:
+                    if st.session_state.get('gemini_status_type') == "success":
+                        st.success(st.session_state['gemini_status_msg'])
+                    else:
+                        st.error(st.session_state['gemini_status_msg'])
 
             st.divider()
 
