@@ -111,12 +111,37 @@ def check_kill_switch_status(consecutive_losses: int) -> dict:
     return {"is_locked": False, "min_confidence": 0.70, "status_msg": "NORMAL"}
 
 def evaluate_smart_breakout_signals(df: pd.DataFrame, asset_symbol: str) -> dict:
-    """Smart ATR Volatility Expansion & Friction Filter Strategy Engine"""
+    """Smart ATR Volatility Expansion & Friction Filter Strategy Engine with High Volume Breakout Override"""
     if df is None or len(df) < 20:
         return {"signal": "HOLD", "confidence": 0.50, "reason": "Insufficient candle data for analysis"}
 
     df = df.copy()
     last_row = df.iloc[-1]
+    
+    # Calculate ADX & Volume
+    vol_ma20 = df['Volume'].rolling(20).mean().iloc[-1]
+    vol_ratio = last_row['Volume'] / (vol_ma20 + 1e-6)
+    
+    adx_ind = ta.trend.ADXIndicator(high=df['High'], low=df['Low'], close=df['Close'], window=14)
+    adx_val = adx_ind.adx().iloc[-1]
+    rsi_val = ta.momentum.rsi(df['Close'], window=14).iloc[-1]
+
+    # HIGH VOLUME BREAKOUT OVERRIDE (Bypasses Hurst Chop if Vol >= 1.5x & ADX >= 25)
+    is_high_vol_breakout = (vol_ratio >= 1.50) and (adx_val >= 25.0)
+
+    # Expanded RSI Ceiling up to 75.0 for High Volume Momentum
+    max_rsi_allowed = 75.0 if is_high_vol_breakout else 65.0
+
+    if rsi_val > max_rsi_allowed:
+        return {"signal": "HOLD", "confidence": 0.50, "reason": f"⚠️ RSI {rsi_val:.1f} > {max_rsi_allowed} (Overbought Resistance Zone)"}
+
+    # Execute BUY CALL if Momentum & Volume align
+    if is_high_vol_breakout and last_row['Close'] > last_row['Open']:
+        return {
+            "signal": "BUY_CALL",
+            "confidence": 0.82, # High AI Conviction
+            "reason": f"🔥 HIGH-VOLUME MOMENTUM BREAKOUT: Vol {vol_ratio:.2f}x | ADX {adx_val:.1f} | RSI {rsi_val:.1f}"
+        }
 
     # 1. Ezekiel Chew Candle Body Ratio Filter (>= 60%)
     candle_range = last_row['High'] - last_row['Low'] + 1e-6
@@ -127,14 +152,10 @@ def evaluate_smart_breakout_signals(df: pd.DataFrame, asset_symbol: str) -> dict
         return {"signal": "HOLD", "confidence": 0.50, "reason": f"⚠️ Body ratio {body_ratio:.2f} < 0.60 (Weak Wick / Doji Candle Rejected)"}
 
     # 2. ADX Trend Strength Filter (> 22.0) - Rejects Dead Sideways Chop
-    adx_ind = ta.trend.ADXIndicator(high=df['High'], low=df['Low'], close=df['Close'], window=14)
-    adx_val = adx_ind.adx().iloc[-1]
     if adx_val < 22.0:
         return {"signal": "HOLD", "confidence": 0.50, "reason": f"⚠️ ADX {adx_val:.1f} < 22.0 (Dead Sideways Chop - Signal Rejected)"}
 
     # 3. Volume Spike Filter (>= 1.20x 20-MA)
-    vol_ma20 = df['Volume'].rolling(20).mean().iloc[-1]
-    vol_ratio = last_row['Volume'] / (vol_ma20 + 1e-6)
     if vol_ratio < 1.20:
         return {"signal": "HOLD", "confidence": 0.50, "reason": f"⚠️ Volume {vol_ratio:.2f}x < 1.20x Average (Low Institutional Volume)"}
 
