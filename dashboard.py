@@ -14,6 +14,11 @@ import logging
 import threading
 
 # 1. Safe Auto-Refresh Loop Engine (Prevents Freezing on API Timeouts)
+from quant_math_engine import compute_weighted_obi, compute_hurst_exponent_rs, compute_bbwp
+from multi_strategy import evaluate_institutional_bitcoin_signals
+from paper_broker import apply_stateful_dynamic_trailing_lock
+from broker_integrator import render_broker_integrator_tab
+
 try:
     from streamlit_autorefresh import st_autorefresh
     # Auto-refreshes every 3 seconds safely
@@ -2187,102 +2192,7 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
 
     # RENDER IN TAB 3 (Fail-Safe Wrapped Blocks):
     with tab_broker:
-        st.markdown("## 🔑 Broker API Integrator & Direct Diagnostic Center")
-        st.info("🧪 **STATUS:** Paper Trading Test Active (Day 1 of 14). All execution is simulated with zero financial risk.")
-        
-        st.divider()
-
-        # 1. TELEGRAM SECTION
-        st.markdown("### 📲 Telegram Alert Bot Status & Key Manager")
-        try:
-            is_tg_ok, tg_msg = check_authentic_telegram_backend_ping()
-            if is_tg_ok: st.success(tg_msg)
-            else: st.error(tg_msg)
-        except Exception as e_tg:
-            st.warning(f"⚠️ Telegram Status Check Notice: {e_tg}")
-
-        with st.expander("✏️ Edit / Update Telegram Credentials", expanded=not is_tg_ok):
-            edit_tg_token = st.text_input("Telegram Bot Token", value=st.secrets.get("TELEGRAM_BOT_TOKEN", "8939955418:AAFXd58Nwr84uIGeqrvIqvntveWwHjqmenE"), type="password", key="edit_tg_tok_fixed")
-            edit_tg_chat = st.text_input("Telegram Chat ID", value=st.secrets.get("TELEGRAM_CHAT_ID", "1072750499"), key="edit_tg_chat_fixed")
-            if st.button("💾 Update Telegram Keys", key="btn_save_tg_edit_fixed", use_container_width=True):
-                st.session_state['TELEGRAM_BOT_TOKEN'] = edit_tg_token
-                st.session_state['TELEGRAM_CHAT_ID'] = edit_tg_chat
-                st.success("✅ Telegram Keys Updated!")
-                st.rerun()
-
-        st.divider()
-
-        # 2. GEMINI AI SECTION
-        st.markdown("### 🤖 Google AI Studio (Gemini Flash API) Status & Key Manager")
-        try:
-            is_gm_ok, gm_msg = check_authentic_gemini_backend_ping()
-            if is_gm_ok: st.info(gm_msg)
-            else: st.warning(gm_msg)
-        except Exception as e_gm:
-            st.warning(f"⚠️ Gemini Status Check Notice: {e_gm}")
-
-        with st.expander("✏️ Edit / Update Google Gemini API Key", expanded=not is_gm_ok):
-            edit_gm_key = st.text_input("Gemini API Key", value=st.secrets.get("GEMINI_API_KEY", ""), type="password", key="edit_gm_key_fixed")
-            if st.button("💾 Update Gemini Key", key="btn_save_gm_edit_fixed", use_container_width=True):
-                st.session_state['GEMINI_API_KEY'] = edit_gm_key
-                st.success("✅ Gemini API Key Updated!")
-                st.rerun()
-
-        st.divider()
-
-        # 3. BINANCE SECTION
-        st.markdown("### 🔒 Binance Crypto API Status & Key Manager")
-        try:
-            is_b_ok, b_msg = check_authentic_binance_backend_ping()
-            if is_b_ok: st.success(b_msg)
-            else: st.error(b_msg)
-        except Exception as e_b:
-            st.warning(f"⚠️ Binance Status Check Notice: {e_b}")
-
-        with st.expander("✏️ Edit / Update Binance API Credentials", expanded=not is_b_ok):
-            edit_b_k = st.text_input("Binance API Key", value=st.secrets.get("BINANCE_API_KEY", ""), type="password", key="b_k_persist_v15")
-            edit_b_s = st.text_input("Binance API Secret", value=st.secrets.get("BINANCE_API_SECRET", ""), type="password", key="b_s_persist_v15")
-            
-            if st.button("💾 Update Binance Keys", key="btn_b_update_v15", use_container_width=True):
-                st.session_state['BINANCE_API_KEY'] = edit_b_k
-                st.session_state['BINANCE_API_SECRET'] = edit_b_s
-                st.session_state['b_save_banner_msg'] = "✅ **BINANCE API KEYS SAVED TO CLOUD SESSION SUCCESSFULLY!**"
-                st.toast("✅ Binance Keys Saved!", icon="💾")
-
-        # Display Binance Save Banner Permanently
-        if 'b_save_banner_msg' in st.session_state:
-            st.success(st.session_state['b_save_banner_msg'])
-
-        st.divider()
-
-        # 4. ZERODHA SECTION
-        with st.expander("🔑 Zerodha Kite Connect Credentials (NSE India)", expanded=False):
-            st.text_input("Zerodha API Key", type="password", value=st.secrets.get("ZERODHA_API_KEY", ""), key="edit_z_key_fixed")
-            st.text_input("Zerodha API Secret", type="password", value=st.secrets.get("ZERODHA_API_SECRET", ""), key="edit_z_sec_fixed")
-            st.text_input("Zerodha Access Token (Daily TOTP)", type="password", value=st.secrets.get("ZERODHA_ACCESS_TOKEN", ""), key="edit_z_tok_fixed")
-
-        # Master Save Button below all Credential Expanders
-        st.markdown("---")
-        if st.button("💾 Save All Credentials & Active Execution Mode to Cloud Session", key="btn_master_save_persist_v15", use_container_width=True):
-            st.session_state['active_execution_mode'] = active_mode if 'active_mode' in locals() else "PAPER_TRADING"
-            if 'b_k_persist_v15' in st.session_state and st.session_state['b_k_persist_v15']:
-                st.session_state['BINANCE_API_KEY'] = st.session_state['b_k_persist_v15']
-            if 'b_s_persist_v15' in st.session_state and st.session_state['b_s_persist_v15']:
-                st.session_state['BINANCE_API_SECRET'] = st.session_state['b_s_persist_v15']
-            st.session_state['master_save_banner_msg'] = "🎉 **ALL CREDENTIALS & EXECUTION SETTINGS SAVED TO CLOUD SESSION SUCCESSFULLY!**"
-            st.toast("🎉 ALL CREDENTIALS SAVED!", icon="💾")
-
-        # Display Master Save Banner Permanently (Never disappears on auto-refresh!)
-        if 'master_save_banner_msg' in st.session_state:
-            st.success(st.session_state['master_save_banner_msg'])
-
-        st.divider()
-
-        # 5. HEALTH DIAGNOSTIC PANEL
-        try:
-            render_system_health_panel()
-        except Exception as e_h:
-            st.warning(f"⚠️ Health Diagnostic Notice: {e_h}")
+        render_broker_integrator_tab()
 
 # Run Cloud State Recovery before scanning
 enforce_cloud_kill_switch_guard()
