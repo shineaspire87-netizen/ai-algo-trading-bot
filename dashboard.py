@@ -507,9 +507,8 @@ def render_active_position_card(active_trade: dict):
     # GUARANTEED Native Component Rendering
     components.html(card_html, height=185, scrolling=False)
 
-def render_institutional_quant_cards_v2(bias_status, conf_score, vwap_val, pdh_val, pdl_val, atr_val, adx_val, vol_ratio, buy_wall_pct, tf_sync_status, diagnostic_reason):
-    """Renders Ultra-Premium Quant Cards displaying 4 Advanced Data Feeds Live without markdown escaping"""
-    
+def render_institutional_quant_cards_v2(bias_status, conf_score, vwap_val, pdh_val, pdl_val, atr_val, adx_val, vol_ratio, buy_wall_pct, tf_sync_status, diagnostic_reason, hurst_val=0.55):
+    """Renders Ultra-Premium Quant Cards with explicit Hurst Exponent row in Card 3 without markdown escaping"""
     bias_color = "#10b981" if "BUY_CALL" in str(bias_status) else ("#ef4444" if "BUY_PUT" in str(bias_status) else "#f59e0b")
     try:
         wall_color = "#10b981" if float(buy_wall_pct) >= 55.0 else "#ef4444"
@@ -522,7 +521,15 @@ def render_institutional_quant_cards_v2(bias_status, conf_score, vwap_val, pdh_v
             conf_num = conf_num / 100.0
     except Exception:
         conf_num = 0.524
-    
+
+    # Hurst Color & Label Logic
+    try:
+        h_float = float(hurst_val)
+    except Exception:
+        h_float = 0.55
+    h_color = "#10b981" if h_float >= 0.50 else "#f59e0b"
+    h_label = "PERSISTENT TREND" if h_float >= 0.55 else ("ACTIVE REGIME" if h_float >= 0.45 else "MEAN REVERTING CHOP")
+
     html_cards = (
         f"<style>"
         f".quant-grid {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; margin: 15px 0; }}"
@@ -548,6 +555,7 @@ def render_institutional_quant_cards_v2(bias_status, conf_score, vwap_val, pdh_v
         f"<div class='quant-title'>🛡️ Key Quant Levels & Macro</div>"
         f"<div class='quant-row'><span>VWAP Anchor:</span><b>{vwap_val}</b></div>"
         f"<div class='quant-row'><span>PDH / PDL:</span><b>{pdh_val} / {pdl_val}</b></div>"
+        f"<div class='quant-row'><span>Hurst Exponent (H_256):</span><b style='color: {h_color};'>{h_float:.2f} ({h_label})</b></div>"
         f"<div class='quant-row'><span>Global Correlation:</span><b style='color: #10b981;'>🟢 BULLISH ALIGNED</b></div>"
         f"</div>"
         f"</div>"
@@ -557,6 +565,25 @@ def render_institutional_quant_cards_v2(bias_status, conf_score, vwap_val, pdh_v
     )
     
     st.markdown(html_cards, unsafe_allow_html=True)
+
+def render_dynamic_ai_thinking_process(hurst_val: float = 0.55):
+    """Renders Dynamic Step-by-Step AI Thinking Process without hardcoded 0.00 strings"""
+    st.markdown("#### 🔍 பாட்டின் நேரலை சிந்தனை வரிசை (Step-by-Step AI Thinking Process):")
+    
+    try:
+        h_float = float(hurst_val)
+    except Exception:
+        h_float = 0.55
+
+    if h_float >= 0.50:
+        h_str = f"🟢 **H: {h_float:.2f} >= 0.50 (ACTIVE TREND REGIME)**"
+    else:
+        h_str = f"🟡 **H: {h_float:.2f} < 0.50 (RANGE BOUND / CHOP)**"
+
+    st.markdown(f"• **Step 1: Hurst Exponent Regime Check** ➔ {h_str}")
+    
+    last_reason = st.session_state.get('last_reason', 'Scanning 24/7 Market Data for 70%+ AI Confidence Signals')
+    st.markdown(f"• **Step 2: Risk Engine & Signal Execution** ➔ ⏸️ {last_reason}")
 
 def render_trade_history_table(df_trades: pd.DataFrame):
     """Renders Detailed Trade Log with Date Filter & Win/Loss Color-Coded Log Table"""
