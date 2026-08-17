@@ -35,6 +35,40 @@ from config import GOOGLE_SHEET_WEB_APP_URL, TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_I
 from multi_strategy import evaluate_soft_kill_switch_position_scaling, calculate_dynamic_atr_levels, detect_vcp_squeeze_contraction, detect_liquidity_sweep_trap, evaluate_pyramiding_scaling
 import streamlit.components.v1 as components
 
+def render_live_ticking_scan_header(cycle_count=28):
+    """Renders 1-Second Real-Time Live Ticking Scanner Clock Component"""
+    clock_html = f"""
+    <div style="background: rgba(30, 41, 59, 0.75); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 10px 14px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+        <div style="font-size: 13px; font-weight: 700; color: #cbd5e1;">
+            ⏱️ <b>LIVE SYSTEM SCANNER CLOCK:</b> <span id="live-scan-clock" style="color: #38bdf8;">--:--:-- PM</span>
+        </div>
+        <div style="font-size: 12px; font-weight: 600; color: #10b981;">
+            ⚡ <b>Status:</b> Active Scanning (Cycle #{cycle_count})
+        </div>
+    </div>
+
+    <script>
+        function updateLiveScanClock() {{
+            const now = new Date();
+            let hours = now.getHours();
+            const minutes = String(now.getMinutes()).padStart(2, '0');
+            const seconds = String(now.getSeconds()).padStart(2, '0');
+            const ampm = hours >= 12 ? 'PM' : 'AM';
+            hours = hours % 12;
+            hours = hours ? hours : 12; // 0 becomes 12
+            const strTime = String(hours).padStart(2, '0') + ':' + minutes + ':' + seconds + ' ' + ampm;
+            
+            const clockElem = document.getElementById('live-scan-clock');
+            if (clockElem) {{
+                clockElem.innerText = strTime + ' IST';
+            }}
+        }}
+        setInterval(updateLiveScanClock, 1000);
+        updateLiveScanClock();
+    </script>
+    """
+    st.components.v1.html(clock_html, height=55)
+
 def render_dynamic_color_changing_live_ticker(symbol="BTCUSDT"):
     """Replaces old static metric card with 0ms Dynamic Color-Changing Live Ticker (Green on UP, Red on DOWN)"""
     ticker_html = f"""
@@ -1844,13 +1878,10 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
                 diagnostic_reason=reason_msg
             )
 
+            render_live_ticking_scan_header(scan_sec_count)
+
             st.markdown(f"""
-            <div class="glass-card" style="margin-top:-10px;">
-                <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; font-size:13px; color:#cbd5e1; margin-bottom:10px;">
-                    <span>⏱️ Last Scan: <b>{scan_time_str}</b> (Cycle #{scan_sec_count})</span>
-                    <span>Active AI Signal: <b style="color:#38bdf8;">{bot_signal_str}</b></span>
-                </div>
-                <hr style="border-color: rgba(255,255,255,0.1); margin: 8px 0;">
+            <div class="glass-card" style="margin-top:-5px;">
                 <small style="color:#cbd5e1;"><b>🔍 பாட்டின் நேரலை சிந்தனை வரிசை (Step-by-Step AI Thinking Process):</b><br>{thought_steps}</small>
             </div>
             """, unsafe_allow_html=True)
