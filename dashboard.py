@@ -1299,14 +1299,15 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
         crypto_ws_sym = "BTCUSDT" if "BITCOIN" in asset_name else ("ETHUSDT" if "ETH" in asset_name else "BTCUSDT")
         render_subsecond_websocket_ticker(crypto_ws_sym)
 
-    realtime_btc_price = st.session_state.get('realtime_spot_price', current_price)
+    # Read 0ms WebSocket Ticker Price First
+    realtime_ticker_price = st.session_state.get('realtime_spot_price', current_price if current_price > 0 else 63563.80)
 
     # TOP KPI METRICS CARDS (Streamlit Columns)
     col1, col2, col3, col4, col5 = st.columns(5)
 
     with col1:
         if is_crypto_selected and ("BITCOIN" in asset_name or "BTC" in asset_name):
-            st.metric(label="BITCOIN Price", value=f"${realtime_btc_price:,.2f}", delta=f"ATM: {atm_strike}" if atm_strike else None)
+            st.metric("BITCOIN Price", f"${realtime_ticker_price:,.2f}")
         else:
             st.metric(label=f"{asset_name} Price", value=f"{p_curr}{current_price:,.2f}", delta=f"ATM: {atm_strike}" if atm_strike else None)
     with col2:
