@@ -2090,22 +2090,51 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
     # ==========================================
     with tab_broker:
         try:
-            st.markdown("## 🔑 Broker API Integrator & System Diagnostics")
+            st.markdown("## 🔑 Broker API Integrator & Execution Settings")
+            st.info("🧪 **STATUS:** Paper Trading Test Active (Day 1 of 14). All execution is simulated with zero financial risk.")
             
-            # 1. System Health Panel (Wrapped safely)
-            try:
-                render_system_health_panel()
-            except Exception as e_health:
-                st.warning(f"⚠️ Health Panel Loading Notice: {e_health}")
-                
+            # -------------------------------------------------------------
+            # 1. EXECUTION MODE SELECTOR
+            # -------------------------------------------------------------
+            active_mode = st.radio(
+                "Select Active Execution Engine:",
+                ["🎮 Paper Trading Simulator (Active - 2 Weeks Test)", "🟡 Binance Crypto Live API", "🟢 Zerodha Kite Connect Live API"],
+                index=0,
+                key="tab3_exec_mode_radio_v2"
+            )
+
             st.divider()
 
-            # 2. Diagnostic Connection Testers
+            # -------------------------------------------------------------
+            # 2. LIVE BROKER & AI API CREDENTIALS MANAGER
+            # -------------------------------------------------------------
+            st.markdown("### 🔒 Live Broker & AI Credentials Manager")
+            
+            with st.expander("🔑 Binance Crypto API Credentials", expanded=True):
+                binance_k = st.text_input("Binance API Key", type="password", value=st.secrets.get("BINANCE_API_KEY", ""), key="tab3_binance_k")
+                binance_s = st.text_input("Binance API Secret", type="password", value=st.secrets.get("BINANCE_API_SECRET", ""), key="tab3_binance_s")
+
+            with st.expander("🔑 Zerodha Kite Connect Credentials (NSE India)", expanded=False):
+                zerodha_k = st.text_input("Zerodha API Key", type="password", value=st.secrets.get("ZERODHA_API_KEY", ""), key="tab3_zerodha_k")
+                zerodha_s = st.text_input("Zerodha API Secret", type="password", value=st.secrets.get("ZERODHA_API_SECRET", ""), key="tab3_zerodha_s")
+                zerodha_t = st.text_input("Zerodha Access Token (Daily TOTP)", type="password", value=st.secrets.get("ZERODHA_ACCESS_TOKEN", ""), key="tab3_zerodha_t")
+
+            with st.expander("🤖 Google AI Studio (Gemini API) Key", expanded=False):
+                gemini_k = st.text_input("Gemini API Key", type="password", value=st.secrets.get("GEMINI_API_KEY", ""), key="tab3_gemini_k")
+
+            if st.button("💾 Save Credentials to Cloud Session", key="tab3_btn_save_keys", use_container_width=True):
+                st.success("✅ Credentials saved to cloud session successfully!")
+
+            st.divider()
+
+            # -------------------------------------------------------------
+            # 3. REAL-TIME API DIAGNOSTIC CONNECTION TESTERS
+            # -------------------------------------------------------------
             st.markdown("### 📲 Real-Time API Diagnostic Connection Testers")
             col_t1, col_t2 = st.columns(2)
             
             with col_t1:
-                if st.button("🧪 Send Test Telegram Alert Now", key="tab_broker_btn_telegram", use_container_width=True):
+                if st.button("🧪 Send Test Telegram Alert Now", key="tab3_btn_test_telegram", use_container_width=True):
                     try:
                         import requests
                         bot_token = st.secrets.get("TELEGRAM_BOT_TOKEN", "8939955418:AAFXd58Nwr84uIGeqrvIqvntveWwHjqmenE")
@@ -2128,7 +2157,7 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
                     else: st.error(msg)
 
             with col_t2:
-                if st.button("🧪 Test Google AI Studio (Gemini API) Connection", key="tab_broker_btn_gemini", use_container_width=True):
+                if st.button("🧪 Test Google AI Studio (Gemini API) Connection", key="tab3_btn_test_gemini", use_container_width=True):
                     try:
                         import google.generativeai as genai
                         import time, os
@@ -2153,36 +2182,13 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
 
             st.divider()
 
-            # 3. Execution Mode Selector
-            st.markdown("### 🎛️ Active Execution Mode Selector")
-            st.info("🧪 **STATUS:** Paper Trading Test Active (Day 1 of 14). All execution is simulated with zero financial risk.")
-            
-            active_mode = st.radio(
-                "Select Active Execution Engine:",
-                ["🎮 Paper Trading Simulator (Active - 2 Weeks Test)", "🟡 Binance Crypto Live API", "🟢 Zerodha Kite Connect Live API"],
-                index=0,
-                key="tab_broker_radio_mode"
-            )
-
-            st.divider()
-
-            # 4. API Credentials Inputs
-            st.markdown("### 🔒 Live Broker & AI Credentials Manager")
-            
-            with st.expander("🔑 Binance Crypto API Credentials", expanded=True):
-                b_key = st.text_input("Binance API Key", type="password", value=st.secrets.get("BINANCE_API_KEY", ""), key="tab_broker_binance_key")
-                b_sec = st.text_input("Binance API Secret", type="password", value=st.secrets.get("BINANCE_API_SECRET", ""), key="tab_broker_binance_secret")
-
-            with st.expander("🔑 Zerodha Kite Connect Credentials (NSE India)", expanded=False):
-                z_key = st.text_input("Zerodha API Key", type="password", value=st.secrets.get("ZERODHA_API_KEY", ""), key="tab_broker_zerodha_key")
-                z_sec = st.text_input("Zerodha API Secret", type="password", value=st.secrets.get("ZERODHA_API_SECRET", ""), key="tab_broker_zerodha_secret")
-                z_tok = st.text_input("Zerodha Access Token (Daily TOTP)", type="password", value=st.secrets.get("ZERODHA_ACCESS_TOKEN", ""), key="tab_broker_zerodha_token")
-
-            with st.expander("🤖 Google AI Studio (Gemini API) Key", expanded=False):
-                g_key = st.text_input("Gemini API Key", type="password", value=st.secrets.get("GEMINI_API_KEY", ""), key="tab_broker_gemini_key")
-
-            if st.button("💾 Save Credentials & Check All Connections", key="tab_broker_btn_save_all", use_container_width=True):
-                st.success("✅ Credentials saved to cloud session successfully!")
+            # -------------------------------------------------------------
+            # 4. SYSTEM HEALTH DIAGNOSTIC PANEL (LOADED LAST)
+            # -------------------------------------------------------------
+            try:
+                render_system_health_panel()
+            except Exception as e_health:
+                st.warning(f"⚠️ Health Panel Loading Notice: {e_health}")
 
         except Exception as e:
             st.error(f"❌ Error rendering Broker Integrator Tab: {str(e)}")
