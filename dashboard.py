@@ -10,20 +10,37 @@ from multi_strategy import evaluate_soft_kill_switch_position_scaling, calculate
 import streamlit.components.v1 as components
 import pandas as pd
 
+def get_tradingview_symbol(asset_name: str) -> str:
+    """Maps internal asset names to exact TradingView widget symbols with NSE: prefix"""
+    asset_upper = str(asset_name).upper().strip()
+    
+    mapping = {
+        "NIFTY": "NSE:NIFTY",
+        "NIFTY50": "NSE:NIFTY",
+        "^NSEI": "NSE:NIFTY",
+        "BANKNIFTY": "NSE:BANKNIFTY",
+        "^NSEBANK": "NSE:BANKNIFTY",
+        "RELIANCE": "NSE:RELIANCE",
+        "RELIANCE.NS": "NSE:RELIANCE",
+        "HDFCBANK": "NSE:HDFCBANK",
+        "HDFCBANK.NS": "NSE:HDFCBANK",
+        "ICICIBANK": "NSE:ICICIBANK",
+        "ICICIBANK.NS": "NSE:ICICIBANK",
+        "INFY": "NSE:INFY",
+        "INFY.NS": "NSE:INFY",
+        "SBIN": "NSE:SBIN",
+        "SBIN.NS": "NSE:SBIN",
+        "BITCOIN": "BINANCE:BTCUSDT",
+        "BTC-USD": "BINANCE:BTCUSDT",
+        "ETHEREUM": "BINANCE:ETHUSDT",
+        "ETH-USD": "BINANCE:ETHUSDT"
+    }
+    
+    return mapping.get(asset_upper, f"NSE:{asset_upper}")
+
 def render_tradingview_live_chart(asset_name):
     """Embeds Official TradingView Real-Time Chart with Pre-loaded Indicators"""
-    tv_map = {
-        "BANKNIFTY": "NSE:BANKNIFTY",
-        "NIFTY50": "NSE:NIFTY",
-        "RELIANCE": "NSE:RELIANCE",
-        "HDFCBANK": "NSE:HDFCBANK",
-        "ICICIBANK": "NSE:ICICIBANK",
-        "INFY": "NSE:INFY",
-        "SBIN": "NSE:SBIN",
-        "BITCOIN": "BINANCE:BTCUSDT",
-        "ETHEREUM": "BINANCE:ETHUSDT"
-    }
-    tv_symbol = tv_map.get(asset_name, "NSE:NIFTY")
+    tv_symbol = get_tradingview_symbol(asset_name)
 
     widget_code = f"""
     <div class="tradingview-widget-container" style="height:520px;width:100%">
