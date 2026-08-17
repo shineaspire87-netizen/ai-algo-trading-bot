@@ -2092,78 +2092,84 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
         st.markdown("## 🔑 Broker API Integrator & Direct Diagnostic Center")
         st.info("🧪 **STATUS:** Paper Trading Test Active (Day 1 of 14). All execution is simulated with zero financial risk.")
         
-        # -------------------------------------------------------------
-        # 1. DIRECT TELEGRAM BOT TESTER & CREDENTIALS
-        # -------------------------------------------------------------
-        with st.expander("📲 Telegram Alert Bot Tester & Credentials", expanded=True):
-            default_tg_token = st.secrets.get("TELEGRAM_BOT_TOKEN", "8939955418:AAFXd58Nwr84uIGeqrvIqvntveWwHjqmenE")
-            default_tg_chat = st.secrets.get("TELEGRAM_CHAT_ID", "1072750499")
-            
-            tg_token_input = st.text_input("Telegram Bot Token", value=default_tg_token, type="password", key="input_direct_tg_token")
-            tg_chat_input = st.text_input("Telegram Chat ID", value=default_tg_chat, key="input_direct_tg_chat")
+        st.divider()
 
-            if st.button("🚀 Send Test Telegram Message Now", key="btn_direct_tg_test_v2", use_container_width=True):
-                with st.spinner("Sending test alert directly to your Telegram App..."):
-                    try:
-                        import requests
-                        url = f"https://api.telegram.org/bot{tg_token_input}/sendMessage"
-                        payload = {"chat_id": tg_chat_input, "text": "🔔 <b>ANTONY Quant Terminal</b>\n\n✅ Live Connection Test Successful!", "parse_mode": "HTML"}
-                        res = requests.post(url, json=payload, timeout=5)
-                        
-                        if res.status_code == 200:
-                            st.success(f"🎉 **SUCCESS (200 OK):** Telegram Alert delivered! Check your Telegram Mobile App now.")
-                        else:
-                            st.error(f"❌ **FAILED ({res.status_code}):** {res.text}")
-                    except Exception as e:
-                        st.error(f"❌ **CONNECTION ERROR:** {str(e)}")
+        # -------------------------------------------------------------
+        # 1. DIRECT TELEGRAM BOT TESTER WITH INSTANT TOAST POPUP
+        # -------------------------------------------------------------
+        st.markdown("### 📲 Telegram Alert Bot Connection Tester")
+        
+        default_tg_token = st.secrets.get("TELEGRAM_BOT_TOKEN", "8939955418:AAFXd58Nwr84uIGeqrvIqvntveWwHjqmenE")
+        default_tg_chat = st.secrets.get("TELEGRAM_CHAT_ID", "1072750499")
+        
+        col_tg1, col_tg2 = st.columns(2)
+        with col_tg1:
+            tg_token_input = st.text_input("Telegram Bot Token", value=default_tg_token, type="password", key="input_direct_tg_token_v3")
+        with col_tg2:
+            tg_chat_input = st.text_input("Telegram Chat ID", value=default_tg_chat, key="input_direct_tg_chat_v3")
+
+        if st.button("🚀 Send Test Telegram Message Now", key="btn_direct_tg_test_v3", use_container_width=True):
+            try:
+                import requests
+                url = f"https://api.telegram.org/bot{tg_token_input}/sendMessage"
+                payload = {"chat_id": tg_chat_input, "text": "🔔 <b>ANTONY Quant Terminal</b>\n\n✅ Live Connection Test Successful!", "parse_mode": "HTML"}
+                res = requests.post(url, json=payload, timeout=5)
+                
+                if res.status_code == 200:
+                    st.toast("🎉 TELEGRAM SUCCESS: Alert delivered to your phone!", icon="🚀")
+                    st.success("🎉 **SUCCESS (200 OK):** Telegram Alert delivered! Check your Telegram Mobile App now.")
+                else:
+                    st.toast(f"❌ TELEGRAM ERROR ({res.status_code})", icon="⚠️")
+                    st.error(f"❌ **FAILED ({res.status_code}):** {res.text}")
+            except Exception as e:
+                st.error(f"❌ **CONNECTION ERROR:** {str(e)}")
 
         st.divider()
 
         # -------------------------------------------------------------
-        # 2. DIRECT GOOGLE GEMINI API TESTER & CREDENTIALS
+        # 2. DIRECT GOOGLE GEMINI API TESTER WITH INSTANT TOAST POPUP
         # -------------------------------------------------------------
-        with st.expander("🤖 Google AI Studio (Gemini 1.5 API) Tester & Credentials", expanded=True):
-            default_gemini_key = st.secrets.get("GEMINI_API_KEY", "")
-            gemini_key_input = st.text_input("Gemini API Key", value=default_gemini_key, type="password", key="input_direct_gemini_key")
+        st.markdown("### 🤖 Google AI Studio (Gemini 1.5 API) Connection Tester")
+        
+        default_gemini_key = st.secrets.get("GEMINI_API_KEY", "")
+        gemini_key_input = st.text_input("Gemini API Key", value=default_gemini_key, type="password", key="input_direct_gemini_key_v3")
 
-            if st.button("🚀 Test Google Gemini API Connection Now", key="btn_direct_gemini_test_v2", use_container_width=True):
-                with st.spinner("Pinging Google AI Studio (Gemini 1.5 Flash)..."):
-                    try:
-                        import google.generativeai as genai
-                        import time
-                        if gemini_key_input and "YOUR_" not in gemini_key_input:
-                            genai.configure(api_key=gemini_key_input)
-                            start_t = time.time()
-                            model = genai.GenerativeModel('gemini-1.5-flash')
-                            res = model.generate_content("Respond in 1 short sentence confirming ANTONY Quant Terminal connection.")
-                            latency = round((time.time() - start_t) * 1000, 2)
-                            st.success(f"🎉 **GEMINI CONNECTED!** (Latency: `{latency} ms`)\n\n🤖 **Response:** {res.text.strip()}")
-                        else:
-                            st.error("❌ **KEY MISSING:** Please paste your Gemini API Key in the box above first!")
-                    except Exception as e:
-                        st.error(f"❌ **GEMINI API ERROR:** {str(e)}")
+        if st.button("🚀 Test Google Gemini API Connection Now", key="btn_direct_gemini_test_v3", use_container_width=True):
+            try:
+                import google.generativeai as genai
+                import time
+                if gemini_key_input and "YOUR_" not in gemini_key_input:
+                    genai.configure(api_key=gemini_key_input)
+                    start_t = time.time()
+                    model = genai.GenerativeModel('gemini-1.5-flash')
+                    res = model.generate_content("Respond in 1 short sentence confirming ANTONY Quant Terminal connection.")
+                    latency = round((time.time() - start_t) * 1000, 2)
+                    
+                    st.toast(f"🎉 GEMINI CONNECTED! Latency: {latency} ms", icon="🤖")
+                    st.success(f"🎉 **GEMINI CONNECTED SUCCESSFULLY!** (Latency: `{latency} ms`)")
+                    st.info(f"🤖 **Gemini Live Response:** {res.text.strip()}")
+                else:
+                    st.error("❌ **KEY MISSING:** Please paste your Gemini API Key in the box above first!")
+            except Exception as e:
+                st.error(f"❌ **GEMINI API ERROR:** {str(e)}")
 
         st.divider()
 
         # -------------------------------------------------------------
-        # 3. LIVE BROKER CREDENTIALS MANAGER (BINANCE & ZERODHA)
+        # 3. LIVE BROKER CREDENTIALS MANAGER & HEALTH PANEL
         # -------------------------------------------------------------
         st.markdown("### 🔒 Live Broker Credentials Manager")
         
-        with st.expander("🔑 Binance Crypto API Credentials", expanded=False):
-            st.text_input("Binance API Key", type="password", value=st.secrets.get("BINANCE_API_KEY", ""), key="input_binance_key")
-            st.text_input("Binance API Secret", type="password", value=st.secrets.get("BINANCE_API_SECRET", ""), key="input_binance_secret")
-
-        with st.expander("🔑 Zerodha Kite Connect Credentials (NSE India)", expanded=False):
-            st.text_input("Zerodha API Key", type="password", value=st.secrets.get("ZERODHA_API_KEY", ""), key="input_zerodha_key")
-            st.text_input("Zerodha API Secret", type="password", value=st.secrets.get("ZERODHA_API_SECRET", ""), key="input_zerodha_secret")
-            st.text_input("Zerodha Access Token (Daily TOTP)", type="password", value=st.secrets.get("ZERODHA_ACCESS_TOKEN", ""), key="input_zerodha_token")
+        col_b1, col_b2 = st.columns(2)
+        with col_b1:
+            st.text_input("Binance API Key", type="password", value=st.secrets.get("BINANCE_API_KEY", ""), key="input_binance_key_v3")
+            st.text_input("Binance API Secret", type="password", value=st.secrets.get("BINANCE_API_SECRET", ""), key="input_binance_secret_v3")
+        with col_b2:
+            st.text_input("Zerodha API Key", type="password", value=st.secrets.get("ZERODHA_API_KEY", ""), key="input_zerodha_key_v3")
+            st.text_input("Zerodha API Secret", type="password", value=st.secrets.get("ZERODHA_API_SECRET", ""), key="input_zerodha_secret_v3")
 
         st.divider()
 
-        # -------------------------------------------------------------
-        # 4. SYSTEM HEALTH DIAGNOSTIC GRID
-        # -------------------------------------------------------------
         try:
             render_system_health_panel()
         except Exception as e_health:
