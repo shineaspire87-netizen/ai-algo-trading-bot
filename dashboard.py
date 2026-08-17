@@ -124,6 +124,34 @@ def render_tradingview_live_chart(asset_name: str):
     
     st.components.v1.html(tv_html, height=520)
 
+def render_binance_direct_tradingview_chart():
+    """Renders Direct Binance Embedded Chart (BINANCE:BTCUSDT)"""
+    chart_html = """
+    <!-- TradingView Widget BEGIN -->
+    <div class="tradingview-widget-container" style="height:500px;width:100%">
+      <div id="tradingview_binance_chart" style="height:calc(100% - 32px);width:100%"></div>
+      <script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
+      <script type="text/javascript">
+      new TradingView.widget({
+        "autosize": true,
+        "symbol": "BINANCE:BTCUSDT",
+        "interval": "5",
+        "timezone": "Asia/Kolkata",
+        "theme": "dark",
+        "style": "1",
+        "locale": "en",
+        "toolbar_bg": "#f1f3f6",
+        "enable_publishing": false,
+        "hide_legend": false,
+        "save_image": false,
+        "container_id": "tradingview_binance_chart"
+      });
+      </script>
+    </div>
+    <!-- TradingView Widget END -->
+    """
+    st.components.v1.html(chart_html, height=520)
+
 def render_smart_live_chart(asset_name: str, df_chart: pd.DataFrame):
     """Smart Chart Engine: Uses Plotly Interactive Canvas for NSE & TV for Crypto"""
     asset_clean = str(asset_name).upper().strip()
@@ -157,8 +185,11 @@ def render_smart_live_chart(asset_name: str, df_chart: pd.DataFrame):
         else:
             st.info("⌛ Loading live 5-minute candlestick data from NSE stream...")
     else:
-        # Render TradingView Iframe for Crypto (BTC/ETH)
-        render_tradingview_live_chart(asset_name)
+        # Render Direct Binance Embedded Chart for Crypto
+        if "BITCOIN" in asset_clean or "BTC" in asset_clean:
+            render_binance_direct_tradingview_chart()
+        else:
+            render_tradingview_live_chart(asset_name)
 
 import numpy as np
 import plotly.graph_objects as go
@@ -1230,11 +1261,16 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
         crypto_ws_sym = "BTCUSDT" if "BITCOIN" in asset_name else ("ETHUSDT" if "ETH" in asset_name else "BTCUSDT")
         render_subsecond_websocket_ticker(crypto_ws_sym)
 
+    realtime_btc_price = st.session_state.get('realtime_spot_price', current_price)
+
     # TOP KPI METRICS CARDS (Streamlit Columns)
     col1, col2, col3, col4, col5 = st.columns(5)
 
     with col1:
-        st.metric(label=f"{asset_name} Price", value=f"{p_curr}{current_price:,.2f}", delta=f"ATM: {atm_strike}" if atm_strike else None)
+        if is_crypto_selected and ("BITCOIN" in asset_name or "BTC" in asset_name):
+            st.metric(label="BITCOIN Price", value=f"${realtime_btc_price:,.2f}", delta=f"ATM: {atm_strike}" if atm_strike else None)
+        else:
+            st.metric(label=f"{asset_name} Price", value=f"{p_curr}{current_price:,.2f}", delta=f"ATM: {atm_strike}" if atm_strike else None)
     with col2:
         if curr_symbol == "$":
             display_capital = current_capital / conversion_factor
