@@ -2166,11 +2166,59 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
         # 3. LIVE BROKER CREDENTIALS MANAGER
         # -------------------------------------------------------------
         st.markdown("### 🔒 Live Broker Credentials Manager")
-        col_b1, col_b2 = st.columns(2)
-        with col_b1:
-            st.text_input("Binance API Key", type="password", value=st.secrets.get("BINANCE_API_KEY", ""), key="input_binance_key_v5")
-            st.text_input("Binance API Secret", type="password", value=st.secrets.get("BINANCE_API_SECRET", ""), key="input_binance_secret_v5")
-        with col_b2:
+        
+        with st.expander("🔑 Binance Crypto API Credentials", expanded=True):
+            binance_k = st.text_input("Binance API Key", type="password", value=st.secrets.get("BINANCE_API_KEY", ""), key="input_binance_key_v7")
+            binance_s = st.text_input("Binance API Secret", type="password", value=st.secrets.get("BINANCE_API_SECRET", ""), key="input_binance_secret_v7")
+
+            col_b_save, col_b_test = st.columns(2)
+            
+            # 1. Save Button
+            with col_b_save:
+                if st.button("💾 Save Binance Keys", key="btn_save_binance_v7", use_container_width=True):
+                    st.session_state['BINANCE_API_KEY'] = binance_k
+                    st.session_state['BINANCE_API_SECRET'] = binance_s
+                    st.success("✅ Binance Keys saved to current cloud session successfully!")
+
+            # 2. Test Connection Button (Fetches Live Binance Account Balance)
+            with col_b_test:
+                if st.button("🧪 Test Binance API Connection", key="btn_test_binance_v7", use_container_width=True):
+                    with st.spinner("Pinging Binance servers with your API Key..."):
+                        try:
+                            import hmac, hashlib, time, requests
+                            
+                            key = binance_k or st.secrets.get("BINANCE_API_KEY", "")
+                            sec = binance_s or st.secrets.get("BINANCE_API_SECRET", "")
+                            
+                            if not key or not sec:
+                                st.error("❌ Binance API Key or Secret Key is missing!")
+                            else:
+                                timestamp = int(time.time() * 1000)
+                                query_string = f"timestamp={timestamp}"
+                                signature = hmac.new(sec.encode('utf-8'), query_string.encode('utf-8'), hashlib.sha256).hexdigest()
+                                
+                                url = f"https://api.binance.com/api/v3/account?{query_string}&signature={signature}"
+                                headers = {"X-MBX-APIKEY": key}
+                                
+                                res = requests.get(url, headers=headers, timeout=5)
+                                res_data = res.json()
+                                
+                                if res.status_code == 200 and 'canTrade' in res_data:
+                                    can_trade = res_data.get('canTrade', False)
+                                    usdt_bal = "0.00"
+                                    for b in res_data.get('balances', []):
+                                        if b.get('asset') == 'USDT':
+                                            usdt_bal = b.get('free', '0.00')
+                                            break
+                                            
+                                    st.success(f"🎉 **BINANCE API CONNECTED SUCCESSFULLY!**")
+                                    st.info(f"🟢 **Trading Permission:** {'✅ ENABLED' if can_trade else '❌ DISABLED'}\n\n💵 **Live USDT Free Balance:** `${float(usdt_bal):,.2f} USDT`")
+                                else:
+                                    st.error(f"❌ **BINANCE API ERROR ({res.status_code}):** {res_data.get('msg', res.text)}")
+                        except Exception as e:
+                            st.error(f"❌ **CONNECTION ERROR:** {str(e)}")
+
+        with st.expander("🔑 Zerodha Kite Connect Credentials (NSE India)", expanded=False):
             st.text_input("Zerodha API Key", type="password", value=st.secrets.get("ZERODHA_API_KEY", ""), key="input_zerodha_key_v5")
             st.text_input("Zerodha API Secret", type="password", value=st.secrets.get("ZERODHA_API_SECRET", ""), key="input_zerodha_secret_v5")
 
