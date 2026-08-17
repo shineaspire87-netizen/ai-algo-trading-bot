@@ -152,38 +152,76 @@ def render_binance_direct_tradingview_chart():
     """
     st.components.v1.html(chart_html, height=520)
 
-def render_smart_live_chart(asset_name: str, df_chart: pd.DataFrame):
+def render_plotly_strategy_chart_with_trade_overlay(df, active_trade=None):
+    """Renders Plotly Technical Chart with Entry, Target, SL, and Live Price Lines Overlay"""
+    if df is None or df.empty:
+        st.warning("⚠️ Waiting for candle data to render Plotly strategy chart...")
+        return
+
+    import plotly.graph_objects as go
+    fig = go.Figure()
+
+    # 1. Add Candlestick Trace
+    fig.add_trace(go.Candlestick(
+        x=df.index,
+        open=df['Open'], high=df['High'],
+        low=df['Low'], close=df['Close'],
+        name='5m Candles'
+    ))
+
+    # 2. Add EMA 9, EMA 21 & VWAP
+    ema9_col = 'EMA_9' if 'EMA_9' in df.columns else ('EMA9' if 'EMA9' in df.columns else None)
+    if ema9_col:
+        fig.add_trace(go.Scatter(x=df.index, y=df[ema9_col], line=dict(color='#3b82f6', width=1.5), name='EMA 9'))
+    ema21_col = 'EMA_21' if 'EMA_21' in df.columns else ('EMA21' if 'EMA21' in df.columns else None)
+    if ema21_col:
+        fig.add_trace(go.Scatter(x=df.index, y=df[ema21_col], line=dict(color='#f59e0b', width=1.5), name='EMA 21'))
+    if 'VWAP' in df.columns:
+        fig.add_trace(go.Scatter(x=df.index, y=df['VWAP'], line=dict(color='#8b5cf6', width=1.5), name='VWAP'))
+
+    # 3. DRAW DYNAMIC TRADE LINES IF AN ACTIVE TRADE IS RUNNING!
+    if active_trade and active_trade.get('status') == 'ACTIVE':
+        entry_spot = float(active_trade.get('Entry_Stock_Price') or active_trade.get('entry_stock_price', 0.0))
+        target_spot = float(active_trade.get('Target_Stock_Price') or active_trade.get('target_stock_price', 0.0))
+        sl_spot = float(active_trade.get('SL_Stock_Price') or active_trade.get('sl_stock_price', 0.0))
+        live_spot = float(active_trade.get('Live_Stock_Price') or active_trade.get('live_stock_price', 0.0))
+
+        symbol_str = str(active_trade.get('Symbol') or active_trade.get('symbol', ''))
+        curr_tag = "$" if any(k in symbol_str.upper() for k in ["BITCOIN", "ETHEREUM", "BTC", "ETH", "USD"]) else "₹"
+
+        # Entry Line (Cyan)
+        if entry_spot > 0:
+            fig.add_hline(y=entry_spot, line_dash="dash", line_color="#06b6d4", line_width=2,
+                          annotation_text=f"📍 ENTRY: {curr_tag}{entry_spot:,.2f}", annotation_position="top left")
+        # Target Line (Green)
+        if target_spot > 0:
+            fig.add_hline(y=target_spot, line_dash="dash", line_color="#10b981", line_width=2,
+                          annotation_text=f"🎯 TARGET: {curr_tag}{target_spot:,.2f}", annotation_position="top left")
+        # Stop Loss Line (Red)
+        if sl_spot > 0:
+            fig.add_hline(y=sl_spot, line_dash="dash", line_color="#ef4444", line_width=2,
+                          annotation_text=f"🛑 STOP LOSS: {curr_tag}{sl_spot:,.2f}", annotation_position="bottom left")
+        # Live Spot Price Line (Yellow)
+        if live_spot > 0:
+            fig.add_hline(y=live_spot, line_dash="dot", line_color="#f59e0b", line_width=1.5,
+                          annotation_text=f"📈 LIVE: {curr_tag}{live_spot:,.2f}", annotation_position="top right")
+
+    fig.update_layout(
+        template="plotly_dark",
+        height=520,
+        margin=dict(l=10, r=10, t=30, b=10),
+        xaxis_rangeslider_visible=False
+    )
+    st.plotly_chart(fig, use_container_width=True)
+
+def render_smart_live_chart(asset_name: str, df_chart: pd.DataFrame, active_trade=None):
     """Smart Chart Engine: Uses Plotly Interactive Canvas for NSE & TV for Crypto"""
     asset_clean = str(asset_name).upper().strip()
     is_nse_asset = any(k in asset_clean for k in ["NIFTY", "BANKNIFTY", "RELIANCE", "HDFCBANK", "ICICIBANK", "INFY", "SBIN", ".NS", "^NSE"])
 
     if is_nse_asset:
         st.markdown(f"### 📈 Real-Time Interactive Strategy Chart: {asset_name} (NSE)")
-        if df_chart is not None and not df_chart.empty:
-            # Render Unrestricted Plotly Strategy Chart with VWAP, EMA9, EMA21, PDH, PDL
-            import plotly.graph_objects as go
-            
-            fig = go.Figure()
-            # Candlestick Trace
-            fig.add_trace(go.Candlestick(
-                x=df_chart.index, open=df_chart['Open'], high=df_chart['High'],
-                low=df_chart['Low'], close=df_chart['Close'], name="Candles"
-            ))
-            
-            # EMA 9 & EMA 21 Traces
-            ema9_col = 'EMA_9' if 'EMA_9' in df_chart.columns else ('EMA9' if 'EMA9' in df_chart.columns else None)
-            if ema9_col:
-                fig.add_trace(go.Scatter(x=df_chart.index, y=df_chart[ema9_col], mode='lines', name='EMA 9', line=dict(color='#f59e0b', width=1.5)))
-            ema21_col = 'EMA_21' if 'EMA_21' in df_chart.columns else ('EMA21' if 'EMA21' in df_chart.columns else None)
-            if ema21_col:
-                fig.add_trace(go.Scatter(x=df_chart.index, y=df_chart[ema21_col], mode='lines', name='EMA 21', line=dict(color='#3b82f6', width=1.5)))
-            if 'VWAP' in df_chart.columns:
-                fig.add_trace(go.Scatter(x=df_chart.index, y=df_chart['VWAP'], mode='lines', name='VWAP', line=dict(color='#a855f7', width=2)))
-
-            fig.update_layout(template="plotly_dark", height=500, margin=dict(l=10, r=10, t=30, b=10))
-            st.plotly_chart(fig, use_container_width=True)
-        else:
-            st.info("⌛ Loading live 5-minute candlestick data from NSE stream...")
+        render_plotly_strategy_chart_with_trade_overlay(df_chart, active_trade)
     else:
         # Render Direct Binance Embedded Chart for Crypto
         if "BITCOIN" in asset_clean or "BTC" in asset_clean:
@@ -1808,7 +1846,7 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
         st.markdown("---")
 
         # SMART DUAL LIVE CHART (PLOTLY FOR NSE / TRADINGVIEW FOR CRYPTO)
-        render_smart_live_chart(asset_name, df)
+        render_smart_live_chart(asset_name, df, active_data)
 
         st.markdown("---")
 
