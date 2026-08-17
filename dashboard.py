@@ -2077,8 +2077,8 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
     # ==========================================
     def check_authentic_telegram_backend_ping():
         """Performs genuine HTTP GET request to Telegram servers and validates HTTP 200 OK response"""
-        token = st.secrets.get("TELEGRAM_BOT_TOKEN", "8939955418:AAFXd58Nwr84uIGeqrvIqvntveWwHjqmenE")
-        chat_id = st.secrets.get("TELEGRAM_CHAT_ID", "1072750499")
+        token = st.secrets.get("TELEGRAM_BOT_TOKEN", os.getenv("TELEGRAM_BOT_TOKEN", st.session_state.get("TELEGRAM_BOT_TOKEN", "8939955418:AAFXd58Nwr84uIGeqrvIqvntveWwHjqmenE")))
+        chat_id = st.secrets.get("TELEGRAM_CHAT_ID", os.getenv("TELEGRAM_CHAT_ID", st.session_state.get("TELEGRAM_CHAT_ID", "1072750499")))
         try:
             start_t = time.time()
             url = f"https://api.telegram.org/bot{token}/getMe"
@@ -2094,32 +2094,117 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
             return False, f"🔴 **TELEGRAM CONNECTION EXCEPTION:** {str(e)}"
 
     def check_authentic_gemini_backend_ping():
-        """Performs genuine API call to Google AI Studio Gemini 1.5 Flash and validates response"""
-        gemini_key = st.secrets.get("GEMINI_API_KEY", os.getenv("GEMINI_API_KEY", ""))
+        """Auto-discovers available Gemini models dynamically and tests backend connection"""
+        gemini_key = st.secrets.get("GEMINI_API_KEY", os.getenv("GEMINI_API_KEY", st.session_state.get("GEMINI_API_KEY", "")))
         if not gemini_key or "YOUR_" in str(gemini_key):
-            return False, "🟡 **GEMINI API KEY NOTICE:** Key missing in secrets. Add `GEMINI_API_KEY` in Streamlit Cloud Secrets."
+            return False, "🔴 **GEMINI API KEY MISSING:** Key empty. Please enter your Gemini API Key below.", ""
         try:
             import google.generativeai as genai
             genai.configure(api_key=gemini_key)
             start_t = time.time()
-            model = genai.GenerativeModel('gemini-1.5-flash')
+            
+            # DYNAMIC MODEL AUTO-DISCOVERY (Gemini 2.0 / 1.5 Pro / Flash Latest)
+            working_model_name = "gemini-1.5-flash-latest"
+            try:
+                available_models = [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
+                if available_models:
+                    working_model_name = available_models[0] # Auto-picks the available model
+            except Exception:
+                working_model_name = "gemini-1.5-flash-latest"
+
+            model = genai.GenerativeModel(working_model_name)
             res = model.generate_content("Ping")
             latency = round((time.time() - start_t) * 1000, 2)
-            return True, f"🤖 **GOOGLE GEMINI 1.5/2.5 FLASH BACKEND PING SUCCESSFUL!**\n\n• **AI Model:** `Gemini 1.5 Flash` | **Server Status:** `HTTP 200 OK`\n• **Response Time:** `{latency} ms` | **Gemini Reply:** `{res.text.strip()}`"
+            
+            clean_model = working_model_name.replace("models/", "")
+            return True, f"🟢 **GOOGLE GEMINI AI CONNECTED!**\n\n• **Active Model:** `{clean_model}` | **Server Status:** `HTTP 200 OK`\n• **Response Time:** `{latency} ms` | **Gemini Reply:** `{res.text.strip()}`", clean_model
         except Exception as e:
-            return False, f"🔴 **GEMINI BACKEND EXCEPTION:** {str(e)}"
+            return False, f"🔴 **GEMINI BACKEND EXCEPTION:** {str(e)}", ""
 
-    # Render Authentic Statuses in Tab 3
+    def check_authentic_binance_backend_ping():
+        """Tests Binance API connection and fetches live USDT balance"""
+        b_key = st.secrets.get("BINANCE_API_KEY", os.getenv("BINANCE_API_KEY", st.session_state.get("BINANCE_API_KEY", "")))
+        b_sec = st.secrets.get("BINANCE_API_SECRET", os.getenv("BINANCE_API_SECRET", st.session_state.get("BINANCE_API_SECRET", "")))
+        
+        if not b_key or not b_sec or "YOUR_" in str(b_key):
+            return False, "🔴 **BINANCE API KEYS MISSING:** Key or Secret empty. Enter your Binance keys below."
+            
+        try:
+            timestamp = int(time.time() * 1000)
+            query_string = f"timestamp={timestamp}"
+            signature = hmac.new(b_sec.encode('utf-8'), query_string.encode('utf-8'), hashlib.sha256).hexdigest()
+            url = f"https://api.binance.com/api/v3/account?{query_string}&signature={signature}"
+            headers = {"X-MBX-APIKEY": b_key}
+            
+            res = requests.get(url, headers=headers, timeout=5)
+            res_data = res.json()
+            
+            if res.status_code == 200 and 'canTrade' in res_data:
+                can_trade = res_data.get('canTrade', False)
+                usdt_bal = "0.00"
+                for b in res_data.get('balances', []):
+                    if b.get('asset') == 'USDT':
+                        usdt_bal = b.get('free', '0.00')
+                        break
+                return True, f"🟢 **BINANCE CRYPTO API CONNECTED!**\n\n• **Spot Trading:** {'✅ ENABLED' if can_trade else '❌ DISABLED'}\n• **Live Free USDT Balance:** `${float(usdt_bal):,.2f} USDT`"
+            else:
+                return False, f"🔴 **BINANCE API ERROR ({res.status_code}):** {res_data.get('msg', res.text)}"
+        except Exception as e:
+            return False, f"🔴 **BINANCE CONNECTION EXCEPTION:** {str(e)}"
+
+    # RENDER IN TAB 3:
     with tab_broker:
         st.markdown("## 🔑 Broker API Integrator & Direct Diagnostic Center")
+        st.info("🧪 **STATUS:** Paper Trading Test Active (Day 1 of 14). All execution is simulated with zero financial risk.")
         
+        st.divider()
+
+        # 1. TELEGRAM STATUS & EDIT FORM
+        st.markdown("### 📲 Telegram Alert Bot Status & Key Manager")
         is_tg_ok, tg_msg = check_authentic_telegram_backend_ping()
         if is_tg_ok: st.success(tg_msg)
         else: st.error(tg_msg)
+        
+        with st.expander("✏️ Edit / Update Telegram Credentials", expanded=not is_tg_ok):
+            edit_tg_token = st.text_input("Telegram Bot Token", value=st.secrets.get("TELEGRAM_BOT_TOKEN", "8939955418:AAFXd58Nwr84uIGeqrvIqvntveWwHjqmenE"), type="password", key="edit_tg_tok")
+            edit_tg_chat = st.text_input("Telegram Chat ID", value=st.secrets.get("TELEGRAM_CHAT_ID", "1072750499"), key="edit_tg_chat")
+            if st.button("💾 Update Telegram Keys", key="btn_save_tg_edit", use_container_width=True):
+                st.session_state['TELEGRAM_BOT_TOKEN'] = edit_tg_token
+                st.session_state['TELEGRAM_CHAT_ID'] = edit_tg_chat
+                st.success("✅ Telegram Keys Updated!")
+                st.rerun()
 
-        is_gm_ok, gm_msg = check_authentic_gemini_backend_ping()
+        st.divider()
+
+        # 2. GEMINI AI STATUS & EDIT FORM
+        st.markdown("### 🤖 Google AI Studio (Gemini Flash API) Status & Key Manager")
+        is_gm_ok, gm_msg, active_model = check_authentic_gemini_backend_ping()
         if is_gm_ok: st.info(gm_msg)
         else: st.warning(gm_msg)
+
+        with st.expander("✏️ Edit / Update Google Gemini API Key", expanded=not is_gm_ok):
+            edit_gm_key = st.text_input("Gemini API Key", value=st.secrets.get("GEMINI_API_KEY", ""), type="password", key="edit_gm_key")
+            if st.button("💾 Update Gemini Key", key="btn_save_gm_edit", use_container_width=True):
+                st.session_state['GEMINI_API_KEY'] = edit_gm_key
+                st.success("✅ Gemini API Key Updated!")
+                st.rerun()
+
+        st.divider()
+
+        # 3. BINANCE CRYPTO API STATUS & EDIT FORM
+        st.markdown("### 🔒 Binance Crypto API Status & Key Manager")
+        is_b_ok, b_msg = check_authentic_binance_backend_ping()
+        if is_b_ok: st.success(b_msg)
+        else: st.error(b_msg)
+
+        with st.expander("✏️ Edit / Update Binance API Credentials", expanded=not is_b_ok):
+            edit_b_key = st.text_input("Binance API Key", value=st.secrets.get("BINANCE_API_KEY", ""), type="password", key="edit_b_key")
+            edit_b_sec = st.text_input("Binance API Secret", value=st.secrets.get("BINANCE_API_SECRET", ""), type="password", key="edit_b_sec")
+            if st.button("💾 Update Binance Keys", key="btn_save_b_edit", use_container_width=True):
+                st.session_state['BINANCE_API_KEY'] = edit_b_key
+                st.session_state['BINANCE_API_SECRET'] = edit_b_sec
+                st.success("✅ Binance API Keys Updated!")
+                st.rerun()
 
 # Run Cloud State Recovery before scanning
 enforce_cloud_kill_switch_guard()
