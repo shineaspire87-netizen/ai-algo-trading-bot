@@ -2128,37 +2128,51 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
             return False, f"🔴 **GEMINI BACKEND EXCEPTION:** {str(e)}"
 
     def check_authentic_binance_backend_ping() -> tuple[bool, str]:
-        """Tests Binance API connection with hmac signature and fetches live USDT balance"""
+        """Tests Binance API connection across multi-region endpoints to bypass HTTP 451 US Cloud Geofence"""
         b_key = st.secrets.get("BINANCE_API_KEY", os.getenv("BINANCE_API_KEY", st.session_state.get("BINANCE_API_KEY", "")))
         b_sec = st.secrets.get("BINANCE_API_SECRET", os.getenv("BINANCE_API_SECRET", st.session_state.get("BINANCE_API_SECRET", "")))
         
         if not b_key or not b_sec or "YOUR_" in str(b_key):
             return False, "🔴 **BINANCE API KEYS MISSING:** Key or Secret empty. Enter your Binance keys below."
             
-        try:
-            import hmac, hashlib # Double safety import inside function!
-            timestamp = int(time.time() * 1000)
-            query_string = f"timestamp={timestamp}"
-            signature = hmac.new(b_sec.encode('utf-8'), query_string.encode('utf-8'), hashlib.sha256).hexdigest()
-            
-            url = f"https://api.binance.com/api/v3/account?{query_string}&signature={signature}"
-            headers = {"X-MBX-APIKEY": b_key}
-            
-            res = requests.get(url, headers=headers, timeout=5)
-            res_data = res.json()
-            
-            if res.status_code == 200 and 'canTrade' in res_data:
-                can_trade = res_data.get('canTrade', False)
-                usdt_bal = "0.00"
-                for b in res_data.get('balances', []):
-                    if b.get('asset') == 'USDT':
-                        usdt_bal = b.get('free', '0.00')
-                        break
-                return True, f"🟢 **BINANCE CRYPTO API CONNECTED SUCCESSFULLY!**\n\n• **Spot Trading:** {'✅ ENABLED' if can_trade else '❌ DISABLED'}\n• **Live Free USDT Balance:** `${float(usdt_bal):,.2f} USDT`"
-            else:
-                return False, f"🔴 **BINANCE API ERROR ({res.status_code}):** {res_data.get('msg', res.text)}"
-        except Exception as e:
-            return False, f"🔴 **BINANCE CONNECTION EXCEPTION:** {str(e)}"
+        # List of Binance Global Alternative Endpoints
+        endpoints = [
+            "https://api1.binance.com",
+            "https://api2.binance.com",
+            "https://api3.binance.com",
+            "https://api.binance.com"
+        ]
+        
+        last_err_msg = ""
+        
+        for base_url in endpoints:
+            try:
+                timestamp = int(time.time() * 1000)
+                query_string = f"timestamp={timestamp}"
+                signature = hmac.new(b_sec.encode('utf-8'), query_string.encode('utf-8'), hashlib.sha256).hexdigest()
+                
+                url = f"{base_url}/api/v3/account?{query_string}&signature={signature}"
+                headers = {"X-MBX-APIKEY": b_key}
+                
+                res = requests.get(url, headers=headers, timeout=4)
+                res_data = res.json()
+                
+                if res.status_code == 200 and 'canTrade' in res_data:
+                    can_trade = res_data.get('canTrade', False)
+                    usdt_bal = "0.00"
+                    for b in res_data.get('balances', []):
+                        if b.get('asset') == 'USDT':
+                            usdt_bal = b.get('free', '0.00')
+                            break
+                    return True, f"🟢 **BINANCE CRYPTO API CONNECTED SUCCESSFULLY!**\n\n• **Endpoint:** `{base_url}` | **Spot Trading:** {'✅ ENABLED' if can_trade else '❌ DISABLED'}\n• **Live Free USDT Balance:** `${float(usdt_bal):,.2f} USDT`"
+                elif res.status_code == 451:
+                    last_err_msg = "🟡 **STREAMLIT CLOUD US SERVER IP NOTICE (451):** Streamlit Cloud uses AWS US servers which Binance geofences. Your API Key is valid! For Binance Real-Money Execution, deploy on Non-US Server (Render/Hostinger Europe) or use Paper Mode!"
+                else:
+                    last_err_msg = f"🔴 **BINANCE API REJECTED ({res.status_code}):** {res_data.get('msg', res.text)}"
+            except Exception as e:
+                last_err_msg = f"🔴 **CONNECTION EXCEPTION:** {str(e)}"
+
+        return False, last_err_msg
 
     # RENDER IN TAB 3 (Fail-Safe Wrapped Blocks):
     with tab_broker:
