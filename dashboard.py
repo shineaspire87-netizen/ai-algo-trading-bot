@@ -2082,54 +2082,13 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
         st.divider()
 
         # -------------------------------------------------------------
-        # 1. FORM-BASED TELEGRAM ALERT BOT TESTER
-        # -------------------------------------------------------------
-        st.markdown("### 📲 Telegram Alert Bot Connection Tester")
-        
-        with st.form(key="form_telegram_tester_v5"):
-            col_tg1, col_tg2 = st.columns(2)
-            with col_tg1:
-                default_tg_token = st.secrets.get("TELEGRAM_BOT_TOKEN", "8939955418:AAFXd58Nwr84uIGeqrvIqvntveWwHjqmenE")
-                tg_token_val = st.text_input("Telegram Bot Token", value=default_tg_token, type="password", key="form_tg_token")
-            with col_tg2:
-                default_tg_chat = st.secrets.get("TELEGRAM_CHAT_ID", "1072750499")
-                tg_chat_val = st.text_input("Telegram Chat ID", value=default_tg_chat, key="form_tg_chat")
-
-            submit_tg = st.form_submit_button("🚀 Test Telegram Connection & Send Live Message Now", use_container_width=True)
-
-        if submit_tg:
-            with st.spinner("Pinging Telegram API & sending live test message..."):
-                try:
-                    import requests
-                    url = f"https://api.telegram.org/bot{tg_token_val}/sendMessage"
-                    payload = {"chat_id": tg_chat_val, "text": "🔔 <b>ANTONY Quant AI Algo Terminal</b>\n\n✅ Live Telegram Connection Test Successful!\n⏱️ Heartbeat: Active.", "parse_mode": "HTML"}
-                    res = requests.post(url, json=payload, timeout=5)
-                    
-                    if res.status_code == 200 and res.json().get("ok"):
-                        st.session_state['tg_test_res'] = ("SUCCESS", "🎉 **TELEGRAM CONNECTED SUCCESSFULLY!** Live alert delivered to your phone. Check your Telegram App now!")
-                    else:
-                        st.session_state['tg_test_res'] = ("ERROR", f"❌ Telegram API Error ({res.status_code}): {res.text}")
-                except Exception as e:
-                    st.session_state['tg_test_res'] = ("ERROR", f"❌ Network Exception: {str(e)}")
-
-        # Display Telegram Test Result Permanently
-        if 'tg_test_res' in st.session_state:
-            res_type, res_msg = st.session_state['tg_test_res']
-            if res_type == "SUCCESS":
-                st.success(res_msg)
-            else:
-                st.error(res_msg)
-
-        st.divider()
-
-        # -------------------------------------------------------------
-        # 2. FORM-BASED GOOGLE AI STUDIO (GEMINI 1.5/2.5 FLASH) TESTER
+        # 1. GOOGLE AI STUDIO (GEMINI 1.5/2.5 FLASH) FORM TESTER
         # -------------------------------------------------------------
         st.markdown("### 🤖 Google AI Studio (Gemini 1.5/2.5 Flash API) Connection Tester")
 
-        with st.form(key="form_gemini_tester_v5"):
+        with st.form(key="form_gemini_credentials_v6"):
             default_gemini_key = st.secrets.get("GEMINI_API_KEY", "")
-            gemini_key_val = st.text_input("Gemini API Key", value=default_gemini_key, type="password", key="form_gemini_key")
+            gemini_key_val = st.text_input("Gemini API Key", value=default_gemini_key, type="password", key="form_gemini_key_v6")
 
             submit_gm = st.form_submit_button("🚀 Cross-Check Gemini API Key & Verify AI Connection", use_container_width=True)
 
@@ -2146,84 +2105,85 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
                         res = model.generate_content("Respond in 1 short sentence confirming ANTONY Quant Terminal connection.")
                         latency = round((time.time() - start_t) * 1000, 2)
                         
-                        st.session_state['gm_test_res'] = ("SUCCESS", f"🎉 **GOOGLE GEMINI API CONNECTED SUCCESSFULLY!** (Latency: `{latency} ms`)\n\n🤖 **Gemini Live Response:** {res.text.strip()}")
+                        st.success(f"🎉 **GOOGLE GEMINI 1.5/2.5 FLASH API CONNECTED SUCCESSFULLY!** (Latency: `{latency} ms`)")
+                        st.info(f"🤖 **Gemini Live Response:** {res.text.strip()}")
                     else:
-                        st.session_state['gm_test_res'] = ("ERROR", "❌ **GEMINI API KEY MISSING!** Please paste your Gemini API Key in the text box above first.")
+                        st.error("❌ **KEY MISSING:** Please paste your Gemini API Key in the box above first!")
                 except Exception as e:
-                    st.session_state['gm_test_res'] = ("ERROR", f"❌ **GEMINI API ERROR:** {str(e)}")
-
-        # Display Gemini Test Result Permanently
-        if 'gm_test_res' in st.session_state:
-            res_type, res_msg = st.session_state['gm_test_res']
-            if res_type == "SUCCESS":
-                st.success(res_msg)
-            else:
-                st.error(res_msg)
+                    st.error(f"❌ **GEMINI API ERROR:** {str(e)}")
 
         st.divider()
 
         # -------------------------------------------------------------
-        # 3. LIVE BROKER CREDENTIALS MANAGER
+        # 2. BINANCE CRYPTO API FORM TESTER & SAVER
         # -------------------------------------------------------------
-        st.markdown("### 🔒 Live Broker Credentials Manager")
-        
-        with st.expander("🔑 Binance Crypto API Credentials", expanded=True):
-            binance_k = st.text_input("Binance API Key", type="password", value=st.secrets.get("BINANCE_API_KEY", ""), key="input_binance_key_v7")
-            binance_s = st.text_input("Binance API Secret", type="password", value=st.secrets.get("BINANCE_API_SECRET", ""), key="input_binance_secret_v7")
+        st.markdown("### 🔒 Binance Crypto API Credentials & Live Connection Tester")
 
-            col_b_save, col_b_test = st.columns(2)
+        with st.form(key="form_binance_credentials_v6"):
+            b_key_input = st.text_input("Binance API Key", type="password", value=st.secrets.get("BINANCE_API_KEY", ""), key="form_b_key")
+            b_sec_input = st.text_input("Binance API Secret", type="password", value=st.secrets.get("BINANCE_API_SECRET", ""), key="form_b_sec")
             
-            # 1. Save Button
-            with col_b_save:
-                if st.button("💾 Save Binance Keys", key="btn_save_binance_v7", use_container_width=True):
-                    st.session_state['BINANCE_API_KEY'] = binance_k
-                    st.session_state['BINANCE_API_SECRET'] = binance_s
-                    st.success("✅ Binance Keys saved to current cloud session successfully!")
+            col_b1, col_b2 = st.columns(2)
+            with col_b1:
+                save_b = st.form_submit_button("💾 Save Binance Keys", use_container_width=True)
+            with col_b2:
+                test_b = st.form_submit_button("🧪 Test Binance API Connection", use_container_width=True)
 
-            # 2. Test Connection Button (Fetches Live Binance Account Balance)
-            with col_b_test:
-                if st.button("🧪 Test Binance API Connection", key="btn_test_binance_v7", use_container_width=True):
-                    with st.spinner("Pinging Binance servers with your API Key..."):
-                        try:
-                            import hmac, hashlib, time, requests
-                            
-                            key = binance_k or st.secrets.get("BINANCE_API_KEY", "")
-                            sec = binance_s or st.secrets.get("BINANCE_API_SECRET", "")
-                            
-                            if not key or not sec:
-                                st.error("❌ Binance API Key or Secret Key is missing!")
-                            else:
-                                timestamp = int(time.time() * 1000)
-                                query_string = f"timestamp={timestamp}"
-                                signature = hmac.new(sec.encode('utf-8'), query_string.encode('utf-8'), hashlib.sha256).hexdigest()
-                                
-                                url = f"https://api.binance.com/api/v3/account?{query_string}&signature={signature}"
-                                headers = {"X-MBX-APIKEY": key}
-                                
-                                res = requests.get(url, headers=headers, timeout=5)
-                                res_data = res.json()
-                                
-                                if res.status_code == 200 and 'canTrade' in res_data:
-                                    can_trade = res_data.get('canTrade', False)
-                                    usdt_bal = "0.00"
-                                    for b in res_data.get('balances', []):
-                                        if b.get('asset') == 'USDT':
-                                            usdt_bal = b.get('free', '0.00')
-                                            break
-                                            
-                                    st.success(f"🎉 **BINANCE API CONNECTED SUCCESSFULLY!**")
-                                    st.info(f"🟢 **Trading Permission:** {'✅ ENABLED' if can_trade else '❌ DISABLED'}\n\n💵 **Live USDT Free Balance:** `${float(usdt_bal):,.2f} USDT`")
-                                else:
-                                    st.error(f"❌ **BINANCE API ERROR ({res.status_code}):** {res_data.get('msg', res.text)}")
-                        except Exception as e:
-                            st.error(f"❌ **CONNECTION ERROR:** {str(e)}")
+        if save_b:
+            st.session_state['BINANCE_API_KEY'] = b_key_input
+            st.session_state['BINANCE_API_SECRET'] = b_sec_input
+            st.success("✅ Binance Keys saved to current cloud session successfully!")
 
-        with st.expander("🔑 Zerodha Kite Connect Credentials (NSE India)", expanded=False):
-            st.text_input("Zerodha API Key", type="password", value=st.secrets.get("ZERODHA_API_KEY", ""), key="input_zerodha_key_v5")
-            st.text_input("Zerodha API Secret", type="password", value=st.secrets.get("ZERODHA_API_SECRET", ""), key="input_zerodha_secret_v5")
+        if test_b:
+            with st.spinner("Authenticating with Binance API & fetching live account status..."):
+                try:
+                    import hmac, hashlib, time, requests
+                    key = b_key_input or st.secrets.get("BINANCE_API_KEY", "")
+                    sec = b_sec_input or st.secrets.get("BINANCE_API_SECRET", "")
+                    
+                    if not key or not sec:
+                        st.error("❌ Please paste your Binance API Key and Secret Key in the text boxes above first!")
+                    else:
+                        timestamp = int(time.time() * 1000)
+                        query_string = f"timestamp={timestamp}"
+                        signature = hmac.new(sec.encode('utf-8'), query_string.encode('utf-8'), hashlib.sha256).hexdigest()
+                        
+                        url = f"https://api.binance.com/api/v3/account?{query_string}&signature={signature}"
+                        headers = {"X-MBX-APIKEY": key}
+                        
+                        res = requests.get(url, headers=headers, timeout=5)
+                        res_data = res.json()
+                        
+                        if res.status_code == 200 and 'canTrade' in res_data:
+                            can_trade = res_data.get('canTrade', False)
+                            usdt_bal = "0.00"
+                            for b in res_data.get('balances', []):
+                                if b.get('asset') == 'USDT':
+                                    usdt_bal = b.get('free', '0.00')
+                                    break
+                                    
+                            st.success("🎉 **BINANCE API CONNECTED SUCCESSFULLY!**")
+                            st.info(f"🟢 **Trading Permission:** {'✅ ENABLED' if can_trade else '❌ DISABLED'}\n\n💵 **Live USDT Free Balance:** `${float(usdt_bal):,.2f} USDT`")
+                        else:
+                            st.error(f"❌ **BINANCE API REJECTED ({res.status_code}):** {res_data.get('msg', res.text)}")
+                except Exception as e:
+                    st.error(f"❌ **CONNECTION EXCEPTION:** {str(e)}")
 
         st.divider()
 
+        # -------------------------------------------------------------
+        # 3. ZERODHA KITE CONNECT CREDENTIALS
+        # -------------------------------------------------------------
+        with st.expander("🔑 Zerodha Kite Connect Credentials (NSE India)", expanded=False):
+            st.text_input("Zerodha API Key", type="password", value=st.secrets.get("ZERODHA_API_KEY", ""), key="input_zerodha_key_v6")
+            st.text_input("Zerodha API Secret", type="password", value=st.secrets.get("ZERODHA_API_SECRET", ""), key="input_zerodha_secret_v6")
+            st.text_input("Zerodha Access Token (Daily TOTP)", type="password", value=st.secrets.get("ZERODHA_ACCESS_TOKEN", ""), key="input_zerodha_token_v6")
+
+        st.divider()
+
+        # -------------------------------------------------------------
+        # 4. SYSTEM HEALTH DIAGNOSTIC PANEL
+        # -------------------------------------------------------------
         try:
             render_system_health_panel()
         except Exception as e_health:
