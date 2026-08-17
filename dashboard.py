@@ -2242,23 +2242,21 @@ def render_0ms_websocket_ticker(binance_symbol: str = "BTCUSDT"):
     """
     components.html(ticker_html, height=55)
 
-# 1. Unlocked Sidebar Asset Selector
-st.sidebar.markdown("### 🎛️ Asset & Market Selector")
+# 1. ONE SINGLE UNIFIED ASSET SELECTOR IN SIDEBAR
+st.sidebar.markdown("### 🎛️ Active Focus Asset")
 
-asset_options = ["BITCOIN", "ETHEREUM", "SOLANA", "NIFTY", "BANKNIFTY", "RELIANCE"]
-default_idx = 0
-
+asset_options = ["ETHEREUM", "BITCOIN", "SOLANA", "NIFTY", "BANKNIFTY", "RELIANCE"]
 selected_asset = st.sidebar.selectbox(
     "Select Active Focus Asset:",
     asset_options,
-    index=default_idx,
-    key="unlocked_sidebar_asset_select"
+    index=0 if st.session_state.get('selected_asset') == 'ETHEREUM' else 1,
+    key="one_single_active_asset_selector"
 )
 
+# SYNC SESSION STATE IMMEDIATELY
 st.session_state['selected_asset'] = selected_asset
 
-# 2. Dynamic Symbol & Currency Mapping
-crypto_map = {
+crypto_symbol_map = {
     "BITCOIN": "BTCUSDT",
     "ETHEREUM": "ETHUSDT",
     "SOLANA": "SOLUSDT"
@@ -2273,17 +2271,18 @@ nse_symbol_map = {
     "RELIANCE": "RELIANCE.NS"
 }
 
-is_crypto = selected_asset in crypto_map
-active_binance_symbol = crypto_map.get(selected_asset, "BTCUSDT")
-selected_symbol = nse_symbol_map.get(selected_asset, "BTC-USD")
+is_crypto = selected_asset in crypto_symbol_map
+active_binance_symbol = crypto_symbol_map.get(selected_asset, "ETHUSDT" if selected_asset == "ETHEREUM" else "BTCUSDT")
+selected_symbol = nse_symbol_map.get(selected_asset, "ETH-USD" if selected_asset == "ETHEREUM" else "BTC-USD")
 selected_name = selected_asset
 timeframe = "5m"
 curr_symbol = "$" if is_crypto else "₹"
 st.session_state['active_currency'] = curr_symbol
 
-st.sidebar.info(f"⚡ **ACTIVE FOCUS:** `{selected_asset}` ({curr_symbol} Currency Calibration)")
+# Sidebar Info Box
+st.sidebar.info(f"🔥 **{selected_asset} ACTIVE FOCUS MODE**\nScanning 24/7 Global Crypto Options in USD ($)." if is_crypto else f"🇮🇳 **{selected_asset} ACTIVE FOCUS MODE**\nScanning NSE Indian Options in INR (₹).")
 
-# 3. Dynamic 0ms WebSocket Ticker for Selected Asset
+# 2. RENDER 0MS WEBSOCKET TICKER FOR SELECTED ASSET
 render_0ms_websocket_ticker(active_binance_symbol)
 
 # Run Cloud State Recovery before scanning
