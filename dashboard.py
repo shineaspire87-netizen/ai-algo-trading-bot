@@ -11,15 +11,18 @@ import streamlit.components.v1 as components
 import pandas as pd
 
 def get_tradingview_symbol(asset_name: str) -> str:
-    """Maps internal asset names to exact TradingView widget symbols with NSE: prefix"""
+    """Maps internal asset names to exact unrestricted TradingView widget symbols"""
     asset_upper = str(asset_name).upper().strip()
     
     mapping = {
-        "NIFTY": "NSE:NIFTY",
-        "NIFTY50": "NSE:NIFTY",
-        "^NSEI": "NSE:NIFTY",
-        "BANKNIFTY": "NSE:BANKNIFTY",
-        "^NSEBANK": "NSE:BANKNIFTY",
+        # Indian Indices -> Use Continuous Futures Tickers (Unrestricted in TV Widget)
+        "NIFTY": "NSE:NIFTY1!",
+        "NIFTY50": "NSE:NIFTY1!",
+        "^NSEI": "NSE:NIFTY1!",
+        "BANKNIFTY": "NSE:BANKNIFTY1!",
+        "^NSEBANK": "NSE:BANKNIFTY1!",
+        
+        # Indian Stocks (Unrestricted)
         "RELIANCE": "NSE:RELIANCE",
         "RELIANCE.NS": "NSE:RELIANCE",
         "HDFCBANK": "NSE:HDFCBANK",
@@ -30,6 +33,8 @@ def get_tradingview_symbol(asset_name: str) -> str:
         "INFY.NS": "NSE:INFY",
         "SBIN": "NSE:SBIN",
         "SBIN.NS": "NSE:SBIN",
+        
+        # Crypto
         "BITCOIN": "BINANCE:BTCUSDT",
         "BTC-USD": "BINANCE:BTCUSDT",
         "ETHEREUM": "BINANCE:ETHUSDT",
