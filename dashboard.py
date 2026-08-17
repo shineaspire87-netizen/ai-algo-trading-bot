@@ -1030,14 +1030,34 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
     st.markdown("---")
 
 
-    # Streamlit Tabs Definition
-    tab_live, tab_backtest, tab_broker = st.tabs([
+    # 1. HORIZONTAL NAVIGATION BAR WITH SESSION STATE PERSISTENCE (Prevents Auto-Tab Jumping)
+    nav_options = [
         "🖥️ Live Execution Terminal", 
         "📊 Backtesting & Optimization", 
         "🔑 Broker Integrator (2-Week Paper Test)"
-    ])
+    ]
 
-    with tab_live:
+    # Preserve active tab selection in session state
+    current_tab_name = st.session_state.get('active_tab_name', nav_options[0])
+    tab_idx = nav_options.index(current_tab_name) if current_tab_name in nav_options else 0
+
+    selected_tab = st.radio(
+        "Navigation Tabs",
+        nav_options,
+        index=tab_idx,
+        horizontal=True,
+        key="dashboard_persistent_nav_v16",
+        label_visibility="collapsed"
+    )
+
+    st.session_state['active_tab_name'] = selected_tab
+
+    st.divider()
+
+    # -------------------------------------------------------------
+    # TAB 1: LIVE EXECUTION TERMINAL
+    # -------------------------------------------------------------
+    if selected_tab == "🖥️ Live Execution Terminal":
         # 🟢 CLOUD SESSION MEMORY FALLBACK (Prevents trade wipe on code deploy)
         if "active_trade_memory" not in st.session_state:
             st.session_state.active_trade_memory = {"status": "NO_POSITION"}
@@ -1600,7 +1620,7 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
     # ==========================================
     # TAB 2: BACKTESTING & OPTIMIZATION ENGINE
     # ==========================================
-    with tab_backtest:
+    elif selected_tab == "📊 Backtesting & Optimization":
         st.markdown("## 📊 Strategy Backtesting & Win-Rate Analytics")
         col_bt1, col_bt2, col_bt3 = st.columns(3)
         
@@ -1633,7 +1653,7 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
     # ==========================================
     # TAB 3: BROKER KEY INTEGRATOR & PAPER MODE
     # ==========================================
-    with tab_broker:
+    elif selected_tab == "🔑 Broker Integrator (2-Week Paper Test)":
         st.markdown("### 🟡 Binance Crypto Live API Integrator")
 
         with st.form(key="form_binance_live_real_money_v13"):
