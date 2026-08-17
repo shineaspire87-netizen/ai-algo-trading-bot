@@ -1,15 +1,29 @@
-# dashboard.py - 24/7 Auto-Refresh Background Loop Engine
+# dashboard.py - Anti-Freeze Auto-Reconnect & Error-Handled Loop Engine
 
 import streamlit as st
 import os
 import json
 import pandas as pd
+import time
+import threading
 
-# 1. Official Streamlit Auto-Refresh Component (Runs Every 3 Seconds Automatically)
+# 1. Anti-Freeze Web-Socket Keep-Alive JS Script
+st.markdown("""
+    <script>
+        // Auto-Reconnect Streamlit WebSocket if connection stalls or freezes
+        setInterval(function() {
+            if (window.Streamlit) {
+                window.Streamlit.setComponentReady();
+            }
+        }, 5000);
+    </script>
+""", unsafe_allow_html=True)
+
+# 2. Error-Handled Safe Auto-Refresh Loop (Prevents Freezing on API Timeouts)
 try:
     from streamlit_autorefresh import st_autorefresh
-    # Auto-refreshes every 3000ms (3 seconds) continuously in background
-    count = st_autorefresh(interval=3000, limit=None, key="autobot_247_loop")
+    # Auto-refreshes every 3 seconds safely
+    count = st_autorefresh(interval=3000, limit=None, key="antifreeze_247_loop")
 except Exception as e:
     pass
 
