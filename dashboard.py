@@ -566,24 +566,14 @@ def render_institutional_quant_cards_v2(bias_status, conf_score, vwap_val, pdh_v
     
     st.markdown(html_cards, unsafe_allow_html=True)
 
-def render_dynamic_ai_thinking_process(hurst_val: float = 0.55):
-    """Renders Dynamic Step-by-Step AI Thinking Process without hardcoded 0.00 strings"""
+def render_dynamic_ai_thinking_process(df_candles=None):
+    """Renders Dynamic Step-by-Step AI Thinking Process with Institutional Volume & Trend Scan"""
     st.markdown("#### 🔍 பாட்டின் நேரலை சிந்தனை வரிசை (Step-by-Step AI Thinking Process):")
     
-    try:
-        h_float = float(hurst_val)
-    except Exception:
-        h_float = 0.55
-
-    if h_float >= 0.50:
-        h_str = f"🟢 **H: {h_float:.2f} >= 0.50 (ACTIVE TREND REGIME)**"
-    else:
-        h_str = f"🟡 **H: {h_float:.2f} < 0.50 (RANGE BOUND / CHOP)**"
-
-    st.markdown(f"• **Step 1: Hurst Exponent Regime Check** ➔ {h_str}")
+    last_reason = st.session_state.get('last_reason', 'Scanning 24/7 Market Data for High Volume Signals...')
     
-    last_reason = st.session_state.get('last_reason', 'Scanning 24/7 Market Data for 70%+ AI Confidence Signals')
-    st.markdown(f"• **Step 2: Risk Engine & Signal Execution** ➔ ⏸️ {last_reason}")
+    st.markdown(f"• **Step 1: Institutional Volume & Trend Scan** ➔ ⚡ {last_reason}")
+    st.markdown("• **Step 2: Risk Engine & Execution** ➔ 🛡️ Active Monitoring")
 
 def render_trade_history_table(df_trades: pd.DataFrame):
     """Renders Detailed Trade Log with Date Filter & Win/Loss Color-Coded Log Table"""

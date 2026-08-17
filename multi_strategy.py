@@ -154,14 +154,14 @@ def detect_predictive_vcp_breakout(df_5m: pd.DataFrame, bbwp_val: float, atr_14:
 # 4. MASTER MULTI-FACTOR SIGNAL DECISION MATRIX
 # -------------------------------------------------------------
 def evaluate_institutional_bitcoin_signals(df_5m: pd.DataFrame, asset_symbol: str = "BITCOIN", orderbook_bids: list = None, orderbook_asks: list = None) -> dict:
-    """Evaluates All Microstructure Feeds, Timeframes, and Risk Controls for 70%+ Confidence Signals"""
-    if df_5m is None or len(df_5m) < 60:
-        return {"signal": "HOLD", "confidence": 0.50, "reason": "Insufficient 5m candle history for institutional analysis"}
+    """Evaluates All Microstructure Feeds with Priority Volume Override (Vol >= 1.15x)"""
+    if df_5m is None or len(df_5m) < 20:
+        return {"signal": "HOLD", "confidence": 0.50, "reason": "Insufficient candle history"}
 
     df = df_5m.copy()
     last_row = df.iloc[-1]
 
-    # Calculate Core Indicators
+    # Calculate Indicators
     atr_14 = ta.volatility.average_true_range(df['High'], df['Low'], df['Close'], window=14).iloc[-1]
     rsi_14 = ta.momentum.rsi(df['Close'], window=14).iloc[-1]
     
@@ -174,86 +174,48 @@ def evaluate_institutional_bitcoin_signals(df_5m: pd.DataFrame, asset_symbol: st
     candle_range = last_row['High'] - last_row['Low'] + 1e-6
     body_ratio = abs(last_row['Close'] - last_row['Open']) / candle_range
 
-    # Calculate Advanced Phase 1 Quant Indicators
-    hurst_val = compute_hurst_exponent_rs(df['Close'], window=256)
-    bbwp_val = compute_bbwp(df, bb_window=20, percentile_window=288)
-    obi_10 = compute_weighted_obi(orderbook_bids, orderbook_asks, depth_levels=10)
-    sdr_val = compute_spoofing_detection_ratio(orderbook_bids) if orderbook_bids else 1.0
+    hurst_val = compute_hurst_exponent_rs(df['Close'], window=64)
+    if hurst_val <= 0.05 or np.isnan(hurst_val):
+        hurst_val = 0.55
 
-    # Key Landmark Levels (PDH & PDL)
-    pdh_val = df['High'].iloc[-288:].max()
-    pdl_val = df['Low'].iloc[-288:].min()
+    # 1. PRIORITY VOLUME OVERRIDE (Vol >= 1.15x immediately bypasses Hurst Chop Check)
+    is_high_volume = vol_ratio >= 1.15
 
-    # 1. FIXED HURST VETO: Ignore Hurst if H <= 0.05 or if ADX >= 20.0 (Strong Trend)
-    is_high_vol_breakout = (vol_ratio >= 1.50) and (adx_14 >= 22.0)
-    
-    if (0.05 < hurst_val < 0.42) and adx_14 < 20.0 and not is_high_vol_breakout:
+    if not is_high_volume and hurst_val < 0.42 and adx_14 < 20.0:
         return {
             "signal": "HOLD",
-            "confidence": 0.40,
-            "reason": f"⏸️ Hurst Chop Range (H={hurst_val:.2f})"
+            "confidence": 0.45,
+            "reason": f"⏸️ Low Volume ({vol_ratio:.2f}x) & Sideways Chop Range (H={hurst_val:.2f}). Waiting for Volume Spike."
         }
 
-    # 2. HIGH VOLUME OVERRIDE EXECUTION (Volume >= 1.5x)
-    if is_high_vol_breakout and last_row['Close'] > last_row['Open']:
-        return {
-            "signal": "BUY_CALL",
-            "confidence": 0.85, # High Conviction
-            "reason": f"🔥 HIGH VOLUME MOMENTUM BREAKOUT: Vol {vol_ratio:.2f}x | ADX {adx_14:.1f} | 100% Bullish Sync"
-        }
-    elif is_high_vol_breakout and last_row['Close'] < last_row['Open']:
-        return {
-            "signal": "BUY_PUT",
-            "confidence": 0.85, # High Conviction
-            "reason": f"🔥 HIGH VOLUME BEARISH BREAKOUT: Vol {vol_ratio:.2f}x | ADX {adx_14:.1f} | 100% Bearish Sync"
-        }
+    # 2. EVALUATE BUY CALL / BUY PUT SIGNALS
+    vwap_val = (df['Volume'] * (df['High'] + df['Low'] + df['Close']) / 3).cumsum() / df['Volume'].cumsum()
+    vwap_curr = vwap_val.iloc[-1]
 
-    # 3. Check Liquidity Sweep Traps (SFP)
-    sfp_data = detect_liquidity_sweep_sfp_trap(df, pdh_val, pdl_val, atr_14)
-    if sfp_data['is_sweep']:
-        return {
-            "signal": sfp_data['signal'],
-            "confidence": 0.85, # High Conviction Reversal
-            "reason": sfp_data['status']
-        }
-
-    # 3. Check Multi-Timeframe Cascade
-    cascade_data = evaluate_multi_timeframe_cascade(df)
-    
-    # 4. Calculate Calibrated AI Confidence Score
-    base_confidence = 0.50
+    base_confidence = 0.55
     if body_ratio >= 0.60: base_confidence += 0.10
-    if vol_ratio >= 1.20: base_confidence += 0.10
-    if adx_14 >= 22.0: base_confidence += 0.10
-    if obi_10 >= 0.20 or obi_10 <= -0.20: base_confidence += 0.05
-    if cascade_data['allow_long'] or cascade_data['allow_short']: base_confidence += 0.15
-
-    # Check Predictive VCP Breakout
-    vcp_data = detect_predictive_vcp_breakout(df, bbwp_val, atr_14, obi_10)
-    if vcp_data['is_vcp_predictive']:
-        base_confidence += vcp_data['boost']
+    if vol_ratio >= 1.15: base_confidence += 0.15
+    if adx_14 >= 20.0: base_confidence += 0.10
 
     final_confidence = round(min(base_confidence, 0.95), 2)
 
-    # 5. EXECUTION GATING (Requires >= 70% Confidence)
-    if final_confidence >= 0.70:
-        if cascade_data['allow_long'] and rsi_14 <= 75.0 and sdr_val >= 0.80:
-            return {
-                "signal": "BUY_CALL",
-                "confidence": final_confidence,
-                "reason": f"🚀 100% INSTITUTIONAL BULLISH CASCADE: Multi-TF Sync | OBI_10 {obi_10:+.2f} | Vol {vol_ratio:.2f}x | ADX {adx_14:.1f} | H={hurst_val:.2f}"
-            }
-        elif cascade_data['allow_short'] and rsi_14 >= 25.0 and sdr_val >= 0.80:
-            return {
-                "signal": "BUY_PUT",
-                "confidence": final_confidence,
-                "reason": f"🚨 100% INSTITUTIONAL BEARISH CASCADE: Multi-TF Sync | OBI_10 {obi_10:+.2f} | Vol {vol_ratio:.2f}x | ADX {adx_14:.1f} | H={hurst_val:.2f}"
-            }
+    if last_row['Close'] > vwap_curr and rsi_14 <= 75.0 and is_high_volume:
+        return {
+            "signal": "BUY_CALL",
+            "confidence": final_confidence,
+            "reason": f"🔥 HIGH VOLUME BREAKOUT DETECTED: Vol {vol_ratio:.2f}x >= 1.15x | ADX {adx_14:.1f} | RSI {rsi_14:.1f}"
+        }
+    elif last_row['Close'] < vwap_curr and rsi_14 >= 25.0 and is_high_volume:
+        return {
+            "signal": "BUY_PUT",
+            "confidence": final_confidence,
+            "reason": f"🚨 HIGH VOLUME BREAKDOWN DETECTED: Vol {vol_ratio:.2f}x >= 1.15x | ADX {adx_14:.1f} | RSI {rsi_14:.1f}"
+        }
 
     return {
         "signal": "HOLD",
         "confidence": final_confidence,
-        "reason": f"⏸️ WAITING FOR 70%+ AI CONFIDENCE: Current AI Score: {final_confidence*100:.1f}% | OBI_10: {obi_10:+.2f} | H={hurst_val:.2f}"
+        "reason": f"⏸️ Waiting for VWAP Breakout Confirmation | Vol: {vol_ratio:.2f}x | RSI: {rsi_14:.1f}"
     }
 
 # -------------------------------------------------------------
