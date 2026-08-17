@@ -2246,6 +2246,57 @@ def render_0ms_websocket_ticker(binance_symbol: str = "BTCUSDT"):
     """
     components.html(ticker_html, height=55)
 
+def get_active_asset_context():
+    """Returns 100% synchronized asset context for 0ms instantaneous UI switching"""
+    selected_asset = st.session_state.get('selected_asset', 'BITCOIN')
+    
+    asset_config = {
+        "BITCOIN": {
+            "title": "BITCOIN",
+            "binance_symbol": "BTCUSDT",
+            "yahoo_ticker": "BTC-USD",
+            "currency": "$",
+            "is_crypto": True
+        },
+        "ETHEREUM": {
+            "title": "ETHEREUM",
+            "binance_symbol": "ETHUSDT",
+            "yahoo_ticker": "ETH-USD",
+            "currency": "$",
+            "is_crypto": True
+        },
+        "SOLANA": {
+            "title": "SOLANA",
+            "binance_symbol": "SOLUSDT",
+            "yahoo_ticker": "SOL-USD",
+            "currency": "$",
+            "is_crypto": True
+        },
+        "NIFTY": {
+            "title": "NIFTY 50",
+            "binance_symbol": "NIFTY",
+            "yahoo_ticker": "^NSEI",
+            "currency": "₹",
+            "is_crypto": False
+        },
+        "BANKNIFTY": {
+            "title": "BANKNIFTY",
+            "binance_symbol": "BANKNIFTY",
+            "yahoo_ticker": "^NSEBANK",
+            "currency": "₹",
+            "is_crypto": False
+        },
+        "RELIANCE": {
+            "title": "RELIANCE",
+            "binance_symbol": "RELIANCE",
+            "yahoo_ticker": "RELIANCE.NS",
+            "currency": "₹",
+            "is_crypto": False
+        }
+    }
+    
+    return asset_config.get(selected_asset, asset_config["BITCOIN"])
+
 # 1. ONE SINGLE UNIFIED ASSET SELECTOR IN SIDEBAR
 st.sidebar.markdown("### 🎛️ Active Focus Asset")
 
@@ -2260,31 +2311,18 @@ selected_asset = st.sidebar.selectbox(
 # SYNC SESSION STATE IMMEDIATELY
 st.session_state['selected_asset'] = selected_asset
 
-crypto_symbol_map = {
-    "BITCOIN": "BTCUSDT",
-    "ETHEREUM": "ETHUSDT",
-    "SOLANA": "SOLUSDT"
-}
-
-nse_symbol_map = {
-    "BITCOIN": "BTC-USD",
-    "ETHEREUM": "ETH-USD",
-    "SOLANA": "SOL-USD",
-    "NIFTY": "^NSEI",
-    "BANKNIFTY": "^NSEBANK",
-    "RELIANCE": "RELIANCE.NS"
-}
-
-is_crypto = selected_asset in crypto_symbol_map
-active_binance_symbol = crypto_symbol_map.get(selected_asset, "ETHUSDT" if selected_asset == "ETHEREUM" else "BTCUSDT")
-selected_symbol = nse_symbol_map.get(selected_asset, "ETH-USD" if selected_asset == "ETHEREUM" else "BTC-USD")
-selected_name = selected_asset
+# -------------------------------------------------------------
+# RENDER MAIN DASHBOARD WITH DYNAMIC ASSET CONTEXT
+# -------------------------------------------------------------
+ctx = get_active_asset_context()
+selected_symbol = ctx['yahoo_ticker']
+selected_name = ctx['title']
+active_binance_symbol = ctx['binance_symbol']
 timeframe = "5m"
-curr_symbol = "$" if is_crypto else "₹"
-st.session_state['active_currency'] = curr_symbol
+st.session_state['active_currency'] = ctx['currency']
 
 # Sidebar Info Box
-st.sidebar.info(f"🔥 **{selected_asset} ACTIVE FOCUS MODE**\nScanning 24/7 Global Crypto Options in USD ($)." if is_crypto else f"🇮🇳 **{selected_asset} ACTIVE FOCUS MODE**\nScanning NSE Indian Options in INR (₹).")
+st.sidebar.info(f"🔥 **{ctx['title']} ACTIVE FOCUS MODE**\nScanning 24/7 Global Crypto Options in USD ($)." if ctx['is_crypto'] else f"🇮🇳 **{ctx['title']} ACTIVE FOCUS MODE**\nScanning NSE Indian Options in INR (₹).")
 
 # 2. RENDER 0MS WEBSOCKET TICKER FOR SELECTED ASSET
 render_0ms_websocket_ticker(active_binance_symbol)
