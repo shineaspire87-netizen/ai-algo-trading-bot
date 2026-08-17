@@ -2075,9 +2075,51 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
     # ==========================================
     # TAB 3: BROKER KEY INTEGRATOR & PAPER MODE
     # ==========================================
+    def check_authentic_telegram_backend_ping():
+        """Performs genuine HTTP GET request to Telegram servers and validates HTTP 200 OK response"""
+        token = st.secrets.get("TELEGRAM_BOT_TOKEN", "8939955418:AAFXd58Nwr84uIGeqrvIqvntveWwHjqmenE")
+        chat_id = st.secrets.get("TELEGRAM_CHAT_ID", "1072750499")
+        try:
+            start_t = time.time()
+            url = f"https://api.telegram.org/bot{token}/getMe"
+            res = requests.get(url, timeout=3)
+            latency = round((time.time() - start_t) * 1000, 2)
+            
+            if res.status_code == 200 and res.json().get("ok"):
+                bot_name = res.json().get("result", {}).get("first_name", "AntonyQuantBot")
+                return True, f"🟢 **TELEGRAM BACKEND PING SUCCESSFUL!**\n\n• **Bot Name:** `{bot_name}` | **Chat ID:** `{chat_id}`\n• **Server Response:** `HTTP 200 OK` | **Latency:** `{latency} ms`"
+            else:
+                return False, f"🔴 **TELEGRAM SERVER REJECTED:** HTTP {res.status_code} - {res.text}"
+        except Exception as e:
+            return False, f"🔴 **TELEGRAM CONNECTION EXCEPTION:** {str(e)}"
+
+    def check_authentic_gemini_backend_ping():
+        """Performs genuine API call to Google AI Studio Gemini 1.5 Flash and validates response"""
+        gemini_key = st.secrets.get("GEMINI_API_KEY", os.getenv("GEMINI_API_KEY", ""))
+        if not gemini_key or "YOUR_" in str(gemini_key):
+            return False, "🟡 **GEMINI API KEY NOTICE:** Key missing in secrets. Add `GEMINI_API_KEY` in Streamlit Cloud Secrets."
+        try:
+            import google.generativeai as genai
+            genai.configure(api_key=gemini_key)
+            start_t = time.time()
+            model = genai.GenerativeModel('gemini-1.5-flash')
+            res = model.generate_content("Ping")
+            latency = round((time.time() - start_t) * 1000, 2)
+            return True, f"🤖 **GOOGLE GEMINI 1.5/2.5 FLASH BACKEND PING SUCCESSFUL!**\n\n• **AI Model:** `Gemini 1.5 Flash` | **Server Status:** `HTTP 200 OK`\n• **Response Time:** `{latency} ms` | **Gemini Reply:** `{res.text.strip()}`"
+        except Exception as e:
+            return False, f"🔴 **GEMINI BACKEND EXCEPTION:** {str(e)}"
+
+    # Render Authentic Statuses in Tab 3
     with tab_broker:
-        from broker_integrator import render_broker_integrator_tab
-        render_broker_integrator_tab()
+        st.markdown("## 🔑 Broker API Integrator & Direct Diagnostic Center")
+        
+        is_tg_ok, tg_msg = check_authentic_telegram_backend_ping()
+        if is_tg_ok: st.success(tg_msg)
+        else: st.error(tg_msg)
+
+        is_gm_ok, gm_msg = check_authentic_gemini_backend_ping()
+        if is_gm_ok: st.info(gm_msg)
+        else: st.warning(gm_msg)
 
 # Run Cloud State Recovery before scanning
 enforce_cloud_kill_switch_guard()
