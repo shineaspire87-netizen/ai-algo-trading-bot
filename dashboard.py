@@ -1630,6 +1630,31 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
     # TAB 3: BROKER KEY INTEGRATOR & PAPER MODE
     # ==========================================
     with tab_broker:
+        st.markdown("### 🟡 Binance Crypto Live API Integrator")
+
+        with st.form(key="form_binance_live_real_money_v12"):
+            default_b_key = st.secrets.get("BINANCE_API_KEY", st.session_state.get("BINANCE_API_KEY", ""))
+            default_b_sec = st.secrets.get("BINANCE_API_SECRET", st.session_state.get("BINANCE_API_SECRET", ""))
+            
+            b_key = st.text_input("Binance API Key", type="password", value=default_b_key, key="live_input_b_key")
+            b_sec = st.text_input("Binance API Secret", type="password", value=default_b_sec, key="live_input_b_sec")
+            
+            enable_live = st.checkbox("🟢 Activate Binance Real-Money Execution Engine", value=st.session_state.get("BINANCE_LIVE_ENABLED", False))
+            
+            submit_b = st.form_submit_button("💾 Connect & Save Binance Live API Credentials", use_container_width=True)
+
+        if submit_b:
+            st.session_state['BINANCE_API_KEY'] = b_key
+            st.session_state['BINANCE_API_SECRET'] = b_sec
+            st.session_state['BINANCE_LIVE_ENABLED'] = enable_live
+            
+            if enable_live:
+                st.success("🎉 **BINANCE REAL-MONEY LIVE EXECUTION ENGINE ACTIVATED!**")
+                st.info("⚡ Bot will now execute live orders directly on Binance API for 70%+ AI Confidence signals.")
+            else:
+                st.warning("🎮 **PAPER TRADING SIMULATOR ACTIVE:** Binance keys saved, but real-money execution is paused.")
+
+        st.divider()
         render_system_health_panel()
         st.divider()
         st.markdown("## 🔑 Broker API Integration & Mode Selector")
