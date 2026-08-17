@@ -1644,8 +1644,18 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
             b_key = st.text_input("Binance API Key", type="password", value=default_b_key, key="live_input_b_key_v13")
             b_sec = st.text_input("Binance API Secret", type="password", value=default_b_sec, key="live_input_b_sec_v13")
             
-            # Real Binance Capital Input Field
-            real_usdt_capital = st.number_input("💵 Enter Your Live Binance USDT Capital Balance ($):", min_value=1.0, max_value=100000.0, value=float(default_b_bal if default_b_bal < 5000 else 10.00), step=1.0, key="input_real_usdt_cap")
+            # 1. Real Binance Capital Input Field with Instant Auto-Sync
+            real_usdt_capital = st.number_input(
+                "💵 Enter Your Live Binance USDT Capital Balance ($):", 
+                min_value=0.01, 
+                max_value=100000.0, 
+                value=float(st.session_state.get('total_capital', 10.00) if st.session_state.get('total_capital', 10.00) < 5000 else 10.00), 
+                step=1.0, 
+                key="input_real_usdt_cap_v15"
+            )
+
+            # 2. INSTANTLY SYNC TOTAL CAPITAL METRIC CARD AUTOMATICALLY!
+            st.session_state['total_capital'] = float(real_usdt_capital)
             
             enable_live = st.checkbox("🟢 Activate Binance Real-Money Execution Engine", value=st.session_state.get("BINANCE_LIVE_ENABLED", True))
             
