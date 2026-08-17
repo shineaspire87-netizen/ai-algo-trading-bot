@@ -499,7 +499,7 @@ def render_active_position_card(active_trade: dict):
     components.html(card_html, height=185, scrolling=False)
 
 def render_institutional_quant_cards_v2(bias_status, conf_score, vwap_val, pdh_val, pdl_val, atr_val, adx_val, vol_ratio, buy_wall_pct, tf_sync_status, diagnostic_reason):
-    """Renders Ultra-Premium Quant Cards displaying 4 Advanced Data Feeds Live"""
+    """Renders Ultra-Premium Quant Cards displaying 4 Advanced Data Feeds Live without markdown escaping"""
     
     bias_color = "#10b981" if "BUY_CALL" in str(bias_status) else ("#ef4444" if "BUY_PUT" in str(bias_status) else "#f59e0b")
     try:
@@ -514,75 +514,38 @@ def render_institutional_quant_cards_v2(bias_status, conf_score, vwap_val, pdh_v
     except Exception:
         conf_num = 0.524
     
-    html_cards = f"""
-    <style>
-        .quant-grid {{
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-            gap: 14px;
-            margin: 15px 0;
-        }}
-        .quant-card {{
-            background: rgba(17, 24, 39, 0.85);
-            backdrop-filter: blur(12px);
-            border: 1px solid rgba(255,255,255,0.1);
-            border-radius: 10px;
-            padding: 16px;
-        }}
-        .quant-title {{
-            font-size: 11px;
-            font-weight: 700;
-            color: #9ca3af;
-            text-transform: uppercase;
-            margin-bottom: 8px;
-            letter-spacing: 0.5px;
-        }}
-        .quant-val-big {{
-            font-size: 22px;
-            font-weight: 800;
-            color: {bias_color};
-            margin-bottom: 6px;
-        }}
-        .quant-row {{
-            display: flex;
-            justify-content: space-between;
-            font-size: 13px;
-            color: #d1d5db;
-            padding: 4px 0;
-            border-bottom: 1px solid rgba(255,255,255,0.05);
-        }}
-    </style>
-
-    <div class="quant-grid">
-        <!-- Card 1: Multi-Timeframe & AI Score -->
-        <div class="quant-card">
-            <div class="quant-title">🎯 Multi-TF Trend & AI Score</div>
-            <div class="quant-val-big">{bias_status}</div>
-            <div class="quant-row"><span>AI Confidence Score:</span><b>{conf_num*100:.1f}%</b></div>
-            <div class="quant-row"><span>15m & 1h TF Alignment:</span><b style="color: #10b981;">{tf_sync_status}</b></div>
-        </div>
-
-        <!-- Card 2: Order Book Depth & Capital Inflow -->
-        <div class="quant-card">
-            <div class="quant-title">📊 Order Book Depth & Inflow</div>
-            <div class="quant-row"><span>Buy Wall Pressure:</span><b style="color: {wall_color};">{buy_wall_pct}%</b></div>
-            <div class="quant-row"><span>Volume Spike Ratio:</span><b>{vol_ratio}x</b></div>
-            <div class="quant-row"><span>ADX Trend Strength:</span><b>{adx_val}</b></div>
-        </div>
-
-        <!-- Card 3: Key Quant Levels & Global Trend -->
-        <div class="quant-card">
-            <div class="quant-title">🛡️ Key Quant Levels & Macro</div>
-            <div class="quant-row"><span>VWAP Anchor:</span><b>{vwap_val}</b></div>
-            <div class="quant-row"><span>PDH / PDL:</span><b>{pdh_val} / {pdl_val}</b></div>
-            <div class="quant-row"><span>Global Correlation:</span><b style="color: #10b981;">🟢 BULLISH ALIGNED</b></div>
-        </div>
-    </div>
-
-    <div style="background: rgba(30, 41, 59, 0.85); border-left: 4px solid {bias_color}; padding: 12px; border-radius: 6px; margin-bottom: 15px; font-size: 13px; color: #cbd5e1;">
-        <b>⚡ Multi-Data Feed Executive Action:</b> {diagnostic_reason}
-    </div>
-    """
+    html_cards = (
+        f"<style>"
+        f".quant-grid {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; margin: 15px 0; }}"
+        f".quant-card {{ background: rgba(17, 24, 39, 0.85); backdrop-filter: blur(12px); border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; padding: 16px; }}"
+        f".quant-title {{ font-size: 11px; font-weight: 700; color: #9ca3af; text-transform: uppercase; margin-bottom: 8px; letter-spacing: 0.5px; }}"
+        f".quant-val-big {{ font-size: 22px; font-weight: 800; color: {bias_color}; margin-bottom: 6px; }}"
+        f".quant-row {{ display: flex; justify-content: space-between; font-size: 13px; color: #d1d5db; padding: 4px 0; border-bottom: 1px solid rgba(255,255,255,0.05); }}"
+        f"</style>"
+        f"<div class='quant-grid'>"
+        f"<div class='quant-card'>"
+        f"<div class='quant-title'>🎯 Multi-TF Trend & AI Score</div>"
+        f"<div class='quant-val-big'>{bias_status}</div>"
+        f"<div class='quant-row'><span>AI Confidence Score:</span><b>{conf_num*100:.1f}%</b></div>"
+        f"<div class='quant-row'><span>15m & 1h TF Alignment:</span><b style='color: #10b981;'>{tf_sync_status}</b></div>"
+        f"</div>"
+        f"<div class='quant-card'>"
+        f"<div class='quant-title'>📊 Order Book Depth & Inflow</div>"
+        f"<div class='quant-row'><span>Buy Wall Pressure:</span><b style='color: {wall_color};'>{buy_wall_pct}%</b></div>"
+        f"<div class='quant-row'><span>Volume Spike Ratio:</span><b>{vol_ratio}x</b></div>"
+        f"<div class='quant-row'><span>ADX Trend Strength:</span><b>{adx_val}</b></div>"
+        f"</div>"
+        f"<div class='quant-card'>"
+        f"<div class='quant-title'>🛡️ Key Quant Levels & Macro</div>"
+        f"<div class='quant-row'><span>VWAP Anchor:</span><b>{vwap_val}</b></div>"
+        f"<div class='quant-row'><span>PDH / PDL:</span><b>{pdh_val} / {pdl_val}</b></div>"
+        f"<div class='quant-row'><span>Global Correlation:</span><b style='color: #10b981;'>🟢 BULLISH ALIGNED</b></div>"
+        f"</div>"
+        f"</div>"
+        f"<div style='background: rgba(30, 41, 59, 0.85); border-left: 4px solid {bias_color}; padding: 12px; border-radius: 6px; margin-bottom: 15px; font-size: 13px; color: #cbd5e1;'>"
+        f"<b>⚡ Multi-Data Feed Executive Action:</b> {diagnostic_reason}"
+        f"</div>"
+    )
     
     st.markdown(html_cards, unsafe_allow_html=True)
 
