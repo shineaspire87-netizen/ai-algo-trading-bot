@@ -10,19 +10,20 @@ from multi_strategy import evaluate_soft_kill_switch_position_scaling, calculate
 import streamlit.components.v1 as components
 import pandas as pd
 
-def get_tradingview_symbol(asset_name: str) -> str:
-    """Maps internal asset names to exact unrestricted TradingView widget symbols"""
-    asset_upper = str(asset_name).upper().strip()
+def render_tradingview_live_chart(asset_name: str):
+    """Renders TradingView embedded iframe chart with 100% valid unrestricted futures symbols"""
+    asset_clean = str(asset_name).upper().strip()
     
-    mapping = {
-        # Indian Indices -> Use Continuous Futures Tickers (Unrestricted in TV Widget)
+    # Unrestricted TradingView Symbol Mapping
+    tv_symbol_map = {
+        # Indian Indices (Mapped to Futures to bypass TV widget restrictions)
+        "BANKNIFTY": "NSE:BANKNIFTY1!",
+        "^NSEBANK": "NSE:BANKNIFTY1!",
         "NIFTY": "NSE:NIFTY1!",
         "NIFTY50": "NSE:NIFTY1!",
         "^NSEI": "NSE:NIFTY1!",
-        "BANKNIFTY": "NSE:BANKNIFTY1!",
-        "^NSEBANK": "NSE:BANKNIFTY1!",
         
-        # Indian Stocks (Unrestricted)
+        # Indian Stocks
         "RELIANCE": "NSE:RELIANCE",
         "RELIANCE.NS": "NSE:RELIANCE",
         "HDFCBANK": "NSE:HDFCBANK",
@@ -41,39 +42,33 @@ def get_tradingview_symbol(asset_name: str) -> str:
         "ETH-USD": "BINANCE:ETHUSDT"
     }
     
-    return mapping.get(asset_upper, f"NSE:{asset_upper}")
+    tv_symbol = tv_symbol_map.get(asset_clean, f"NSE:{asset_clean}")
 
-def render_tradingview_live_chart(asset_name):
-    """Embeds Official TradingView Real-Time Chart with Pre-loaded Indicators"""
-    tv_symbol = get_tradingview_symbol(asset_name)
-
-    widget_code = f"""
-    <div class="tradingview-widget-container" style="height:520px;width:100%">
-      <div id="tradingview_live_chart" style="height:520px;width:100%"></div>
+    # TradingView Embed Widget HTML
+    tv_html = f"""
+    <div class="tradingview-widget-container" style="height:500px;width:100%;">
+      <div id="tradingview_chart_element" style="height:500px;width:100%;"></div>
       <script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
       <script type="text/javascript">
       new TradingView.widget({{
-        "autosize": true,
-        "symbol": "{tv_symbol}",
-        "interval": "5",
-        "timezone": "Asia/Kolkata",
-        "theme": "dark",
-        "style": "1",
-        "locale": "en",
-        "toolbar_bg": "#0f172a",
-        "enable_publishing": false,
-        "allow_symbol_change": true,
-        "container_id": "tradingview_live_chart",
-        "studies": [
-          "STD;EMA",
-          "STD;VWAP",
-          "STD;RSI"
-        ]
+          "autosize": true,
+          "symbol": "{tv_symbol}",
+          "interval": "5",
+          "timezone": "Asia/Kolkata",
+          "theme": "dark",
+          "style": "1",
+          "locale": "en",
+          "toolbar_bg": "#f1f3f6",
+          "enable_publishing": false,
+          "hide_side_toolbar": false,
+          "allow_symbol_change": true,
+          "container_id": "tradingview_chart_element"
       }});
       </script>
     </div>
     """
-    components.html(widget_code, height=530)
+    
+    st.components.v1.html(tv_html, height=520)
 import numpy as np
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
