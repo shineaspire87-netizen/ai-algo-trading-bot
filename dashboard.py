@@ -2102,41 +2102,60 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
         st.markdown("### 📲 Real-Time API Diagnostic Connection Testers")
         col_t1, col_t2 = st.columns(2)
         
+        # -------------------------------------------------------------
+        # 1. TELEGRAM BOT TEST BUTTON
+        # -------------------------------------------------------------
         with col_t1:
-            if st.button("🧪 Send Test Telegram Alert Now", use_container_width=True):
-                import requests
+            if st.button("🧪 Send Test Telegram Alert Now", key="btn_test_telegram", use_container_width=True):
                 bot_token = st.secrets.get("TELEGRAM_BOT_TOKEN", TELEGRAM_BOT_TOKEN)
                 chat_id = st.secrets.get("TELEGRAM_CHAT_ID", TELEGRAM_CHAT_ID)
                 
                 if not bot_token or "YOUR_" in bot_token or not chat_id or "YOUR_" in chat_id:
-                    st.error("❌ Telegram Credentials Missing in Secrets/Config!")
+                    st.session_state['telegram_test_res'] = ("ERROR", "❌ Telegram Credentials Missing in Streamlit Cloud Secrets!")
                 else:
                     url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
                     payload = {"chat_id": chat_id, "text": "🔔 <b>ANTONY Quant Terminal</b>\n\n✅ Telegram Connection Successful!", "parse_mode": "HTML"}
                     try:
                         res = requests.post(url, json=payload, timeout=5)
-                        if res.status_code == 200: st.success("🎉 Telegram Alert Delivered!")
-                        else: st.error(f"❌ Telegram Error: {res.text}")
-                    except Exception as e: st.error(f"❌ Network Exception: {e}")
+                        if res.status_code == 200:
+                            st.session_state['telegram_test_res'] = ("SUCCESS", "🎉 Telegram Alert Delivered Successfully! Check your Telegram App now.")
+                        else:
+                            st.session_state['telegram_test_res'] = ("ERROR", f"❌ Telegram API Error ({res.status_code}): {res.text}")
+                    except Exception as e:
+                        st.session_state['telegram_test_res'] = ("ERROR", f"❌ Network Exception: {str(e)}")
 
+            # PERSISTENT TELEGRAM RESULT DISPLAY
+            if 'telegram_test_res' in st.session_state:
+                status, msg = st.session_state['telegram_test_res']
+                if status == "SUCCESS": st.success(msg)
+                else: st.error(msg)
+
+        # -------------------------------------------------------------
+        # 2. GOOGLE AI STUDIO (GEMINI 1.5 API) TEST BUTTON
+        # -------------------------------------------------------------
         with col_t2:
-            if st.button("🧪 Test Google AI Studio (Gemini API) Connection", use_container_width=True):
-                import google.generativeai as genai
-                import time, os
-                gemini_key = st.secrets.get("GEMINI_API_KEY", os.getenv("GEMINI_API_KEY", ""))
-                
-                if gemini_key and "YOUR_" not in gemini_key:
-                    try:
+            if st.button("🧪 Test Google AI Studio (Gemini API) Connection", key="btn_test_gemini", use_container_width=True):
+                try:
+                    import google.generativeai as genai
+                    gemini_key = st.secrets.get("GEMINI_API_KEY", os.getenv("GEMINI_API_KEY", ""))
+                    
+                    if gemini_key and "YOUR_" not in gemini_key:
                         genai.configure(api_key=gemini_key)
                         start_t = time.time()
                         model = genai.GenerativeModel('gemini-1.5-flash')
                         res = model.generate_content("Respond in 1 short sentence confirming ANTONY Quant Terminal connection.")
                         latency = round((time.time() - start_t) * 1000, 2)
-                        st.success(f"🎉 **Gemini API Connected!** (Latency: `{latency} ms`)")
-                        st.info(f"🤖 **Response:** {res.text.strip()}")
-                    except Exception as e: st.error(f"❌ Gemini Error: {e}")
-                else:
-                    st.error("❌ Gemini API Key Missing in Secrets/Config!")
+                        st.session_state['gemini_test_res'] = ("SUCCESS", f"🎉 **Gemini API Connected!** (Latency: `{latency} ms`)\n\n🤖 **Response:** {res.text.strip()}")
+                    else:
+                        st.session_state['gemini_test_res'] = ("ERROR", "❌ Gemini API Key Missing in Streamlit Cloud Secrets! Add `GEMINI_API_KEY` in Secrets.")
+                except Exception as e:
+                    st.session_state['gemini_test_res'] = ("ERROR", f"❌ Gemini Test Error: {str(e)}")
+
+            # PERSISTENT GEMINI RESULT DISPLAY
+            if 'gemini_test_res' in st.session_state:
+                status, msg = st.session_state['gemini_test_res']
+                if status == "SUCCESS": st.success(msg)
+                else: st.error(msg)
 
         st.divider()
 
