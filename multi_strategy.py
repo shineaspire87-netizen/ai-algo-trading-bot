@@ -126,8 +126,8 @@ def evaluate_smart_breakout_signals(df: pd.DataFrame, asset_symbol: str) -> dict
     adx_val = adx_ind.adx().iloc[-1]
     rsi_val = ta.momentum.rsi(df['Close'], window=14).iloc[-1]
 
-    # HIGH VOLUME BREAKOUT OVERRIDE (Bypasses Hurst Chop if Vol >= 1.5x & ADX >= 25)
-    is_high_vol_breakout = (vol_ratio >= 1.50) and (adx_val >= 25.0)
+    # HIGH VOLUME BREAKOUT OVERRIDE (Bypasses Hurst Chop if Vol >= 1.15x & ADX >= 22)
+    is_high_vol_breakout = (vol_ratio >= 1.15) and (adx_val >= 22.0)
 
     # Expanded RSI Ceiling up to 75.0 for High Volume Momentum
     max_rsi_allowed = 75.0 if is_high_vol_breakout else 65.0
