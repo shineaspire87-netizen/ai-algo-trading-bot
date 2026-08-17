@@ -184,10 +184,10 @@ def evaluate_institutional_bitcoin_signals(df_5m: pd.DataFrame, asset_symbol: st
     pdh_val = df['High'].iloc[-288:].max()
     pdl_val = df['Low'].iloc[-288:].min()
 
-    # 1. FIXED HURST VETO: Ignore Hurst if H == 0.00 or if Volume Spike >= 1.5x
+    # 1. FIXED HURST VETO: Ignore Hurst if H <= 0.05 or if ADX >= 20.0 (Strong Trend)
     is_high_vol_breakout = (vol_ratio >= 1.50) and (adx_14 >= 22.0)
     
-    if (0.05 < hurst_val < 0.42) and adx_14 < 18.0 and not is_high_vol_breakout:
+    if (0.05 < hurst_val < 0.42) and adx_14 < 20.0 and not is_high_vol_breakout:
         return {
             "signal": "HOLD",
             "confidence": 0.40,
