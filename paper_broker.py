@@ -122,6 +122,28 @@ def execute_paper_trade_exit(trade_record: dict, exit_price: float, exit_reason:
 def execute_paper_exit(trade_record, exit_price, exit_reason):
     return execute_paper_trade_exit(trade_record, exit_price, exit_reason)
 
+def evaluate_realtime_intra_candle_risk(trade_record: dict, current_price: float) -> dict:
+    """Evaluates Risk Every 1-Second Tick and Cuts Loss INSTANTLY at -$25.00 Mid-Candle"""
+    entry_price = float(trade_record.get('Entry_Price') or trade_record.get('entry_price', 0.0))
+    qty = int(trade_record.get('Quantity') or trade_record.get('qty', 1))
+    symbol = trade_record.get('Symbol') or trade_record.get('symbol', '')
+    
+    is_crypto = any(k in str(symbol).upper() for k in ["BITCOIN", "ETHEREUM", "BTC", "ETH"])
+    
+    current_pnl = (current_price - entry_price) * qty
+    
+    # HARD INTRA-CANDLE CUT LOSS (Does NOT wait for 5-min candle close!)
+    max_loss_limit = -25.00 if is_crypto else -180.00 # -$25 for Crypto, -₹180 for NSE
+    
+    if current_pnl <= max_loss_limit:
+        return {
+            "should_exit": True, 
+            "reason": f"🚨 INTRA-CANDLE HARD CUT LOSS TRIGGERED ({current_pnl:.2f})", 
+            "exit_price": current_price
+        }
+        
+    return {"should_exit": False, "reason": "HOLDING"}
+
 def enforce_strict_risk_reward_exit(trade_record: dict, current_price: float) -> dict:
     """Enforces Max Loss Cap at -$25.00 and Allows Target Gains up to +$50 / +$100"""
     entry_price = float(trade_record['Entry_Price'])
