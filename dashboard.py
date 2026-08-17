@@ -35,34 +35,56 @@ from config import GOOGLE_SHEET_WEB_APP_URL, TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_I
 from multi_strategy import evaluate_soft_kill_switch_position_scaling, calculate_dynamic_atr_levels, detect_vcp_squeeze_contraction, detect_liquidity_sweep_trap, evaluate_pyramiding_scaling
 import streamlit.components.v1 as components
 
-def render_subsecond_websocket_ticker(symbol="BTCUSDT"):
-    """Renders 0ms Latency Tick-by-Tick Live Price Ticker directly from Exchange WebSocket"""
+def render_dynamic_color_changing_live_ticker(symbol="BTCUSDT"):
+    """Replaces old static metric card with 0ms Dynamic Color-Changing Live Ticker (Green on UP, Red on DOWN)"""
     ticker_html = f"""
-    <div style="background: rgba(17, 24, 39, 0.85); backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; padding: 12px 18px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-        <div>
-            <div style="font-size: 11px; font-weight: 700; color: #9ca3af; text-transform: uppercase;">⚡ REAL-TIME TICKER (0ms Latency Feed)</div>
-            <div id="crypto-price" style="font-size: 26px; font-weight: 900; color: #10b981;">$63,511.17</div>
-        </div>
-        <div style="text-align: right;">
-            <span style="background: rgba(16, 185, 129, 0.2); color: #10b981; border: 1px solid #10b981; font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 15px;">🟢 LIVE TICKER STREAM</span>
-            <div style="font-size: 12px; color: #10b981; margin-top: 4px;">Tick-by-Tick Sub-Second Update</div>
+    <div style="background: rgba(17, 24, 39, 0.85); backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; padding: 14px 18px; margin-bottom: 15px;">
+        <div style="font-size: 11px; font-weight: 700; color: #9ca3af; text-transform: uppercase; letter-spacing: 0.5px;">⚡ REAL-TIME BITCOIN SPOT PRICE (0MS LATENCY)</div>
+        <div style="display: flex; align-items: center; gap: 12px; margin-top: 6px;">
+            <div id="live-btc-price" style="font-size: 34px; font-weight: 900; color: #10b981; transition: color 0.15s ease;">$63,550.29</div>
+            <span id="price-trend-badge" style="background: rgba(16, 185, 129, 0.15); color: #10b981; border: 1px solid #10b981; font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 15px;">🟢 0ms WEBSOCKET</span>
         </div>
     </div>
 
     <script>
+        let previousPrice = 0;
         const ws = new WebSocket('wss://stream.binance.com:9443/ws/{symbol.lower()}@ticker');
+        
         ws.onmessage = (event) => {{
             const data = JSON.parse(event.data);
-            const price = parseFloat(data.c).toLocaleString('en-US', {{ minimumFractionDigits: 2, maximumFractionDigits: 2 }});
-            const pElem = document.getElementById('crypto-price');
-            if (pElem) {{
-                pElem.innerText = '$' + price;
-                pElem.style.color = parseFloat(data.p) >= 0 ? '#10b981' : '#ef4444';
+            const currentPrice = parseFloat(data.c);
+            const formattedPrice = currentPrice.toLocaleString('en-US', {{ minimumFractionDigits: 2, maximumFractionDigits: 2 }});
+            
+            const priceElem = document.getElementById('live-btc-price');
+            const badgeElem = document.getElementById('price-trend-badge');
+            
+            if (priceElem) {{
+                priceElem.innerText = '$' + formattedPrice;
+                
+                // DYNAMIC COLOR SWITCH: GREEN ON RISE, RED ON DROP!
+                if (previousPrice > 0) {{
+                    if (currentPrice > previousPrice) {{
+                        priceElem.style.color = '#10b981'; // Green on UP
+                        if (badgeElem) {{
+                            badgeElem.style.borderColor = '#10b981';
+                            badgeElem.style.color = '#10b981';
+                            badgeElem.innerText = '🟢 0ms TICK UP';
+                        }}
+                    }} else if (currentPrice < previousPrice) {{
+                        priceElem.style.color = '#ef4444'; // Red on DOWN
+                        if (badgeElem) {{
+                            badgeElem.style.borderColor = '#ef4444';
+                            badgeElem.style.color = '#ef4444';
+                            badgeElem.innerText = '🔴 0ms TICK DOWN';
+                        }}
+                    }}
+                }}
+                previousPrice = currentPrice;
             }}
         }};
     </script>
     """
-    st.components.v1.html(ticker_html, height=85)
+    st.components.v1.html(ticker_html, height=95)
 
 def render_tradingview_live_chart(asset_name: str):
     """Renders TradingView embedded iframe chart with 100% valid unrestricted futures symbols"""
@@ -1303,35 +1325,33 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
 
     if is_crypto_selected:
         crypto_ws_sym = "BTCUSDT" if "BITCOIN" in asset_name else ("ETHUSDT" if "ETH" in asset_name else "BTCUSDT")
-        render_subsecond_websocket_ticker(crypto_ws_sym)
+        render_dynamic_color_changing_live_ticker(crypto_ws_sym)
 
-    # Read 0ms WebSocket Ticker Price First
-    realtime_ticker_price = st.session_state.get('realtime_spot_price', current_price if current_price > 0 else 63563.80)
-
-    # TOP KPI METRICS CARDS (Streamlit Columns)
-    col1, col2, col3, col4, col5 = st.columns(5)
-
-    with col1:
-        if is_crypto_selected and ("BITCOIN" in asset_name or "BTC" in asset_name):
-            st.metric("BITCOIN Price", f"${realtime_ticker_price:,.2f}")
-        else:
-            st.metric(label=f"{asset_name} Price", value=f"{p_curr}{current_price:,.2f}", delta=f"ATM: {atm_strike}" if atm_strike else None)
-    with col2:
-        if curr_symbol == "$":
+        # TOP KPI METRICS CARDS (Streamlit Columns)
+        col1, col2, col3, col4 = st.columns(4)
+        with col1:
             display_capital = current_capital / conversion_factor
             st.metric(label="Total Capital", value=f"${display_capital:,.2f}")
-        else:
-            st.metric(label="Total Capital", value=f"₹{current_capital:,.2f}")
-    with col3:
-        if curr_symbol == "$":
+        with col2:
             display_pnl = total_pnl / conversion_factor
             st.metric(label="Net Realized P&L", value=f"${display_pnl:,.2f}", delta=f"${display_pnl:,.2f}")
-        else:
+        with col3:
+            st.metric(label="Today / Total Trades", value=f"{today_trades_count} / {total_trades_count}")
+        with col4:
+            st.metric(label="Profit Factor", value=f"{profit_factor:.2f}", delta=f"Win Rate {win_rate:.1f}%")
+    else:
+        # TOP KPI METRICS CARDS (Streamlit Columns for NSE)
+        col1, col2, col3, col4, col5 = st.columns(5)
+        with col1:
+            st.metric(label=f"{asset_name} Price", value=f"₹{current_price:,.2f}", delta=f"ATM: {atm_strike}" if atm_strike else None)
+        with col2:
+            st.metric(label="Total Capital", value=f"₹{current_capital:,.2f}")
+        with col3:
             st.metric(label="Net Realized P&L", value=f"₹{total_pnl:,.2f}", delta=f"₹{total_pnl:,.2f}")
-    with col4:
-        st.metric(label="Today / Total Trades", value=f"{today_trades_count} / {total_trades_count}")
-    with col5:
-        st.metric(label="Profit Factor", value=f"{profit_factor:.2f}", delta=f"Win Rate {win_rate:.1f}%")
+        with col4:
+            st.metric(label="Today / Total Trades", value=f"{today_trades_count} / {total_trades_count}")
+        with col5:
+            st.metric(label="Profit Factor", value=f"{profit_factor:.2f}", delta=f"Win Rate {win_rate:.1f}%")
 
     st.markdown("---")
 
