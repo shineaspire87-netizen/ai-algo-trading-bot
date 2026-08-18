@@ -41,7 +41,13 @@ def get_tradingview_symbol(asset_name: str) -> str:
         "BITCOIN": "BINANCE:BTCUSDT",
         "BTC-USD": "BINANCE:BTCUSDT",
         "ETHEREUM": "BINANCE:ETHUSDT",
-        "ETH-USD": "BINANCE:ETHUSDT"
+        "ETH-USD": "BINANCE:ETHUSDT",
+        "SOLANA": "BINANCE:SOLUSDT",
+        "SOL-USD": "BINANCE:SOLUSDT",
+        "BNB": "BINANCE:BNBUSDT",
+        "BNB-USD": "BINANCE:BNBUSDT",
+        "XRP": "BINANCE:XRPUSDT",
+        "XRP-USD": "BINANCE:XRPUSDT"
     }
     
     return mapping.get(asset_upper, f"NSE:{asset_upper}")
@@ -402,6 +408,9 @@ st.markdown("""
 WATCHLIST = {
     "BITCOIN": "BTC-USD",
     "ETHEREUM": "ETH-USD",
+    "SOLANA": "SOL-USD",
+    "BNB": "BNB-USD",
+    "XRP": "XRP-USD",
     "BANKNIFTY": "^NSEBANK",
     "NIFTY50": "^NSEI",
     "RELIANCE": "RELIANCE.NS",
@@ -472,7 +481,7 @@ def enforce_cloud_kill_switch_guard(trades_df=None):
 enforce_persistent_cloud_kill_switch = enforce_cloud_kill_switch_guard
 
 def get_asset_currency_info(selected_symbol: str):
-    crypto_keys = ["BITCOIN", "ETHEREUM", "BTC-USD", "ETH-USD", "BTC", "ETH"]
+    crypto_keys = ["BITCOIN", "ETHEREUM", "SOLANA", "BNB", "XRP", "BTC", "ETH", "SOL", "USD"]
     is_crypto = any(k in str(selected_symbol).upper() for k in crypto_keys)
     if is_crypto:
         return "$", 83.5 # Symbol & USD/INR Exchange Rate
@@ -570,16 +579,25 @@ def get_realtime_binance_btc_price():
 # 🟢 INSTANT BINANCE LIVE CRYPTO PRICE SYNC
 def get_realtime_crypto_price(symbol_name):
     """Fetches instant 0ms Binance live price for Crypto assets"""
-    if "BITCOIN" in str(symbol_name).upper() or "BTC" in str(symbol_name).upper():
+    sym_u = str(symbol_name).upper()
+    if "BITCOIN" in sym_u or "BTC" in sym_u:
         return get_realtime_binance_btc_price()
     try:
-        binance_map = {"ETHEREUM": "ETHUSDT", "ETH": "ETHUSDT"}
-        pair = binance_map.get(symbol_name, "ETHUSDT" if "ETH" in str(symbol_name).upper() else None)
-        if pair:
-            url = f"https://api.binance.com/api/v3/ticker/price?symbol={pair}"
-            resp = requests.get(url, timeout=3)
-            if resp.status_code == 200:
-                return float(resp.json()['price'])
+        binance_map = {
+            "ETHEREUM": "ETHUSDT", "ETH": "ETHUSDT", "ETH-USD": "ETHUSDT",
+            "SOLANA": "SOLUSDT", "SOL": "SOLUSDT", "SOL-USD": "SOLUSDT",
+            "BNB": "BNBUSDT", "BNB-USD": "BNBUSDT",
+            "XRP": "XRPUSDT", "XRP-USD": "XRPUSDT"
+        }
+        pair = binance_map.get(sym_u, f"{sym_u}USDT")
+        for base in ["https://data-api.binance.vision", "https://api.binance.com", "https://api.binance.us"]:
+            try:
+                url = f"{base}/api/v3/ticker/price?symbol={pair}"
+                resp = requests.get(url, timeout=1.5)
+                if resp.status_code == 200:
+                    return float(resp.json()['price'])
+            except Exception:
+                continue
     except Exception as e:
         pass
     return None
@@ -1553,16 +1571,16 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
                 except:
                     pass
 
-            # 🚀 SINGLE CANDLE SCALPER ENGINE (1-Candle Exit / 5-Mins Max Limit)
-            if live_premium >= (e_price * 1.06): # Quick +6% Profit in 1 Candle
+            # 🚀 20-MINUTE HOLDING WINDOW ENGINE (Disabled SINGLE_CANDLE_TIMEOUT_EXIT)
+            if live_premium >= (e_price * 1.06): # Quick +6% Profit Target 1
                 auto_exit_triggered = True
-                exit_reason_str = "SINGLE_CANDLE_TARGET_HIT (+6%)"
+                exit_reason_str = "TARGET_1_HIT (+6.0% Gain)"
             elif live_premium <= sl_price:
                 auto_exit_triggered = True
-                exit_reason_str = "STOP_LOSS_HIT (-7%)"
-            elif elapsed_mins >= 5.0: # Hard Exit at the End of 1 Single Candle (5 Mins)
+                exit_reason_str = "HARD_STOP_LOSS_HIT (-3.0% Risk Cap)"
+            elif elapsed_mins >= 20.0: # Full 20 Minutes Max Holding Limit (NOT 5 Minutes!)
                 auto_exit_triggered = True
-                exit_reason_str = "SINGLE_CANDLE_TIMEOUT_EXIT (1 Candle Complete)"
+                exit_reason_str = "MAX_TIME_EXPIRATION_EXIT (20 Mins Limit)"
             elif not is_crypto_selected and now_time >= datetime.time(15, 15):
                 auto_exit_triggered = True
                 exit_reason_str = "AUTO_315_PM_SQUAREOFF"
@@ -1581,26 +1599,21 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
                     st.rerun()
 
             st.markdown(f"""
-            <div class="glass-card-green">
+            <div class="glass-card-green" style="background-color: #111827; border: 2px solid {pnl_color}; border-radius: 12px; padding: 20px; margin-bottom: 20px;">
                 <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap:wrap; gap:10px;">
-                    <h3 style="margin:0; color:#38bdf8;">🚨 ACTIVE POSITION: {sym} ({opt_type})</h3>
+                    <h3 style="margin:0; color:#f59e0b;">📍 ACTIVE POSITION: {sym} ({opt_type})</h3>
                     <span class="badge-tag" style="background:#10b981;">🔓 ACTIVE LIVE TRADE</span>
                 </div>
                 <hr style="border-color: rgba(255,255,255,0.15); margin: 12px 0;">
-                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; font-size: 15px;">
-                    <div>📍 <b>1. Entry Stock Price:</b> <span class="highlight-entry">{p_curr}{e_stock_p:,.2f}</span></div>
-                    <div><b>2. Live Stock Price:</b> <span style="font-weight:bold; color:#00e5ff;">{p_curr}{curr_active_stock_p:,.2f}</span></div>
-                    <div><b>3. Target Stock Price:</b> <span class="highlight-target">{p_curr}{target_stock_p:,.2f} 🎯</span></div>
-                    <div><b>4. SL Stock Price:</b> <span class="highlight-sl">{p_curr}{sl_stock_p:,.2f} ❌</span></div>
+                <div style="display: flex; justify-content: space-between; flex-wrap:wrap; gap:10px; font-size: 15px;">
+                    <div><b>1. Entry Price:</b> <span class="highlight-entry">{p_curr}{e_stock_p:,.2f}</span></div>
+                    <div><b>2. Live Spot Price:</b> <span style="font-weight:bold; color:#00e5ff;">{p_curr}{curr_active_stock_p:,.2f}</span></div>
+                    <div><b>3. Target Price:</b> <span class="highlight-target">{p_curr}{target_stock_p:,.2f} 🎯</span></div>
+                    <div><b>4. Stop Loss:</b> <span class="highlight-sl">{p_curr}{sl_stock_p:,.2f} 🛑</span></div>
                 </div>
                 <hr style="border-color: rgba(255,255,255,0.15); margin: 12px 0;">
-                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; font-size: 15px;">
-                    <div><b>Entry Premium:</b> {p_curr}{e_price:.2f} ➔ <b>Live Premium:</b> {p_curr}{live_premium:.2f}</div>
-                    <div><b>Capital at Risk:</b> <span style="color:#f87171;">{capital_risk_pct:.2f}% ({p_curr}{risk_amount:,.2f})</span></div>
-                    <div><b>Live Floating P&L:</b> <span style="font-size:18px; font-weight:bold; color:{pnl_color};">{p_curr}{live_pnl:+,.2f} ({pnl_pct:+.2f}%)</span></div>
-                </div>
-                <hr style="border-color: rgba(255,255,255,0.15); margin: 12px 0;">
-                <small style="color:#cbd5e1;"><b>🔍 AI Thinking Process:</b><br>• Active Position: {sym} ({opt_type}) ➔ Live Risk & Trailing SL Active.<br>• Elapsed Time: {elapsed_mins:.1f} Mins (Max 20 Mins Limit).<br>• Position Rule: Currently holding active position. Opposite signals ignored until Target/SL/Timeout.</small>
+                <h2 style="color: {pnl_color}; margin: 10px 0 5px 0;">Live Floating P&L: {p_curr}{live_pnl:+,.2f} ({pnl_pct:+.2f}%)</h2>
+                <p style="color: #9ca3af; margin: 0; font-size: 14px;"><i>Target 1 (+6.0% Gain) or Hard Stop Loss (-3.0%) active. Elapsed: {elapsed_mins:.1f} / 20.0 Mins.</i></p>
             </div>
             """, unsafe_allow_html=True)
 

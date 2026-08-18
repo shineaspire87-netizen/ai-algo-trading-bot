@@ -11,29 +11,51 @@ ACTIVE_JSON = "active_trade.json"
 STATE_JSON = "live_state.json"
 BROKERAGE_PER_TRADE = 45.0
 
-def slice_order_quantity(symbol, total_qty):
-    """SEBI Order Slicing Engine: Splits large parent orders into compliant child slices"""
-    asset_key = "BANKNIFTY" if "BANK" in symbol else ("NIFTY50" if "NIFTY" in symbol else "DEFAULT")
-    max_cap = SEBI_FREEZE_LIMITS.get(asset_key, 1800)
-    
-    if total_qty <= max_cap:
-        return [total_qty]
-    
-    slices = []
-    remaining = total_qty
-    while remaining > 0:
-        chunk = min(remaining, max_cap)
-        slices.append(chunk)
-        remaining -= chunk
-    return slices
+SINGLE_CANDLE_TIMEOUT_EXIT = False  # FIXED: Disabled forced 5-min exit!
+MAX_HOLDING_MINUTES = 20.0          # Trades given full 20 mins to hit Target 1 or Target 2
+MAX_DAILY_TRADES = 3                # Enforced 3-Trade Daily Cap
 
-def get_current_ist_timestamp_str() -> str:
-    """Returns clean formatted Indian Standard Time (IST) String"""
-    ist_now = datetime.datetime.utcnow() + datetime.timedelta(hours=5, minutes=30)
-    return ist_now.strftime('%d-%b-%Y %I:%M:%S %p IST')
+def evaluate_paper_trade_exit(trade: dict, live_price: float, elapsed_minutes: float) -> tuple:
+    """
+    Evaluates whether an active trade has hit Target 1 (+6%), Target 2 (+12%), or Stop Loss (-3%).
+    NO MORE FORCED 5-MINUTE SINGLE CANDLE TIMEOUT EXITS!
+    """
+    if not trade or trade.get('status') != 'ACTIVE':
+        return False, "NO_ACTIVE_TRADE", 0.0, 0.0
 
-def execute_paper_trade(symbol, option_type, entry_price, target_price, stop_loss, ai_confidence=72.0):
-    """Executes Paper Trade and IMMEDIATELY sends Direct Telegram Push Alert"""
+    entry_price = float(trade.get('entry_price', 0.0))
+    target_price = float(trade.get('target_price', 0.0))
+    stop_loss = float(trade.get('stop_loss', 0.0))
+    option_type = trade.get('option_type', trade.get('type', 'CALL'))
+    qty = float(trade.get('quantity', trade.get('qty', 0.001)))
+
+    # Calculate Direct Spot PnL (No Synthetic Option Delta Decay Lag)
+    if option_type in ['CALL', 'BUY_CALL', 'LONG', 'BUY']:
+        pnl = (live_price - entry_price) * qty
+        is_target_hit = live_price >= target_price if target_price > 0 else False
+        is_sl_hit = live_price <= stop_loss if stop_loss > 0 else False
+    else: # PUT / SHORT / BUY_PUT
+        pnl = (entry_price - live_price) * qty
+        is_target_hit = live_price <= target_price if target_price > 0 else False
+        is_sl_hit = live_price >= stop_loss if stop_loss > 0 else False
+
+    # 1. Target Hit Exit (+6% / +12%)
+    if is_target_hit:
+        return True, "TARGET_1_HIT (+6.0% Gain)", live_price, pnl
+
+    # 2. Hard Stop Loss Exit (-3.0% Cap)
+    if is_sl_hit:
+        return True, "HARD_STOP_LOSS_HIT (-3.0% Risk Cap)", live_price, pnl
+
+    # 3. Max Holding Timeout Exit (20 Minutes Limit - NOT 5 Minutes!)
+    if elapsed_minutes >= MAX_HOLDING_MINUTES:
+        return True, f"MAX_TIME_EXPIRATION_EXIT ({int(MAX_HOLDING_MINUTES)} Mins Limit)", live_price, pnl
+
+    return False, "HOLDING", live_price, pnl
+
+
+def execute_paper_trade(symbol, option_type, entry_price, target_price, stop_loss, ai_confidence, qty=0.001):
+    """Executes Paper Trade and sends Direct Telegram Push Alert"""
     
     trade_dict = {
         'symbol': symbol,
@@ -41,13 +63,13 @@ def execute_paper_trade(symbol, option_type, entry_price, target_price, stop_los
         'entry_price': entry_price,
         'target_price': target_price,
         'stop_loss': stop_loss,
+        'quantity': qty,
         'status': 'ACTIVE',
+        'start_time': datetime.datetime.now(),
         'entry_time': datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     }
     
-    # -------------------------------------------------------------
-    # DIRECT TELEGRAM PUSH ALERT (ZERO DEPENDENCY ON STREAMLIT UI)
-    # -------------------------------------------------------------
+    # Direct Telegram Push Alert
     entry_html_msg = f"""
 🚀 <b>NEW ACTIVE TRADE ENTERED!</b>
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -63,15 +85,14 @@ def execute_paper_trade(symbol, option_type, entry_price, target_price, stop_los
     try:
         from notifier import send_telegram_alert
         send_telegram_alert(entry_html_msg)
-        print("✅ DIRECT TELEGRAM ENTRY ALERT SENT!")
     except Exception as e:
-        print(f"Telegram Dispatch Error: {e}")
+        print(f"Direct Telegram Alert Dispatch Error: {e}")
 
     return trade_dict
 
 def execute_paper_trade_entry(symbol: str, option_type: str, entry_price: float, qty: int, target_price: float, sl_price: float, ai_confidence: float = 72.0):
     """Executes Paper Entry, Logs IST Time, and Triggers Immediate Telegram Entry Alert"""
-    return execute_paper_trade(symbol, option_type, entry_price, target_price, sl_price, ai_confidence)
+    return execute_paper_trade(symbol, option_type, entry_price, target_price, sl_price, ai_confidence, qty=qty)
 
 def execute_paper_trade_exit(trade_record: dict, exit_price: float, exit_reason: str):
     """Executes Paper Exit, Logs IST Exit Time, and Triggers Telegram Exit Alert"""
@@ -83,13 +104,19 @@ def execute_paper_trade_exit(trade_record: dict, exit_price: float, exit_reason:
     trade_record['status'] = "CLOSED"
     
     # Calculate PnL & Friction
-    symbol = trade_record.get('Symbol', '')
-    is_crypto = any(k in symbol.upper() for k in ["BITCOIN", "ETHEREUM", "BTC", "ETH"])
+    symbol = trade_record.get('Symbol', trade_record.get('symbol', ''))
+    is_crypto = any(k in symbol.upper() for k in ["BITCOIN", "ETHEREUM", "BTC", "ETH", "SOL", "BNB", "XRP"])
     curr = "$" if is_crypto else "₹"
     
-    entry_p = float(trade_record.get('Entry_Price', 0.0))
-    q = int(trade_record.get('Quantity', 1))
-    gross_pnl = (exit_price - entry_p) * q
+    entry_p = float(trade_record.get('Entry_Price', trade_record.get('entry_price', 0.0)))
+    q = float(trade_record.get('Quantity', trade_record.get('quantity', trade_record.get('qty', 1))))
+    
+    opt_t = trade_record.get('Option_Type', trade_record.get('option_type', 'CALL'))
+    if opt_t in ['CALL', 'BUY_CALL', 'LONG', 'BUY']:
+        gross_pnl = (exit_price - entry_p) * q
+    else:
+        gross_pnl = (entry_p - exit_price) * q
+        
     fees = round(abs(gross_pnl * 0.001) + 0.65, 2) if is_crypto else 48.00
     net_pnl = round(gross_pnl - fees, 2)
     
@@ -106,7 +133,12 @@ def execute_paper_trade_exit(trade_record: dict, exit_price: float, exit_reason:
 📊 <b>Net Realized P&L:</b> {curr}{net_pnl:+,.2f}
 ⏰ <b>Exit Time:</b> {ist_exit_time_str}
 """
-    send_telegram_alert(exit_msg)
+    try:
+        send_telegram_alert(exit_msg)
+    except Exception as e:
+        print(f"Telegram Exit Alert Error: {e}")
+    
+    return trade_record
     
     return trade_record
 
