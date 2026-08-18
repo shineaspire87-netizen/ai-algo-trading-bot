@@ -1471,20 +1471,43 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
                 json.dump(active_data, f, indent=4)
             st.session_state.active_trade_memory = active_data
 
-            # Live Binance Real Money Execution Hook
-            if is_crypto_selected and is_binance_live_active:
-                b_key = st.session_state.get('binance_api_key', '')
-                b_sec = st.session_state.get('binance_secret_key', '')
+            # -------------------------------------------------------------
+            # HARD REAL-MONEY ROUTING GUARD (BLOCKS PAPER SIMULATOR FOR BINANCE)
+            # -------------------------------------------------------------
+            has_binance_keys = bool(st.session_state.get('binance_api_key', ''))
+            
+            # Force REAL Mode if Binance Keys are present!
+            if has_binance_keys:
+                st.session_state['execution_mode'] = 'REAL'
+                active_exec_mode = 'REAL'
+            else:
+                active_exec_mode = st.session_state.get('execution_mode', 'PAPER')
+
+            if is_crypto_selected and active_exec_mode == 'REAL':
+                # EXECUTE 100% REAL BINANCE SPOT ORDER ($5.00 USDT)
                 try:
-                    from broker_interface import BinanceSpotBroker
-                    b_broker = BinanceSpotBroker(b_key, b_sec)
-                    if b_broker.is_authenticated:
-                        order_res = b_broker.place_order(asset_name, "BUY", 0.001 if "BTC" in asset_name else 0.01)
-                        new_bal = b_broker.get_spot_usdt_balance()
+                    from broker_interface import execute_binance_live_order
+                    from broker_integrator import get_binance_spot_usdt_balance
+                    pair_symbol = f"{asset_name}/USDT" if "/" not in asset_name else asset_name
+                    if "BITCOIN" in asset_name: pair_symbol = "BTC/USDT"
+                    elif "ETHEREUM" in asset_name: pair_symbol = "ETH/USDT"
+                    elif "SOLANA" in asset_name: pair_symbol = "SOL/USDT"
+
+                    real_order = execute_binance_live_order(
+                        symbol=pair_symbol,
+                        side="BUY" if opt_type == "CALL" else "SELL",
+                        usdt_amount=5.00,
+                        ai_confidence=0.75
+                    )
+                    if real_order:
+                        st.toast(f"🟢 REAL BINANCE SPOT ORDER EXECUTED ON {pair_symbol}!", icon="🚀")
+                        b_key = st.session_state.get('binance_api_key', '')
+                        b_sec = st.session_state.get('binance_secret_key', '')
+                        new_bal = get_binance_spot_usdt_balance(b_key, b_sec)
                         if new_bal > 0:
                             st.session_state['binance_live_usdt_balance'] = new_bal
                 except Exception as e:
-                    print(f"Live Binance Order Error: {e}")
+                    print(f"Live Binance Order Execution Error: {e}")
 
             alert_msg = (
                 f"🚨 <b>ALGO TRADE ENTERED!</b>\n\n"
