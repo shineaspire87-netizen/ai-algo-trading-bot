@@ -1054,18 +1054,27 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
             current_price = binance_price
             atm_strike = round(current_price / 100) * 100
 
-    # Dynamic Symbol Assignment based on Asset
-    curr_symbol, conversion_factor = get_asset_currency_info(asset_name)
-
     # Check if Binance Live Real-Money Execution is Active
     is_binance_live_active = st.session_state.get('binance_authenticated', False) or (st.session_state.get('execution_mode') == 'REAL') or st.session_state.get('BINANCE_LIVE_ENABLED', False)
 
-    if is_binance_live_active:
-        # 100% Direct Override to show user's exact Live Binance USDT Balance from exchange!
-        display_capital = float(st.session_state.get('binance_live_usdt_balance', st.session_state.get('total_capital', 5.56)))
+    # Dynamic Currency Symbol & Capital Conversion Engine
+    usdt_balance = float(st.session_state.get('binance_live_usdt_balance', 5.56))
+    conversion_factor = 83.50 if (asset_name in ["BITCOIN", "ETHEREUM"] or is_crypto_selected) else 1.0
+
+    if asset_name in ["BITCOIN", "ETHEREUM"] or is_crypto_selected:
+        curr_symbol = "$"
+        if is_binance_live_active:
+            display_capital_str = f"${usdt_balance:,.2f}"
+        else:
+            display_capital_str = f"${(current_capital / 83.50):,.2f}"
     else:
-        # Paper Mode Simulation Capital
-        display_capital = float(st.session_state.get('total_capital', current_capital / conversion_factor if curr_symbol == "$" else current_capital))
+        curr_symbol = "₹"
+        if is_binance_live_active:
+            # Auto-converts $5.56 USDT to INR @ 83.50 baseline
+            inr_balance = usdt_balance * 83.50
+            display_capital_str = f"₹{inr_balance:,.2f}"
+        else:
+            display_capital_str = f"₹{current_capital:,.2f}"
 
     # Render Top Metric Cards with Updated Live Capital
     col_m1, col_m2, col_m3, col_m4, col_m5, col_m6 = st.columns(6)
@@ -1074,8 +1083,8 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
         st.metric(f"⚡ {asset_name} Price", f"{curr_symbol}{current_price:,.2f}", delta=f"ATM: {atm_strike}" if atm_strike else None)
 
     with col_m2:
-        # Renders user's exact Live USDT balance DIRECTLY when Binance Live Engine is Active!
-        st.metric("Total Capital", f"${display_capital:,.2f}" if curr_symbol == "$" else f"₹{display_capital:,.2f}")
+        # Renders dynamic capital in correct currency ($ for Crypto, ₹ for NSE)
+        st.metric("Total Capital", display_capital_str)
 
     with col_m3:
         net_pnl_val = 0.0 if is_binance_live_active else (total_pnl / conversion_factor)
