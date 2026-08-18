@@ -1,49 +1,36 @@
-# notifier.py - Bulletproof Dual-Route Telegram Notifier
-
 import requests
-import logging
-import html
-from config import TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID
+import os
+try:
+    from config import TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID
+except Exception:
+    TELEGRAM_BOT_TOKEN = "8939955418:AAFXd58Nwr84uIGeqrvIqvntveWwHjqmenE"
+    TELEGRAM_CHAT_ID = "1072750499"
 
-def send_telegram_alert(message: str, parse_mode: str = "HTML") -> bool:
-    """HTML Error Fallback உடன் கூடிய Dual-Route Telegram Alert Engine"""
-    if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
-        logging.warning("⚠️ Telegram Token or Chat ID Missing in Config/Secrets!")
+if not TELEGRAM_BOT_TOKEN:
+    TELEGRAM_BOT_TOKEN = "8939955418:AAFXd58Nwr84uIGeqrvIqvntveWwHjqmenE"
+if not TELEGRAM_CHAT_ID:
+    TELEGRAM_CHAT_ID = "1072750499"
+
+def send_telegram_alert(message_html: str) -> bool:
+    """Send immediate Telegram push alert with sound"""
+    if not message_html or not message_html.strip():
         return False
-
+        
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
-    
-    # Route 1: Try Sending with HTML Parse Mode
     payload = {
         "chat_id": TELEGRAM_CHAT_ID,
-        "text": message,
-        "parse_mode": parse_mode
+        "text": message_html,
+        "parse_mode": "HTML",
+        "disable_notification": False  # LOUD SOUND ALERT!
     }
-
     try:
-        response = requests.post(url, json=payload, timeout=5)
-        if response.status_code == 200:
-            logging.info("✅ Telegram HTML Alert Delivered Successfully.")
+        res = requests.post(url, json=payload, timeout=5)
+        if res.status_code == 200:
             return True
-        else:
-            logging.warning(f"⚠️ Telegram HTML Route Failed ({response.status_code}): {response.text}")
+        # Plain text fallback
+        clean_text = message_html.replace("<b>", "").replace("</b>", "").replace("<i>", "").replace("</i>", "").replace("<code>", "").replace("</code>", "")
+        fallback_res = requests.post(url, json={"chat_id": TELEGRAM_CHAT_ID, "text": clean_text, "disable_notification": False}, timeout=5)
+        return fallback_res.status_code == 200
     except Exception as e:
-        logging.error(f"❌ Telegram Route 1 Error: {e}")
-
-    # Route 2: Fallback to Clean Plain Text (Strips HTML tags if Route 1 fails)
-    try:
-        clean_text = message.replace("<b>", "").replace("</b>", "").replace("<i>", "").replace("</i>", "").replace("<code>", "").replace("</code>", "")
-        fallback_payload = {
-            "chat_id": TELEGRAM_CHAT_ID,
-            "text": clean_text
-        }
-        fallback_res = requests.post(url, json=fallback_payload, timeout=5)
-        if fallback_res.status_code == 200:
-            logging.info("✅ Telegram Fallback Plain-Text Alert Delivered.")
-            return True
-        else:
-            logging.error(f"❌ Telegram Fallback Route Failed ({fallback_res.status_code}): {fallback_res.text}")
-    except Exception as e:
-        logging.error(f"❌ Telegram Route 2 Error: {e}")
-
-    return False
+        print(f"Telegram Alert Error: {e}")
+        return False
