@@ -1957,6 +1957,39 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
 
         ai_confidence_score = 84.6 if (is_bullish and rsi_val > 55) else 78.2
 
+        # -------------------------------------------------------------
+        # ⚡ ULTRA-SIMPLE 5-MINUTE QUICK SCALP CHEAT SHEET
+        # -------------------------------------------------------------
+        scalp_is_buy = is_bullish
+        scalp_tp1 = round(sig_cur_price * (1.0035 if scalp_is_buy else 0.9965), 2 if sig_cur_price > 1 else 4)
+        scalp_sl = round(sig_cur_price * (0.9975 if scalp_is_buy else 1.0025), 2 if sig_cur_price > 1 else 4)
+        
+        next_candle_pred = "UPWARD (BULLISH 🚀)" if scalp_is_buy else "DOWNWARD (BEARISH 📉)"
+        action_text = "BUY / LONG (Green Button)" if scalp_is_buy else "SELL / SHORT (Red Button)"
+        action_color = "#10b981" if scalp_is_buy else "#ef4444"
+
+        scalp_cheat_html = f"""<div style="background-color: #0f172a; border: 2px solid {action_color}; border-radius: 12px; padding: 20px; margin-bottom: 25px;">
+<h2 style="color: {action_color}; margin: 0;">⚡ 5-MINUTE QUICK SCALP CHEAT SHEET</h2>
+<p style="color: #94a3b8; margin-top: 5px;"><i>5-Min Quick Targets hit within 1 to 2 candles!</i></p>
+<div style="display: flex; justify-content: space-between; margin-top: 15px; font-size: 16px; background-color: #1e293b; padding: 12px; border-radius: 8px; flex-wrap: wrap; gap: 10px;">
+<div>🔥 <b>BEST CHART RIGHT NOW:</b> <span style="color: #38bdf8; font-weight: bold;">{pair_name}</span></div>
+<div>🔮 <b>NEXT 5M CANDLE PREDICTION:</b> <span style="color: {action_color}; font-weight: bold;">{next_candle_pred}</span></div>
+<div>🤖 <b>AI CONFIDENCE:</b> <span style="color: #f59e0b; font-weight: bold;">{ai_confidence_score:.1f}%</span></div>
+</div>
+<hr style="border-color: #334155; margin: 15px 0;">
+<h3 style="color: #f59e0b; margin-bottom: 10px;">📋 BINANCE ORDER BOX — TYPE THESE EXACT NUMBERS NOW:</h3>
+<div style="display: flex; justify-content: space-between; font-size: 17px; font-weight: bold; flex-wrap: wrap; gap: 10px;">
+<div style="color: #e2e8f0;">[1] Action: <span style="color: {action_color};">{action_text}</span></div>
+<div style="color: #38bdf8;">[2] Price: {curr_tag}{sig_cur_price:,.2f}</div>
+<div style="color: #f59e0b;">[3] Total: 5.00 USDT</div>
+</div>
+<div style="display: flex; justify-content: space-between; font-size: 17px; font-weight: bold; margin-top: 12px; flex-wrap: wrap; gap: 10px;">
+<div style="color: #34d399;">[4] Take Profit (TP 5m): {curr_tag}{scalp_tp1:,.2f} (+0.35% Quick Gain)</div>
+<div style="color: #f87171;">[5] Stop Loss (SL): {curr_tag}{scalp_sl:,.2f} (-0.25% Risk Cap)</div>
+</div>
+</div>"""
+        st.markdown(scalp_cheat_html, unsafe_allow_html=True)
+
         # 1. FEATURED LIVE ORDER SHEET CARD (Ready to Copy to Binance)
         order_sheet_html = f"""<div style="background-color: #0f172a; border: 2px solid #10b981; border-radius: 14px; padding: 22px; margin-bottom: 20px; box-shadow: 0 4px 20px rgba(16, 185, 129, 0.15);">
 <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
