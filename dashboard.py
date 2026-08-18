@@ -744,6 +744,20 @@ soft_kill_info = evaluate_soft_kill_switch_position_scaling(st.session_state.get
 if soft_kill_info['status'] == "SOFT_KILL_SWITCH_ACTIVE":
     st.sidebar.warning("⚠️ SOFT KILL-SWITCH ACTIVE: 2 Losses Detected. Position Size Scaled to 50% & AI Confidence Threshold set to 75%.")
 
+# -------------------------------------------------------------
+# 1-CLICK DAILY RISK LOCK RESET BUTTON
+# -------------------------------------------------------------
+if st.session_state.get('daily_loss_lock', False) or st.session_state.get('consecutive_losses', 0) >= 2 or "பூட்டப்பட்டுள்ளது" in str(st.session_state.get('lock_msg', '')):
+    st.sidebar.markdown("---")
+    st.sidebar.error("🔒 Today's Safety Lock Active (2 Losses Hit)")
+    
+    if st.sidebar.button("🔓 Unlock System for Live Binance Test", use_container_width=True):
+        st.session_state['daily_loss_lock'] = False
+        st.session_state['consecutive_losses'] = 0
+        st.session_state['lock_msg'] = ""
+        st.toast("🚀 Safety Lock Reset! Live Binance Engine Unlocked for Today.", icon="⚡")
+        st.rerun()
+
 period_map = {"1m": "1d", "5m": "5d", "15m": "5d", "1h": "1mo", "1d": "3mo"}
 
 def get_intelligent_ai_response(user_input, asset_name, current_price, rsi_val, is_market_open, active_data, current_capital, total_pnl, win_rate):
