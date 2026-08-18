@@ -545,28 +545,25 @@ def fetch_real_today_news_rss():
         return "🟢 TODAY'S NEWS SENTIMENT STABLE", "✅ இன்றைய செய்திகள் நிலவரம் சாதகமாக உள்ளது.", "glass-card-green", ["• Today's live news feed connected."]
 
 def get_realtime_binance_btc_price():
-    """Fetch 100% exact live price directly from Binance Official Public API"""
-    try:
-        # Primary: Binance Spot Official Ticker API
-        url = "https://api.binance.com/api/v3/ticker/price?symbol=BTCUSDT"
-        response = requests.get(url, timeout=2)
-        if response.status_code == 200:
-            data = response.json()
-            return float(data['price'])
-    except Exception:
-        pass
-        
-    try:
-        # Secondary Backup: Binance Futures Official Ticker API
-        url_f = "https://fapi.binance.com/fapi/v1/ticker/price?symbol=BTCUSDT"
-        response_f = requests.get(url_f, timeout=2)
-        if response_f.status_code == 200:
-            data_f = response_f.json()
-            return float(data_f['price'])
-    except Exception:
-        pass
-
-    return 64116.00 # Dynamic current baseline
+    """Multi-Endpoint Live Binance Ticker Fetcher (Bypasses US Cloud IP Blocks)"""
+    # 4 Public Endpoints Chain
+    endpoints = [
+        "https://data-api.binance.vision/api/v3/ticker/price?symbol=BTCUSDT",
+        "https://api.binance.com/api/v3/ticker/price?symbol=BTCUSDT",
+        "https://api.binance.us/api/v3/ticker/price?symbol=BTCUSDT",
+        "https://fapi.binance.com/fapi/v1/ticker/price?symbol=BTCUSDT"
+    ]
+    for url in endpoints:
+        try:
+            res = requests.get(url, timeout=1.5).json()
+            if 'price' in res:
+                live_p = float(res['price'])
+                st.session_state['last_valid_btc_price'] = live_p # Save to Session Cache
+                return live_p
+        except Exception:
+            continue
+    # Returns last live price from session memory if network glitches
+    return st.session_state.get('last_valid_btc_price', 64134.22)
 
 # 🟢 INSTANT BINANCE LIVE CRYPTO PRICE SYNC
 def get_realtime_crypto_price(symbol_name):
