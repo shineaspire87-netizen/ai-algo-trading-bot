@@ -392,15 +392,15 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 WATCHLIST = {
+    "BITCOIN": "BTC-USD",
+    "ETHEREUM": "ETH-USD",
     "BANKNIFTY": "^NSEBANK",
     "NIFTY50": "^NSEI",
     "RELIANCE": "RELIANCE.NS",
     "HDFCBANK": "HDFCBANK.NS",
     "ICICIBANK": "ICICIBANK.NS",
     "INFY": "INFY.NS",
-    "SBIN": "SBIN.NS",
-    "BITCOIN": "BTC-USD",
-    "ETHEREUM": "ETH-USD"
+    "SBIN": "SBIN.NS"
 }
 
 
@@ -774,7 +774,12 @@ def log_trade_to_csv_and_update(active_data, exit_price, exit_reason, live_pnl, 
         f"<b>Net Realized P&L:</b> {curr_sym}{net_pnl:+,.2f}\n"
         f"<b>Account Capital:</b> {curr_sym}{new_capital:,.2f}"
     )
-    send_telegram_alert(alert_msg)
+    alert_msg = locals().get('alert_msg', '') # Safe Initialization!
+    if alert_msg:
+        try:
+            send_telegram_alert(alert_msg)
+        except Exception as e:
+            pass
     return new_capital
 
 @st.fragment(run_every="3s")
@@ -1326,7 +1331,12 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
                 f"<b>Target:</b> {p_curr}{tgt_prem:.2f} (+12%)\n"
                 f"<b>Time:</b> {now_dt.strftime('%H:%M:%S')}"
             )
-            send_telegram_alert(alert_msg)
+            alert_msg = locals().get('alert_msg', '') # Safe Initialization!
+            if alert_msg:
+                try:
+                    send_telegram_alert(alert_msg)
+                except Exception as e:
+                    pass
             st.rerun()
 
         # NEWS PANEL
