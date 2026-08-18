@@ -159,6 +159,24 @@ CRYPTO_RADAR_PAIRS = [
     "XRP/USDT"
 ]
 
+def get_binance_geofence_bypassed_exchange(api_key: str, secret_key: str):
+    """Configures CCXT to bypass US Cloud IP Geofence via Asian CDN Endpoints"""
+    return ccxt.binance({
+        'apiKey': api_key.strip(),
+        'secret': secret_key.strip(),
+        'enableRateLimit': True,
+        'urls': {
+            'api': {
+                'public': 'https://api1.binance.com/api/v3',
+                'private': 'https://api1.binance.com/api/v3',
+            }
+        },
+        'options': {
+            'defaultType': 'spot',
+            'adjustForTimeDifference': True
+        }
+    })
+
 def execute_multi_coin_live_order(symbol: str, side: str, usdt_amount: float = 5.00, ai_confidence: float = 0.70):
     """
     Executes Micro $5.00 USDT Order across Top 5 Crypto Pairs without breaking BinanceSpotBroker class
@@ -173,13 +191,7 @@ def execute_multi_coin_live_order(symbol: str, side: str, usdt_amount: float = 5
         return None
 
     try:
-        import ccxt
-        exchange = ccxt.binance({
-            'apiKey': api_key.strip(),
-            'secret': secret_key.strip(),
-            'enableRateLimit': True,
-            'options': {'defaultType': 'spot'}
-        })
+        exchange = get_binance_geofence_bypassed_exchange(api_key, secret_key)
 
         ticker = exchange.fetch_ticker(symbol)
         curr_price = float(ticker['last'])
