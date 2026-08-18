@@ -169,15 +169,18 @@ def evaluate_smart_breakout_signals(df: pd.DataFrame, asset_symbol: str) -> dict
     return {"signal": "HOLD", "confidence": 0.50, "reason": "⏸️ Waiting for clear VWAP/EMA Trend Breakout"}
 
 WATCHLIST = {
+    "BITCOIN": "BTC-USD",
+    "ETHEREUM": "ETH-USD",
+    "SOLANA": "SOL-USD",
+    "BNB": "BNB-USD",
+    "XRP": "XRP-USD",
     "BANKNIFTY": "^NSEBANK",
     "NIFTY50": "^NSEI",
     "RELIANCE": "RELIANCE.NS",
     "HDFCBANK": "HDFCBANK.NS",
     "ICICIBANK": "ICICIBANK.NS",
     "INFY": "INFY.NS",
-    "SBIN": "SBIN.NS",
-    "BITCOIN": "BTC-USD",
-    "ETHEREUM": "ETH-USD"
+    "SBIN": "SBIN.NS"
 }
 
 last_notified_signal = {}

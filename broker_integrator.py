@@ -61,6 +61,29 @@ def test_binance_connection(api_key, secret_key, proxy_url=None):
 
     return False, last_error_msg, 0.0
 
+import os
+
+def get_saved_binance_keys():
+    """Auto-loads Binance API Keys from Secrets/.env so refresh NEVER clears them!"""
+    api_key = st.secrets.get("BINANCE_API_KEY", os.getenv("BINANCE_API_KEY", st.session_state.get("binance_api_key", "")))
+    secret_key = st.secrets.get("BINANCE_SECRET_KEY", os.getenv("BINANCE_SECRET_KEY", st.session_state.get("binance_secret_key", "")))
+    
+    # Fallback to direct .env reading if running locally
+    if not api_key or not secret_key:
+        if os.path.exists(".env"):
+            try:
+                with open(".env", "r", encoding="utf-8") as f:
+                    for line in f:
+                        line = line.strip()
+                        if line.startswith("BINANCE_API_KEY="):
+                            api_key = line.split("=", 1)[1].strip().strip('"').strip("'")
+                        elif line.startswith("BINANCE_SECRET_KEY="):
+                            secret_key = line.split("=", 1)[1].strip().strip('"').strip("'")
+            except Exception:
+                pass
+                
+    return str(api_key).strip(), str(secret_key).strip()
+
 def get_binance_spot_usdt_balance(api_key, secret_key):
     """Dynamically fetch real Binance Spot USDT balance"""
     success, msg, bal = test_binance_connection(api_key, secret_key)
@@ -78,9 +101,8 @@ def render_broker_integrator_tab():
     auth_msg = st.session_state.get('binance_auth_message', '')
     live_usdt = st.session_state.get('binance_live_usdt_balance', 5.56)
 
-    # API Input Forms
-    saved_key = st.session_state.get('binance_api_key', '')
-    saved_secret = st.session_state.get('binance_secret_key', '')
+    # Auto-loads Binance API Keys from Secrets / .env
+    saved_key, saved_secret = get_saved_binance_keys()
 
     api_key_input = st.text_input("Binance API Key:", value=saved_key, type="password", key="b_key_input")
     secret_key_input = st.text_input("Binance API Secret:", value=saved_secret, type="password", key="b_sec_input")
