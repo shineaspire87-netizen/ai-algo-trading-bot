@@ -1630,7 +1630,12 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
                 fig_ov.add_hline(y=float(target_stock_p), line_dash="dash", line_color="#10b981", annotation_text="TARGET 1")
                 fig_ov.add_hline(y=float(sl_stock_p), line_dash="dash", line_color="#ef4444", annotation_text="HARD STOP LOSS")
                 fig_ov.add_hline(y=float(curr_active_stock_p), line_dash="dot", line_color="#f59e0b", annotation_text="LIVE TICKER")
-                fig_ov.update_layout(height=350, template="plotly_dark", title=f"Active Levels for {sym}")
+                
+                # FIX PLOTLY CHART Y-AXIS ALIGNMENT (Centers Entry, Target & SL Lines!)
+                y_min = min(float(sl_stock_p), float(e_stock_p), float(target_stock_p), float(curr_active_stock_p)) * 0.998
+                y_max = max(float(sl_stock_p), float(e_stock_p), float(target_stock_p), float(curr_active_stock_p)) * 1.002
+                fig_ov.update_yaxes(range=[y_min, y_max])
+                fig_ov.update_layout(height=350, template="plotly_dark", title=f"Active Trade Levels for {sym}")
                 st.plotly_chart(fig_ov, use_container_width=True)
         elif not is_market_open:
             st.markdown(f"<div class='glass-card'>🔒 MARKET CLOSED - NO ACTIVE POSITIONS<br><small>{next_unlock_msg}</small></div>", unsafe_allow_html=True)
