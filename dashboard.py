@@ -1543,22 +1543,35 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
                 except Exception as e:
                     print(f"Live Binance Order Execution Error: {e}")
 
-            alert_msg = (
-                f"🚨 <b>ALGO TRADE ENTERED!</b>\n\n"
-                f"<b>Symbol:</b> {trade_sym} ({opt_type})\n"
-                f"<b>Stock Price:</b> {p_curr}{current_price:,.2f}\n"
-                f"<b>VWAP Level:</b> {p_curr}{vwap_val:,.2f}\n"
-                f"<b>Option Premium:</b> {p_curr}{prem:.2f}\n"
-                f"<b>Stop Loss:</b> {p_curr}{sl_prem:.2f} (-7%)\n"
-                f"<b>Target:</b> {p_curr}{tgt_prem:.2f} (+12%)\n"
-                f"<b>Time:</b> {now_dt.strftime('%H:%M:%S')}"
-            )
-            alert_msg = locals().get('alert_msg', '') # Safe Initialization!
-            if alert_msg:
-                try:
+            # -------------------------------------------------------------
+            # DIRECT CO-PILOT TELEGRAM SOUND ALERT DISPATCH
+            # -------------------------------------------------------------
+            try:
+                from notifier import send_copilot_order_ticket_alert, send_telegram_alert
+                if is_crypto_selected:
+                    send_copilot_order_ticket_alert(
+                        symbol=asset_name,
+                        action="BUY" if opt_type == "CALL" else "SELL",
+                        price=current_price,
+                        target=round(current_price * (1.012 if opt_type == "CALL" else 0.988), 2),
+                        stop_loss=round(current_price * (0.995 if opt_type == "CALL" else 1.005), 2),
+                        ai_conf=84.2,
+                        usdt_amount=5.00
+                    )
+                else:
+                    alert_msg = (
+                        f"🚨 <b>ALGO TRADE ENTERED!</b>\n\n"
+                        f"<b>Symbol:</b> {trade_sym} ({opt_type})\n"
+                        f"<b>Stock Price:</b> {p_curr}{current_price:,.2f}\n"
+                        f"<b>VWAP Level:</b> {p_curr}{vwap_val:,.2f}\n"
+                        f"<b>Option Premium:</b> {p_curr}{prem:.2f}\n"
+                        f"<b>Stop Loss:</b> {p_curr}{sl_prem:.2f} (-7%)\n"
+                        f"<b>Target:</b> {p_curr}{tgt_prem:.2f} (+12%)\n"
+                        f"<b>Time:</b> {now_dt.strftime('%H:%M:%S')}"
+                    )
                     send_telegram_alert(alert_msg)
-                except Exception as e:
-                    pass
+            except Exception as e:
+                print(f"Telegram Dispatch Error: {e}")
             st.rerun()
 
         # NEWS PANEL

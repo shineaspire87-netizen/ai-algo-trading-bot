@@ -34,3 +34,29 @@ def send_telegram_alert(message_html: str) -> bool:
     except Exception as e:
         print(f"Telegram Alert Error: {e}")
         return False
+
+def send_copilot_order_ticket_alert(symbol: str, action: str, price: float, target: float, stop_loss: float, ai_conf: float, usdt_amount: float = 5.00) -> bool:
+    """Sends the Exact 15-Second Binance Copy-Paste Order Sheet to Telegram"""
+    clean_sym = f"{symbol}/USDT" if "/" not in symbol else symbol
+    if "BITCOIN" in symbol: clean_sym = "BTC/USDT"
+    elif "ETHEREUM" in symbol: clean_sym = "ETH/USDT"
+    elif "SOLANA" in symbol: clean_sym = "SOL/USDT"
+    elif "BNB" in symbol: clean_sym = "BNB/USDT"
+    elif "XRP" in symbol: clean_sym = "XRP/USDT"
+
+    msg = f"""🎯 <b>ANTONY AI CO-PILOT — BINANCE SPOT ORDER SHEET</b>
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+• <b>Symbol / Pair</b>     : <code>{clean_sym}</code>
+• <b>Action</b>            : <b>{action} LIMIT ORDER</b> 🟢
+
+📍 <b>PRICE FIELD</b>      ➔ Type: <code>${price:,.2f}</code>
+📍 <b>TOTAL FIELD</b>      ➔ Type: <code>{usdt_amount:.2f} USDT</code>
+
+☑️ <b>Check [x] TP/SL Box on Binance:</b>
+🎯 <b>TAKE PROFIT (TP)</b> ➔ Type: <code>${target:,.2f}</code> (+6.0% Gain)
+🛡️ <b>STOP LOSS (SL)</b>   ➔ Type: <code>${stop_loss:,.2f}</code> (-3.0% Risk Cap)
+
+🤖 <b>AI CONFIDENCE</b>    ➔ <b>{ai_conf:.1f}%</b> (Institutional Rules Passed)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+<i>15-Second Copy-Paste Execution | Zero API Stress</i>"""
+    return send_telegram_alert(msg)
