@@ -470,10 +470,15 @@ def enforce_cloud_kill_switch_guard(trades_df=None):
             elif pnl > 0:
                 break
 
+        st.session_state['consecutive_losses'] = consecutive_losses
         if consecutive_losses >= 2:
-            st.session_state['kill_switch_active'] = True
-            st.session_state['kill_switch_reason'] = f"🛑 CLOUD LOCK: TODAY ({today_ist}) HAD {consecutive_losses} CONSECUTIVE LOSSES."
-            return True
+            if not st.session_state.get('safety_lock_unlocked_today', False):
+                st.session_state['kill_switch_active'] = True
+                st.session_state['kill_switch_reason'] = f"🛑 CLOUD LOCK: TODAY ({today_ist}) HAD {consecutive_losses} CONSECUTIVE LOSSES."
+                return True
+            else:
+                st.session_state['kill_switch_active'] = False
+                return False
     except Exception as e:
         pass
     return False
@@ -745,16 +750,21 @@ if soft_kill_info['status'] == "SOFT_KILL_SWITCH_ACTIVE":
     st.sidebar.warning("⚠️ SOFT KILL-SWITCH ACTIVE: 2 Losses Detected. Position Size Scaled to 50% & AI Confidence Threshold set to 75%.")
 
 # -------------------------------------------------------------
-# 1-CLICK DAILY RISK LOCK RESET BUTTON
+# 1-CLICK DAILY RISK LOCK RESET BUTTON (Unlocks Paper Loss for Binance Test)
 # -------------------------------------------------------------
-if st.session_state.get('daily_loss_lock', False) or st.session_state.get('consecutive_losses', 0) >= 2 or "பூட்டப்பட்டுள்ளது" in str(st.session_state.get('lock_msg', '')):
+is_cloud_locked = st.session_state.get('kill_switch_active', False) or st.session_state.get('daily_loss_lock', False) or st.session_state.get('consecutive_losses', 0) >= 2 or "பூட்டப்பட்டுள்ளது" in str(st.session_state.get('lock_msg', ''))
+
+if is_cloud_locked:
     st.sidebar.markdown("---")
-    st.sidebar.error("🔒 Today's Safety Lock Active (2 Losses Hit)")
+    st.sidebar.error("🔒 Today's Safety Lock Active (2 Paper Losses Hit)")
     
-    if st.sidebar.button("🔓 Unlock System for Live Binance Test", use_container_width=True):
+    if st.sidebar.button("🔓 Unlock System for Live Binance Test", use_container_width=True, help="Clears virtual paper loss lock so you can test real $5.56 Binance execution"):
+        st.session_state['safety_lock_unlocked_today'] = True
+        st.session_state['kill_switch_active'] = False
         st.session_state['daily_loss_lock'] = False
         st.session_state['consecutive_losses'] = 0
         st.session_state['lock_msg'] = ""
+        st.session_state['kill_switch_reason'] = ""
         st.toast("🚀 Safety Lock Reset! Live Binance Engine Unlocked for Today.", icon="⚡")
         st.rerun()
 
@@ -973,22 +983,35 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
     if not trades_df.empty:
         trades_df = trades_df.drop_duplicates(subset=['Net_PnL', 'Entry_Price', 'Exit_Price'], keep='last')
 
-    # 1. Read testing mode state first
+    # 1. Read testing mode & real execution state
     is_testing_mode = st.session_state.get('allow_extended_trades', False)
+    is_real_execution = (st.session_state.get('execution_mode') == 'REAL') or st.session_state.get('binance_authenticated', False)
+    is_unlocked_manually = st.session_state.get('safety_lock_unlocked_today', False)
 
     # 2. Check cloud persistent kill switch
-    is_locked_in_cloud = enforce_cloud_kill_switch_guard(trades_df)
+    is_locked_in_cloud = False if (is_real_execution or is_unlocked_manually or is_testing_mode) else enforce_cloud_kill_switch_guard(trades_df)
 
     # 3. Handle Header Banner Display conditionally
     if is_locked_in_cloud:
-        if is_testing_mode:
-            # Override lock for testing mode & show clean blue info banner
-            st.session_state['kill_switch_active'] = False
-            st.info("🧪 **Extended Testing Mode Active:** 2 Consecutive Losses Cloud Lock bypassed for market analysis testing.")
-        else:
-            # Show red error banner for normal production mode
-            st.session_state['kill_switch_active'] = True
+        st.session_state['kill_switch_active'] = True
+        col_err1, col_err2 = st.columns([0.8, 0.2])
+        with col_err1:
             st.error("🛑 பாட் பாதுகாப்பு எச்சரிக்கை: இன்று 2 தொடர் நஷ்டங்கள் பதிவாகியுள்ளதால், கூகுள் ஷீட் தரவுத்தளத்தின் மூலம் பாட் அன்றைய நாளுக்குப் பூட்டப்பட்டுள்ளது!")
+        with col_err2:
+            if st.button("🔓 Unlock Bot Now", use_container_width=True, key="top_banner_unlock_btn"):
+                st.session_state['safety_lock_unlocked_today'] = True
+                st.session_state['kill_switch_active'] = False
+                st.session_state['daily_loss_lock'] = False
+                st.session_state['consecutive_losses'] = 0
+                st.session_state['lock_msg'] = ""
+                st.session_state['kill_switch_reason'] = ""
+                st.toast("🚀 Safety Lock Reset! Bot is now unlocked.", icon="⚡")
+                st.rerun()
+    elif is_testing_mode:
+        st.session_state['kill_switch_active'] = False
+        st.info("🧪 **Extended Testing Mode Active:** 2 Consecutive Losses Cloud Lock bypassed for market analysis testing.")
+    else:
+        st.session_state['kill_switch_active'] = False
 
     total_trades = len(trades_df)
     
@@ -1231,7 +1254,7 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
         trades_today_count = 0
         last_exit_time = None
         is_consecutive_losses_detected = False
-        is_2_consecutive_losses = False if is_testing_mode else (True if st.session_state.get('kill_switch_active', False) else False)
+        is_2_consecutive_losses = False if (is_testing_mode or is_binance_live_active or st.session_state.get('safety_lock_unlocked_today', False)) else (True if st.session_state.get('kill_switch_active', False) else False)
 
         if total_trades > 0 and 'Exit_Time' in trades_df.columns:
             today_str = now_dt.strftime('%Y-%m-%d')
@@ -1243,7 +1266,7 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
                 last_two = today_trades[pnl_col].tail(2).tolist()
                 if len(last_two) == 2 and last_two[0] < 0 and last_two[1] < 0:
                     is_consecutive_losses_detected = True
-                    if not is_testing_mode:
+                    if not is_testing_mode and not is_binance_live_active and not st.session_state.get('safety_lock_unlocked_today', False):
                         is_2_consecutive_losses = True
         
             try:
@@ -1860,33 +1883,6 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
         st.divider()
         render_system_health_panel()
         st.divider()
-        st.markdown("## 🔑 Broker API Integration & Mode Selector")
-        
-        # 2-Week Paper Test Status Box
-        st.info("🧪 **STATUS:** Paper Trading Test Active (Day 1 of 14). All execution is simulated with zero financial risk.")
-        
-        broker_mode = st.radio(
-            "Select Active Execution Mode:",
-            ["🎮 Paper Simulator (Active - 2 Weeks Test)", "🟢 Zerodha Kite Connect (Live)", "🔵 Dhan API (Live)"],
-            index=0
-        )
-        
-        st.divider()
-        st.markdown("### 🔒 Live Broker Credentials (For Post 2-Week Activation)")
-        
-        col_k1, col_k2 = st.columns(2)
-        with col_k1:
-            kite_api_key = st.text_input("Zerodha API Key", type="password", value="***")
-            kite_secret = st.text_input("Zerodha API Secret", type="password", value="***")
-        with col_k2:
-            kite_access_token = st.text_input("Zerodha Access Token (Daily TOTP)", type="password", value="***")
-            
-        if st.button("💾 Save Credentials & Check Health", use_container_width=True):
-            health = check_system_integrity(GOOGLE_SHEET_WEB_APP_URL, TELEGRAM_BOT_TOKEN)
-            st.write("### 🏥 System Health Status:")
-            st.write(f"- Google Sheets Cloud Sync: {'✅ OK' if health['sheets'] else '❌ Disconnected'}")
-            st.write(f"- Telegram Alert Bot: {'✅ OK' if health['telegram'] else '❌ Disconnected'}")
-            st.success("✅ Credentials stored in cloud session successfully!")
 
         st.divider()
         st.markdown("### 📲 Telegram Notifier Live Connection Test")
