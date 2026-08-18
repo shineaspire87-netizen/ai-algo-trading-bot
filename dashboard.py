@@ -1,12 +1,13 @@
 # dashboard.py - Antony Quant AI Algo Terminal (Complete Institutional Engine & Live Sync)
 import streamlit as st
 import requests
-# Import Binance Spot Balance Function safely
+# Import Binance Spot Balance & Verification Functions safely
 try:
-    from broker_integrator import get_binance_spot_usdt_balance, render_broker_integrator_tab
+    from broker_integrator import get_binance_spot_usdt_balance, render_broker_integrator_tab, verify_and_save_binance_credentials
 except Exception:
     get_binance_spot_usdt_balance = None
     render_broker_integrator_tab = None
+    verify_and_save_binance_credentials = None
 
 # Top of dashboard.py (Global Scope)
 ACTIVE_TRADE_FILE = "active_trade.json"
@@ -1761,18 +1762,32 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
             submit_b = st.form_submit_button("💾 Connect & Save Binance Live API Credentials", use_container_width=True)
 
         if submit_b:
-            st.session_state['BINANCE_API_KEY'] = b_key
-            st.session_state['BINANCE_API_SECRET'] = b_sec
-            st.session_state['BINANCE_LIVE_ENABLED'] = enable_live
-            
-            # INSTANTLY UPDATE TOTAL CAPITAL METRIC CARD!
-            st.session_state['total_capital'] = float(real_usdt_capital)
-            
-            if enable_live:
-                st.success("🎉 **BINANCE REAL-MONEY LIVE EXECUTION ENGINE ACTIVATED!**")
-                st.info(f"⚡ Live Binance Capital Updated: **${st.session_state['total_capital']:,.2f} USDT**.")
+            verify_func = globals().get('verify_and_save_binance_credentials', None)
+            if verify_func is not None and b_key and b_sec:
+                with st.spinner("Connecting & Verifying Binance Live API Credentials..."):
+                    is_valid, verified_balance = verify_func(b_key, b_sec)
+                    
+                    if is_valid:
+                        st.session_state['BINANCE_API_KEY'] = b_key
+                        st.session_state['BINANCE_API_SECRET'] = b_sec
+                        st.session_state['BINANCE_LIVE_ENABLED'] = enable_live
+                        st.session_state['real_usdt_balance'] = verified_balance
+                        st.session_state['total_capital'] = verified_balance if verified_balance > 0 else float(real_usdt_capital)
+                        st.success(f"🎉 BINANCE LIVE API VERIFIED BY EXCHANGE! Spot USDT Balance: ${verified_balance:.2f}")
+                        if enable_live:
+                            st.info(f"⚡ Live Binance Capital Updated: **${st.session_state['total_capital']:,.2f} USDT**.")
+                    else:
+                        st.session_state['BINANCE_LIVE_ENABLED'] = False
+                        st.error("🚨 API KEY VALIDATION FAILED! Real-Money Execution Auto-Disabled for Safety.")
             else:
-                st.warning("🎮 **PAPER TRADING SIMULATOR ACTIVE:** Binance keys saved, but real-money execution is paused.")
+                st.session_state['BINANCE_API_KEY'] = b_key
+                st.session_state['BINANCE_API_SECRET'] = b_sec
+                st.session_state['BINANCE_LIVE_ENABLED'] = enable_live
+                st.session_state['total_capital'] = float(real_usdt_capital)
+                if enable_live:
+                    st.success("🎉 **BINANCE REAL-MONEY LIVE EXECUTION ENGINE ACTIVATED!**")
+                else:
+                    st.warning("🎮 **PAPER TRADING SIMULATOR ACTIVE:** Binance keys saved, but real-money execution is paused.")
                 
             st.rerun() # Refresh immediately to update Top Total Capital Metric Card!
 
