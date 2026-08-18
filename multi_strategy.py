@@ -419,3 +419,113 @@ def is_safe_mid_candle_window() -> bool:
     now = datetime.datetime.now()
     second_in_candle = now.second + (now.minute % 5) * 60
     return 60 <= second_in_candle <= 240
+
+
+# =============================================================
+# MULTI-COIN CRYPTO RADAR SCANNER (BTC, ETH, SOL, BNB, XRP)
+# =============================================================
+
+CRYPTO_RADAR_PAIRS = ["BTC/USDT", "ETH/USDT", "SOL/USDT", "BNB/USDT", "XRP/USDT"]
+
+def evaluate_single_asset_signal(df: pd.DataFrame, symbol: str, ai_model_tuple=None):
+    """Evaluates strategy indicators & ML probability for a single symbol"""
+    if df is None or len(df) < 20:
+        return "HOLD", 0.50, "Insufficient Data", {}
+
+    df = df.copy()
+    df_cols = {col.lower(): col for col in df.columns}
+    c_col = df_cols.get('close', 'Close')
+    h_col = df_cols.get('high', 'High')
+    l_col = df_cols.get('low', 'Low')
+    o_col = df_cols.get('open', 'Open')
+    v_col = df_cols.get('volume', 'Volume')
+
+    # Basic Indicators
+    df['EMA_9'] = ta.trend.ema_indicator(df[c_col], window=9)
+    df['EMA_21'] = ta.trend.ema_indicator(df[c_col], window=21)
+    df['RSI'] = ta.momentum.rsi(df[c_col], window=14)
+    
+    latest = df.iloc[-1]
+    ema9, ema21, rsi = float(latest['EMA_9']), float(latest['EMA_21']), float(latest['RSI'])
+    
+    signal = "HOLD"
+    ai_score = 0.50
+    reason = "Neutral indicator zone"
+    
+    if ema9 > ema21 and rsi > 58:
+        signal = "BUY_CALL"
+        ai_score = 0.72
+        reason = f"Bullish EMA Breakout + RSI {rsi:.1f}"
+    elif ema9 < ema21 and rsi < 42:
+        signal = "BUY_PUT"
+        ai_score = 0.72
+        reason = f"Bearish EMA Breakdown + RSI {rsi:.1f}"
+
+    # VCP boost
+    vcp = detect_vcp_squeeze_contraction(df)
+    if vcp.get("is_vcp"):
+        ai_score = min(1.0, ai_score + vcp.get("score_boost", 0.10))
+
+    if ai_model_tuple is not None:
+        try:
+            from train_model_institutional import predict_calibrated_win_probability
+            feat_df = pd.DataFrame([{
+                'ADX': float(ta.trend.adx(df[h_col], df[l_col], df[c_col], window=14).iloc[-1]),
+                'DMI_Plus': float(ta.trend.adx_pos(df[h_col], df[l_col], df[c_col], window=14).iloc[-1]),
+                'DMI_Minus': float(ta.trend.adx_neg(df[h_col], df[l_col], df[c_col], window=14).iloc[-1]),
+                'ATR_Ratio': float(ta.volatility.average_true_range(df[h_col], df[l_col], df[c_col], window=14).iloc[-1] / latest[c_col]),
+                'BB_Width': 0.05,
+                'Body_Ratio': float(abs(latest[c_col] - latest[o_col]) / (latest[h_col] - latest[l_col] + 1e-6)),
+                'Vol_Ratio': 1.2,
+                'EMA_Slope': float((ema9 - ema21) / ema21)
+            }])
+            calib_p = predict_calibrated_win_probability(ai_model_tuple, feat_df)
+            if calib_p > 0:
+                ai_score = calib_p
+        except Exception:
+            pass
+
+    metrics = {
+        "price": float(latest[c_col]),
+        "rsi": rsi,
+        "ema9": ema9,
+        "ema21": ema21
+    }
+
+    return signal, ai_score, reason, metrics
+
+
+def scan_all_crypto_radar_pairs(get_live_df_func, ai_model_tuple):
+    """
+    Scans Top 5 Crypto Radar Pairs simultaneously on every 5-minute bar close.
+    Returns the HIGHEST CONFIDENCE signal pair!
+    """
+    best_pair = None
+    best_ai_score = 0.0
+    best_signal_data = None
+
+    for symbol in CRYPTO_RADAR_PAIRS:
+        try:
+            df = get_live_df_func(symbol, timeframe="5m", limit=100)
+            if df is None or len(df) < 20:
+                continue
+                
+            # Evaluate Strategy Rules
+            signal, ai_score, reason, extra_metrics = evaluate_single_asset_signal(df, symbol, ai_model_tuple)
+            
+            # Catch high confidence breakout signals!
+            if signal in ['BUY_CALL', 'BUY_PUT'] and ai_score >= 0.70:
+                if ai_score > best_ai_score:
+                    best_ai_score = ai_score
+                    best_pair = symbol
+                    best_signal_data = {
+                        'symbol': symbol,
+                        'signal': signal,
+                        'ai_score': ai_score,
+                        'reason': reason,
+                        'metrics': extra_metrics
+                    }
+        except Exception:
+            continue
+
+    return best_signal_data

@@ -5,6 +5,7 @@ import time
 import hmac
 import hashlib
 import requests
+import streamlit as st
 
 class BaseBroker(abc.ABC):
     @abc.abstractmethod
@@ -144,3 +145,51 @@ class ZerodhaKiteBroker(BaseBroker):
 
     def get_positions(self):
         return self.kite.positions() if self.kite else {}
+
+
+# =============================================================
+# MULTI-COIN CRYPTO RADAR EXTENSION (BTC, ETH, SOL, BNB, XRP)
+# =============================================================
+
+CRYPTO_RADAR_PAIRS = [
+    "BTC/USDT",
+    "ETH/USDT",
+    "SOL/USDT",
+    "BNB/USDT",
+    "XRP/USDT"
+]
+
+def execute_multi_coin_live_order(symbol: str, side: str, usdt_amount: float = 5.00, ai_confidence: float = 0.70):
+    """
+    Executes Micro $5.00 USDT Order across Top 5 Crypto Pairs without breaking BinanceSpotBroker class
+    """
+    api_key = st.session_state.get('binance_api_key', '')
+    secret_key = st.session_state.get('binance_secret_key', '')
+    
+    if not api_key or not secret_key:
+        return None
+
+    if ai_confidence < 0.70:
+        return None
+
+    try:
+        import ccxt
+        exchange = ccxt.binance({
+            'apiKey': api_key.strip(),
+            'secret': secret_key.strip(),
+            'enableRateLimit': True,
+            'options': {'defaultType': 'spot'}
+        })
+
+        ticker = exchange.fetch_ticker(symbol)
+        curr_price = float(ticker['last'])
+        raw_qty = usdt_amount / curr_price
+        formatted_qty = float(exchange.amount_to_precision(symbol, raw_qty))
+
+        if side.upper() in ['BUY', 'LONG', 'CALL']:
+            return exchange.create_market_buy_order(symbol, formatted_qty)
+        else:
+            return exchange.create_market_sell_order(symbol, formatted_qty)
+    except Exception as e:
+        print(f"Multi-Coin Order Error ({symbol}): {e}")
+        return None
