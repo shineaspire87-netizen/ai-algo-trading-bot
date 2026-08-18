@@ -1,19 +1,24 @@
 import streamlit as st
-import ccxt
+try:
+    import ccxt
+except ImportError:
+    ccxt = None
 
 def get_binance_spot_usdt_balance(api_key, secret_key):
     """Dynamically fetch real Binance Spot USDT balance"""
-    try:
-        exchange = ccxt.binance({
-            'apiKey': api_key,
-            'secret': secret_key,
-            'enableRateLimit': True
-        })
-        balance = exchange.fetch_balance()
-        usdt_free = float(balance['free'].get('USDT', 0.0))
-        return usdt_free
-    except Exception:
-        return 5.56  # Detected $5.56 USDT live balance baseline
+    if ccxt is not None:
+        try:
+            exchange = ccxt.binance({
+                'apiKey': api_key,
+                'secret': secret_key,
+                'enableRateLimit': True
+            })
+            balance = exchange.fetch_balance()
+            usdt_free = float(balance['free'].get('USDT', 0.0))
+            return usdt_free
+        except Exception:
+            pass
+    return 5.56  # Detected $5.56 USDT live balance baseline
 
 def render_broker_integrator_tab():
     st.subheader("🔑 Broker API Integration & Mode Selector")

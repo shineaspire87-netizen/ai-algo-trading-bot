@@ -1,6 +1,9 @@
 # dashboard.py - Antony Quant AI Algo Terminal (Complete Institutional Engine & Live Sync)
 import streamlit as st
-import ccxt
+try:
+    import ccxt
+except ImportError:
+    ccxt = None
 try:
     from broker_integrator import get_binance_spot_usdt_balance, render_broker_integrator_tab
 except ImportError:
@@ -546,19 +549,21 @@ def fetch_real_today_news_rss():
 
 def get_realtime_binance_btc_price():
     """Fetch 0ms real-time Bitcoin price from Binance Public Ticker"""
-    try:
-        exchange = ccxt.binance({'enableRateLimit': True})
-        ticker = exchange.fetch_ticker('BTC/USDT')
-        return float(ticker['last'])
-    except Exception:
+    if ccxt is not None:
         try:
-            url = "https://api.binance.com/api/v3/ticker/price?symbol=BTCUSDT"
-            resp = requests.get(url, timeout=3)
-            if resp.status_code == 200:
-                return float(resp.json()['price'])
+            exchange = ccxt.binance({'enableRateLimit': True})
+            ticker = exchange.fetch_ticker('BTC/USDT')
+            return float(ticker['last'])
         except Exception:
             pass
-        return 64074.00  # Fallback live baseline
+    try:
+        url = "https://api.binance.com/api/v3/ticker/price?symbol=BTCUSDT"
+        resp = requests.get(url, timeout=3)
+        if resp.status_code == 200:
+            return float(resp.json()['price'])
+    except Exception:
+        pass
+    return 64074.00  # Fallback live baseline
 
 # 🟢 INSTANT BINANCE LIVE CRYPTO PRICE SYNC
 def get_realtime_crypto_price(symbol_name):

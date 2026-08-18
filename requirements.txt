@@ -10,3 +10,4 @@ scikit-learn
 streamlit-autorefresh
 google-generativeai
 websocket-client
+ccxt
