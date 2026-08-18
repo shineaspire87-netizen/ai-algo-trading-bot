@@ -32,36 +32,46 @@ def get_current_ist_timestamp_str() -> str:
     ist_now = datetime.datetime.utcnow() + datetime.timedelta(hours=5, minutes=30)
     return ist_now.strftime('%d-%b-%Y %I:%M:%S %p IST')
 
-def execute_paper_trade_entry(symbol: str, option_type: str, entry_price: float, qty: int, target_price: float, sl_price: float):
-    """Executes Paper Entry, Logs IST Time, and Triggers Immediate Telegram Entry Alert"""
-    ist_time_str = get_current_ist_timestamp_str()
+def execute_paper_trade(symbol, option_type, entry_price, target_price, stop_loss, ai_confidence=72.0):
+    """Executes Paper Trade and IMMEDIATELY sends Direct Telegram Push Alert"""
     
-    trade_record = {
-        "Entry_Time": ist_time_str,
-        "Symbol": symbol,
-        "Option_Type": option_type,
-        "Entry_Price": round(entry_price, 2),
-        "Quantity": qty,
-        "Target": round(target_price, 2),
-        "Stop_Loss": round(sl_price, 2),
-        "status": "ACTIVE"
+    trade_dict = {
+        'symbol': symbol,
+        'option_type': option_type,
+        'entry_price': entry_price,
+        'target_price': target_price,
+        'stop_loss': stop_loss,
+        'status': 'ACTIVE',
+        'entry_time': datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     }
     
-    # 🔔 TRIGGER IMMEDIATE TELEGRAM ENTRY ALERT!
-    is_crypto = any(k in symbol.upper() for k in ["BITCOIN", "ETHEREUM", "BTC", "ETH"])
-    curr = "$" if is_crypto else "₹"
-    
-    entry_msg = f"""🚀 <b>NEW ACTIVE TRADE ENTERED!</b>
-
-📌 <b>Asset Symbol:</b> {symbol} ({option_type})
-💵 <b>Entry Premium:</b> {curr}{entry_price:,.2f}
-🎯 <b>Target Price:</b> {curr}{target_price:,.2f}
-🛑 <b>Stop Loss:</b> {curr}{sl_price:,.2f}
-⏰ <b>Entry Time:</b> {ist_time_str}
+    # -------------------------------------------------------------
+    # DIRECT TELEGRAM PUSH ALERT (ZERO DEPENDENCY ON STREAMLIT UI)
+    # -------------------------------------------------------------
+    entry_html_msg = f"""
+🚀 <b>NEW ACTIVE TRADE ENTERED!</b>
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+• <b>Symbol</b>      : {symbol}
+• <b>Direction</b>   : {option_type}
+• <b>Entry Price</b> : ${entry_price:,.2f}
+• <b>Target 1</b>    : ${target_price:,.2f}
+• <b>Stop Loss</b>   : ${stop_loss:,.2f}
+• <b>AI Score</b>    : {ai_confidence:.1f}% Confidence
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+<i>ANTONY Quant AI Algo Trading Terminal</i>
 """
-    send_telegram_alert(entry_msg)
-    
-    return trade_record
+    try:
+        from notifier import send_telegram_alert
+        send_telegram_alert(entry_html_msg)
+        print("✅ DIRECT TELEGRAM ENTRY ALERT SENT!")
+    except Exception as e:
+        print(f"Telegram Dispatch Error: {e}")
+
+    return trade_dict
+
+def execute_paper_trade_entry(symbol: str, option_type: str, entry_price: float, qty: int, target_price: float, sl_price: float, ai_confidence: float = 72.0):
+    """Executes Paper Entry, Logs IST Time, and Triggers Immediate Telegram Entry Alert"""
+    return execute_paper_trade(symbol, option_type, entry_price, target_price, sl_price, ai_confidence)
 
 def execute_paper_trade_exit(trade_record: dict, exit_price: float, exit_reason: str):
     """Executes Paper Exit, Logs IST Exit Time, and Triggers Telegram Exit Alert"""
