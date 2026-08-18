@@ -1467,13 +1467,18 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
             trade_asset_name = sym.split("_")[0]
             trade_symbol_ticker = WATCHLIST.get(trade_asset_name, asset_symbol)
 
-            try:
-                active_df = yf.download(tickers=trade_symbol_ticker, period="1d", interval="1m", progress=False)
-                if isinstance(active_df.columns, pd.MultiIndex):
-                    active_df.columns = active_df.columns.get_level_values(0)
-                curr_active_stock_p = float(active_df['Close'].iloc[-1])
-            except:
-                curr_active_stock_p = current_price
+            # 0ms Real-Time Binance Price Sync for Active Position
+            if any(k in sym.upper() for k in ["BITCOIN", "ETHEREUM", "SOL", "BNB", "XRP", "BTC", "ETH"]):
+                crypto_live = get_realtime_crypto_price(trade_asset_name)
+                curr_active_stock_p = crypto_live if (crypto_live and crypto_live > 0) else current_price
+            else:
+                try:
+                    active_df = yf.download(tickers=trade_symbol_ticker, period="1d", interval="1m", progress=False)
+                    if isinstance(active_df.columns, pd.MultiIndex):
+                        active_df.columns = active_df.columns.get_level_values(0)
+                    curr_active_stock_p = float(active_df['Close'].iloc[-1])
+                except:
+                    curr_active_stock_p = current_price
 
             stock_diff = curr_active_stock_p - e_stock_p
             premium_change = (stock_diff * 0.5) if opt_type == "CALL" else (-stock_diff * 0.5)
