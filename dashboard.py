@@ -1937,7 +1937,9 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
 <h4 style="margin: 0;">⏳ LIVE 5M CANDLE TIMER: {timer_badge}</h4>
 </div>""", unsafe_allow_html=True)
 
-        sig_cur_price = current_price if (current_price and current_price > 0) else 64288.00
+        # Fixed Entry Price at 5M Candle Open (Does NOT jump/flicker!)
+        locked_entry_price = float(df['Close'].iloc[-1]) if ('Close' in df.columns and len(df) > 0) else (current_price if (current_price and current_price > 0) else 64288.00)
+        
         curr_tag = "$" if is_crypto_selected else "₹"
         pair_name = f"{asset_name}/USDT" if is_crypto_selected else asset_name
 
@@ -1946,7 +1948,7 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
         action_type = "BUY" if is_bullish else "SELL"
         direction_badge = "🟢 BUY / LONG" if is_bullish else "🔴 SELL / SHORT"
 
-        entry_val = sig_cur_price
+        entry_val = locked_entry_price
         target_1_val = round(entry_val * (1.012 if is_bullish else 0.988), 2)
         target_2_val = round(entry_val * (1.025 if is_bullish else 0.975), 2)
         stop_loss_val = round(entry_val * (0.995 if is_bullish else 1.005), 2)
@@ -1961,8 +1963,8 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
         # ⚡ ULTRA-SIMPLE 5-MINUTE QUICK SCALP CHEAT SHEET
         # -------------------------------------------------------------
         scalp_is_buy = is_bullish
-        scalp_tp1 = round(sig_cur_price * (1.0035 if scalp_is_buy else 0.9965), 2 if sig_cur_price > 1 else 4)
-        scalp_sl = round(sig_cur_price * (0.9975 if scalp_is_buy else 1.0025), 2 if sig_cur_price > 1 else 4)
+        scalp_tp1 = round(locked_entry_price * (1.0035 if scalp_is_buy else 0.9965), 2 if locked_entry_price > 1 else 4)
+        scalp_sl = round(locked_entry_price * (0.9975 if scalp_is_buy else 1.0025), 2 if locked_entry_price > 1 else 4)
         
         next_candle_pred = "UPWARD (BULLISH 🚀)" if scalp_is_buy else "DOWNWARD (BEARISH 📉)"
         action_text = "BUY / LONG (Green Button)" if scalp_is_buy else "SELL / SHORT (Red Button)"
@@ -1980,7 +1982,7 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
 <h3 style="color: #f59e0b; margin-bottom: 10px;">📋 BINANCE ORDER BOX — TYPE THESE EXACT NUMBERS NOW:</h3>
 <div style="display: flex; justify-content: space-between; font-size: 17px; font-weight: bold; flex-wrap: wrap; gap: 10px;">
 <div style="color: #e2e8f0;">[1] Action: <span style="color: {action_color};">{action_text}</span></div>
-<div style="color: #38bdf8;">[2] Price: {curr_tag}{sig_cur_price:,.2f}</div>
+<div style="color: #38bdf8;">[2] Price: {curr_tag}{locked_entry_price:,.2f}</div>
 <div style="color: #f59e0b;">[3] Total: 5.00 USDT</div>
 </div>
 <div style="display: flex; justify-content: space-between; font-size: 17px; font-weight: bold; margin-top: 12px; flex-wrap: wrap; gap: 10px;">
