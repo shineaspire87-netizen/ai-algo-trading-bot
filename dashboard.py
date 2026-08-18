@@ -1960,17 +1960,42 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
         ai_confidence_score = 84.6 if (is_bullish and rsi_val > 55) else 78.2
 
         # -------------------------------------------------------------
-        # ⚡ ULTRA-SIMPLE 5-MINUTE QUICK SCALP CHEAT SHEET
+        # ⚡ MULTI-ASSET CHEAT SHEET (NIFTY 50 ₹ DHAN vs BINANCE SPOT $)
         # -------------------------------------------------------------
-        scalp_is_buy = is_bullish
-        scalp_tp1 = round(locked_entry_price * (1.0035 if scalp_is_buy else 0.9965), 2 if locked_entry_price > 1 else 4)
-        scalp_sl = round(locked_entry_price * (0.9975 if scalp_is_buy else 1.0025), 2 if locked_entry_price > 1 else 4)
-        
-        next_candle_pred = "UPWARD (BULLISH 🚀)" if scalp_is_buy else "DOWNWARD (BEARISH 📉)"
-        action_text = "BUY / LONG (Green Button)" if scalp_is_buy else "SELL / SHORT (Red Button)"
-        action_color = "#10b981" if scalp_is_buy else "#ef4444"
+        if not is_crypto_selected:
+            # NIFTY 50 / BANKNIFTY 15-MINUTE OPTIONS CHEAT SHEET (RUPEES ₹)
+            nifty_atm = int(round(locked_entry_price / 50.0) * 50) if "NIFTY" in asset_name else int(round(locked_entry_price / 100.0) * 100)
+            nifty_opt_type = "CE" if is_bullish else "PE"
+            nifty_action = "🟩 BUY CALL OPTION (CE)" if is_bullish else "🟪 BUY PUT OPTION (PE)"
+            nifty_border = "#00E676" if is_bullish else "#E040FB"
+            nifty_bg = "#004D40" if is_bullish else "#4A148C"
 
-        scalp_cheat_html = f"""<div style="background-color: #0f172a; border: 2px solid {action_color}; border-radius: 12px; padding: 20px; margin-bottom: 25px;">
+            st.markdown(f"""<div style="background-color: {nifty_bg}; border: 2px solid {nifty_border}; padding: 20px; border-radius: 12px; text-align: center; color: white; margin-bottom: 20px;">
+<h2 style="color: {nifty_border}; margin: 0;">{nifty_action}</h2>
+<p style="font-size: 18px; margin-top: 5px;">{asset_name} Spot Price: <b>₹{locked_entry_price:,.2f}</b></p>
+<hr style="border-color: {nifty_border};">
+<h3>🎯 RECOMMENDED STRIKE: <u style="color: {nifty_border};">{asset_name} {nifty_atm} {nifty_opt_type}</u></h3>
+</div>
+<div style="background-color: #1A237E; padding: 18px; border-radius: 10px; margin-bottom: 25px; color: white; font-size: 17px; line-height: 1.7;">
+<b>📋 DHAN / TRADINGVIEW EXECUTION CHEAT SHEET (RUPEES ₹):</b><br>
+1. <b>Target Strike :</b> <span style="color:#00E676; font-weight:bold;">{asset_name} {nifty_atm} {nifty_opt_type}</span><br>
+2. <b>Option Entry Zone :</b> Market Price @ 15M Candle Open<br>
+3. <b>Stop Loss (SL)   :</b> <span style="color:#f87171;">-15 Premium Points (Risk: ₹375 per lot)</span><br>
+4. <b>Target 1 (TP1)   :</b> <span style="color:#34d399;">+20 Premium Points (Profit: ₹500 per lot)</span><br>
+5. <b>Target 2 (TP2)   :</b> <span style="color:#6ee7b7;">+45 Premium Points (Profit: ₹1,125 per lot)</span>
+</div>""", unsafe_allow_html=True)
+
+        else:
+            # BINANCE CRYPTO 5-MINUTE QUICK SCALP CHEAT SHEET ($ USD)
+            scalp_is_buy = is_bullish
+            scalp_tp1 = round(locked_entry_price * (1.0035 if scalp_is_buy else 0.9965), 2 if locked_entry_price > 1 else 4)
+            scalp_sl = round(locked_entry_price * (0.9975 if scalp_is_buy else 1.0025), 2 if locked_entry_price > 1 else 4)
+            
+            next_candle_pred = "UPWARD (BULLISH 🚀)" if scalp_is_buy else "DOWNWARD (BEARISH 📉)"
+            action_text = "BUY / LONG (Green Button)" if scalp_is_buy else "SELL / SHORT (Red Button)"
+            action_color = "#10b981" if scalp_is_buy else "#ef4444"
+
+            scalp_cheat_html = f"""<div style="background-color: #0f172a; border: 2px solid {action_color}; border-radius: 12px; padding: 20px; margin-bottom: 25px;">
 <h2 style="color: {action_color}; margin: 0;">⚡ 5-MINUTE QUICK SCALP CHEAT SHEET</h2>
 <p style="color: #94a3b8; margin-top: 5px;"><i>5-Min Quick Targets hit within 1 to 2 candles!</i></p>
 <div style="display: flex; justify-content: space-between; margin-top: 15px; font-size: 16px; background-color: #1e293b; padding: 12px; border-radius: 8px; flex-wrap: wrap; gap: 10px;">
@@ -1990,7 +2015,7 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
 <div style="color: #f87171;">[5] Stop Loss (SL): {curr_tag}{scalp_sl:,.2f} (-0.25% Risk Cap)</div>
 </div>
 </div>"""
-        st.markdown(scalp_cheat_html, unsafe_allow_html=True)
+            st.markdown(scalp_cheat_html, unsafe_allow_html=True)
 
         # 1. FEATURED LIVE ORDER SHEET CARD (Ready to Copy to Binance)
         order_sheet_html = f"""<div style="background-color: #0f172a; border: 2px solid #10b981; border-radius: 14px; padding: 22px; margin-bottom: 20px; box-shadow: 0 4px 20px rgba(16, 185, 129, 0.15);">

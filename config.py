@@ -1,51 +1,46 @@
-# config.py - Zerodha API & Institutional Trading Parameters
-API_KEY = "your_api_key_here"
-API_SECRET = "your_api_secret_here"
-USER_ID = "your_zerodha_user_id"
+# ================================================================================
+# ANTONY QUANT AI TERMINAL - CONFIGURATION ENGINE (NIFTY 50 EDITION)
+# ================================================================================
+import os
 
-# BankNifty & Nifty Index Constants
-INDEX_SYMBOL = "NSE:NIFTY BANK"
-LOT_SIZE = 15                 # BankNifty Lot Size
-STOP_LOSS_PERCENT = 0.15      # 15% Baseline SL
-TARGET_PERCENT = 0.30         # 30% Baseline Target (1:2 RRR)
+# --- CORE TRADING MODE ---
+PRIMARY_MODE = "NIFTY50_OPTIONS"  # Primary focus mode
+DEFAULT_SYMBOL = "^NSEI"           # Yahoo Finance Ticker for NIFTY 50
+ALT_SYMBOL = "^NSEBANK"            # Bank Nifty Ticker
+TIMEFRAME = "15m"                  # 15-Minute Candle (Pressure-Free Execution)
+SECONDARY_TIMEFRAME = "5m"         # 5-Minute Candle (Micro scalp option)
 
-# 🟢 SEBI QUANTITY FREEZE LIMITS (SEBI Mandate)
+# --- NIFTY OPTIONS RISK PARAMETERS (RUPEES ₹) ---
+NIFTY_LOT_SIZE = 25               # Shares per 1 NIFTY Lot (or 50/75 as per index)
+LOT_SIZE = 25
+DEFAULT_LOTS = 1                   # Initial Trading Size (1 Lot)
+
+# Option Premium Point Targets (Example: ₹15 SL, ₹20 TP1, ₹45 TP2)
+STOP_LOSS_POINTS = 15.0            # Strict Risk per Lot (15 points = ₹375)
+TARGET_1_POINTS = 20.0             # Quick Target (20 points = ₹500)
+TARGET_2_POINTS = 45.0             # Trend Target (45 points = ₹1,125)
+
+# --- RISK CONTROL LIMITS ---
+MAX_DAILY_TRADES = 3               # Maximum trades allowed per day
+CONSECUTIVE_LOSS_LOCK = 2          # Lock terminal after 2 consecutive losses
+SAFE_MID_CANDLE_START = 60         # Wait 60s after 15M candle opens
+SAFE_MID_CANDLE_END = 840          # Stop entries 60s before 15M candle closes
+
+# --- SEBI QUANTITY FREEZE LIMITS ---
 SEBI_FREEZE_LIMITS = {
-    "NIFTY50": 1755,    # 27 Lots (Max single order cap 1800)
+    "NIFTY50": 1755,    # 27 Lots
     "BANKNIFTY": 600,   # 20 Lots
     "DEFAULT": 1800
 }
 
-# 🟢 INDIA VIX OPERATIONAL REGIMES
-VIX_REGIMES = {
-    "COMPLACENT": {"max_vix": 12.0, "atr_multiplier": 1.5, "position_scale": 1.2, "label": "Complacent (Trend Bias)"},
-    "NORMAL":     {"max_vix": 18.0, "atr_multiplier": 2.0, "position_scale": 1.0, "label": "Normal (Scalp / Mean Reversion)"},
-    "ELEVATED":   {"max_vix": 25.0, "atr_multiplier": 3.0, "position_scale": 0.6, "label": "Elevated (Defined-Risk Spreads)"},
-    "CRISIS":     {"max_vix": 99.0, "atr_multiplier": 4.0, "position_scale": 0.0, "label": "Crisis (Kill-Switch Active)"}
-}
-
-# 🟢 SIDEWAYS REGIME THRESHOLDS
-HURST_THRESHOLD = 0.45   # H < 0.45 indicates mean-reverting sideways chop
-ADX_SIDEWAYS_MAX = 20.0  # ADX < 20 indicates weak trend
-
-# 🟢 UNIFIED BROKER & INTEGRATION ENGINE PARAMETERS
+# --- BROKER & INTEGRATION ENGINE PARAMETERS ---
 ACTIVE_BROKER = "ZERODHA"
 PAPER_TRADING_MODE = True
 
-ZERODHA_CONFIG = {
-    "API_KEY": API_KEY,
-    "ACCESS_TOKEN": "your_zerodha_access_token"
-}
-
-DHAN_CONFIG = {
-    "CLIENT_ID": "your_dhan_client_id",
-    "ACCESS_TOKEN": "your_dhan_access_token"
-}
-
-# 🟢 CLOUD SYNC & SYSTEM HEALTH
+# --- TELEGRAM & CLOUD SYNC CONFIGURATION ---
 GOOGLE_SHEET_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbyavkzC8zCDG0gR274a3EiusQ1ji72mMi6_Ot5dT0L0r0uXfxDHfEnF87NVniJXyybg/exec"
-TELEGRAM_BOT_TOKEN = "8939955418:AAFXd58Nwr84uIGeqrvIqvntveWwHjqmenE"
-TELEGRAM_CHAT_ID = "1072750499"
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "8939955418:AAFXd58Nwr84uIGeqrvIqvntveWwHjqmenE")
+TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "1072750499")
 
-# 🟢 GOOGLE AI STUDIO GEMINI API CONFIGURATION
-GEMINI_API_KEY = "AIzaSyB2qbWqyI6gxy8mNty3ZmVPCIols5l8mhM"
+# --- GOOGLE AI STUDIO GEMINI API ---
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "AIzaSyB2qbWqyI6gxy8mNty3ZmVPCIols5l8mhM")
