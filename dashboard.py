@@ -1153,10 +1153,7 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
 
     if asset_name in ["BITCOIN", "ETHEREUM"] or is_crypto_selected:
         curr_symbol = "$"
-        if is_binance_live_active:
-            display_capital_str = f"${usdt_balance:,.2f}"
-        else:
-            display_capital_str = f"${(current_capital / 83.50):,.2f}"
+        display_capital_str = f"${usdt_balance:,.2f}"
     else:
         curr_symbol = "₹"
         if is_binance_live_active:
@@ -1940,47 +1937,27 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
         ai_confidence_score = 84.6 if (is_bullish and rsi_val > 55) else 78.2
 
         # 1. FEATURED LIVE ORDER SHEET CARD (Ready to Copy to Binance)
-        st.markdown(f"""
-        <div style="background-color: #0f172a; border: 2px solid #10b981; border-radius: 14px; padding: 22px; margin-bottom: 20px; box-shadow: 0 4px 20px rgba(16, 185, 129, 0.15);">
-            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
-                <h3 style="margin: 0; color: #34d399;">📋 BINANCE SPOT ORDER SHEET: {pair_name}</h3>
-                <span style="background: #059669; color: white; padding: 6px 14px; border-radius: 20px; font-weight: bold; font-size: 14px;">{direction_badge}</span>
-            </div>
-            <p style="color: #94a3b8; margin: 6px 0 16px 0; font-size: 14px;"><i>Valid for 5m–15m Bar | Institutional AI Win Confidence: <b style="color:#34d399;">{ai_confidence_score:.1f}%</b> | Risk-to-Reward: <b style="color:#38bdf8;">1 : {rr_ratio}</b></i></p>
-            
-            <div style="background: #1e293b; border-radius: 10px; padding: 16px; border: 1px solid #334155;">
-                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px;">
-                    <div>
-                        <span style="color: #94a3b8; font-size: 13px;">1. ORDER TYPE</span><br>
-                        <b style="color: #f1f5f9; font-size: 16px;">LIMIT / MARKET ORDER</b>
-                    </div>
-                    <div>
-                        <span style="color: #94a3b8; font-size: 13px;">2. EXACT ENTRY PRICE</span><br>
-                        <span style="color: #38bdf8; font-size: 20px; font-weight: bold; font-family: monospace;">{curr_tag}{entry_val:,.2f}</span>
-                    </div>
-                    <div>
-                        <span style="color: #94a3b8; font-size: 13px;">3. TOTAL ORDER AMOUNT</span><br>
-                        <span style="color: #f59e0b; font-size: 20px; font-weight: bold; font-family: monospace;">5.00 USDT</span>
-                    </div>
-                </div>
-                <hr style="border-color: #334155; margin: 12px 0;">
-                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px;">
-                    <div>
-                        <span style="color: #94a3b8; font-size: 13px;">4. TAKE PROFIT 1 (+1.2% / +6% Spot)</span><br>
-                        <span style="color: #10b981; font-size: 20px; font-weight: bold; font-family: monospace;">{curr_tag}{target_1_val:,.2f} 🎯</span>
-                    </div>
-                    <div>
-                        <span style="color: #94a3b8; font-size: 13px;">5. TAKE PROFIT 2 (+2.5% Extended)</span><br>
-                        <span style="color: #6ee7b7; font-size: 20px; font-weight: bold; font-family: monospace;">{curr_tag}{target_2_val:,.2f} 🚀</span>
-                    </div>
-                    <div>
-                        <span style="color: #94a3b8; font-size: 13px;">6. HARD STOP LOSS (-0.5% Risk Cap)</span><br>
-                        <span style="color: #ef4444; font-size: 20px; font-weight: bold; font-family: monospace;">{curr_tag}{stop_loss_val:,.2f} 🛑</span>
-                    </div>
-                </div>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
+        order_sheet_html = f"""<div style="background-color: #0f172a; border: 2px solid #10b981; border-radius: 14px; padding: 22px; margin-bottom: 20px; box-shadow: 0 4px 20px rgba(16, 185, 129, 0.15);">
+<div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+<h3 style="margin: 0; color: #34d399;">📋 BINANCE SPOT ORDER SHEET: {pair_name}</h3>
+<span style="background: #059669; color: white; padding: 6px 14px; border-radius: 20px; font-weight: bold; font-size: 14px;">{direction_badge}</span>
+</div>
+<p style="color: #94a3b8; margin: 6px 0 16px 0; font-size: 14px;"><i>Valid for 5m–15m Bar | Institutional AI Win Confidence: <b style="color:#34d399;">{ai_confidence_score:.1f}%</b> | Risk-to-Reward: <b style="color:#38bdf8;">1 : {rr_ratio}</b></i></p>
+<div style="background: #1e293b; border-radius: 10px; padding: 16px; border: 1px solid #334155;">
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px;">
+<div><span style="color: #94a3b8; font-size: 13px;">1. ORDER TYPE</span><br><b style="color: #f1f5f9; font-size: 16px;">LIMIT / MARKET ORDER</b></div>
+<div><span style="color: #94a3b8; font-size: 13px;">2. EXACT ENTRY PRICE</span><br><span style="color: #38bdf8; font-size: 20px; font-weight: bold; font-family: monospace;">{curr_tag}{entry_val:,.2f}</span></div>
+<div><span style="color: #94a3b8; font-size: 13px;">3. TOTAL ORDER AMOUNT</span><br><span style="color: #f59e0b; font-size: 20px; font-weight: bold; font-family: monospace;">5.00 USDT</span></div>
+</div>
+<hr style="border-color: #334155; margin: 12px 0;">
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px;">
+<div><span style="color: #94a3b8; font-size: 13px;">4. TAKE PROFIT 1 (+1.2% / +6% Spot)</span><br><span style="color: #10b981; font-size: 20px; font-weight: bold; font-family: monospace;">{curr_tag}{target_1_val:,.2f} 🎯</span></div>
+<div><span style="color: #94a3b8; font-size: 13px;">5. TAKE PROFIT 2 (+2.5% Extended)</span><br><span style="color: #6ee7b7; font-size: 20px; font-weight: bold; font-family: monospace;">{curr_tag}{target_2_val:,.2f} 🚀</span></div>
+<div><span style="color: #94a3b8; font-size: 13px;">6. HARD STOP LOSS (-0.5% Risk Cap)</span><br><span style="color: #ef4444; font-size: 20px; font-weight: bold; font-family: monospace;">{curr_tag}{stop_loss_val:,.2f} 🛑</span></div>
+</div>
+</div>
+</div>"""
+        st.markdown(order_sheet_html, unsafe_allow_html=True)
 
         # 2. ACTION BUTTONS (Send to Telegram & How-To-Use Guide)
         col_sig1, col_sig2 = st.columns([0.5, 0.5])
