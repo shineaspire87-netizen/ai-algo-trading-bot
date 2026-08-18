@@ -1324,14 +1324,14 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
             reason_msg = "<b>பாட் பாதுகாப்பு:</b> எக்ஸ்பைரி நாளில் மதியம் 1:30 மணிக்கு மேல் ஆப்ஷன் பிரீமியம் கரையும் என்பதால் புதிய என்ட்ரிகள் தடுக்கப்பட்டுள்ளன!"
             thought_steps = "• Step 1: Expiry Time Check ➔ 🛑 AFTER 1:30 PM EXPIRY CUTOFF<br>• Step 2: Risk Engine ➔ 🔒 BLOCKED FOR THETA PROTECTION"
             raw_sig = "HOLD"
-        elif is_2_consecutive_losses and not is_testing_mode:
+        elif is_2_consecutive_losses and not is_testing_mode and not is_binance_live_active:
             bot_signal_str = "CONSECUTIVE LOSS KILL-SWITCH 🛑 (LOCKED FOR DAY)"
             card_theme = "glass-card-red"
             ai_conf = "0.00% (Kill-Switch Active)"
             reason_msg = "<b>பாட் பாதுகாப்பு எச்சரிக்கை:</b> இன்று தொடர்ச்சியாக 2 டிரேடுகளில் நஷ்டம் ஏற்பட்டுள்ளதால் பாட் பூட்டப்பட்டுள்ளது!"
             thought_steps = "• Step 1: Risk Filter ➔ 🛑 2 CONSECUTIVE LOSSES DETECTED<br>• Step 2: Kill-Switch ➔ 🔒 LOCKED FOR TODAY"
             raw_sig = "HOLD"
-        elif is_daily_limit_reached:
+        elif is_daily_limit_reached and not is_testing_mode and not is_binance_live_active:
             bot_signal_str = "DAILY LIMIT REACHED 🛑 (MAX 3 TRADES DONE)"
             card_theme = "glass-card-yellow"
             ai_conf = "0.00% (Locked)"
