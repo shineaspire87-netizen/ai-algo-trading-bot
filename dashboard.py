@@ -1916,6 +1916,27 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
         st.subheader("🎯 Live AI Signals & Ready-to-Copy Binance Order Tickets")
         st.caption("24/7 Institutional Quant Signal Engine — Pre-calculated Entry, Target 1, Target 2 & Stop Loss with 15-second Binance execution.")
 
+        # -------------------------------------------------------------
+        # ⏳ LIVE 5-MINUTE CANDLE COUNTDOWN TIMER ENGINE
+        # -------------------------------------------------------------
+        now = datetime.datetime.now()
+        seconds_past_5m = (now.minute % 5) * 60 + now.second
+        remaining_seconds = 300 - seconds_past_5m
+        
+        rem_mins = remaining_seconds // 60
+        rem_secs = remaining_seconds % 60
+        
+        timer_str = f"{rem_mins:02d}:{rem_secs:02d}"
+        
+        if remaining_seconds > 60:
+            timer_badge = f"<span style='color: #10b981; font-weight: bold;'>🟢 VALID ENTRY WINDOW — {timer_str} REMAINING TO ENTER IN BINANCE</span>"
+        else:
+            timer_badge = f"<span style='color: #f59e0b; font-weight: bold;'>🟡 CANDLE CLOSING SOON ({timer_str}) — WAIT FOR NEXT 5M CANDLE TICKET</span>"
+
+        st.markdown(f"""<div style="background-color: #0f172a; border: 1px solid #334155; border-radius: 10px; padding: 12px; margin-bottom: 20px; text-align: center;">
+<h4 style="margin: 0;">⏳ LIVE 5M CANDLE TIMER: {timer_badge}</h4>
+</div>""", unsafe_allow_html=True)
+
         sig_cur_price = current_price if (current_price and current_price > 0) else 64288.00
         curr_tag = "$" if is_crypto_selected else "₹"
         pair_name = f"{asset_name}/USDT" if is_crypto_selected else asset_name
