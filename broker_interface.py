@@ -25,6 +25,67 @@ class PaperBrokerAdapter(BaseBroker):
     def get_positions(self):
         return []
 
+class BinanceSpotBroker(BaseBroker):
+    def __init__(self, api_key="", secret_key=""):
+        self.api_key = str(api_key).strip() if api_key else ""
+        self.secret_key = str(secret_key).strip() if secret_key else ""
+        self.exchange = None
+        self.is_authenticated = False
+        if self.api_key and self.secret_key:
+            self.authenticate()
+
+    def authenticate(self):
+        try:
+            import ccxt
+            self.exchange = ccxt.binance({
+                'apiKey': self.api_key,
+                'secret': self.secret_key,
+                'enableRateLimit': True,
+                'options': {'defaultType': 'spot'}
+            })
+            # Verify live connectivity
+            bal = self.exchange.fetch_balance()
+            self.is_authenticated = True
+            return True
+        except Exception as e:
+            logging.error(f"Binance Auth Error: {e}")
+            self.is_authenticated = False
+            self.exchange = None
+            return False
+
+    def get_spot_usdt_balance(self):
+        try:
+            if self.exchange:
+                balance = self.exchange.fetch_balance()
+                return float(balance['free'].get('USDT', 0.0))
+        except Exception as e:
+            logging.error(f"Binance Balance Fetch Error: {e}")
+        return 0.0
+
+    def place_order(self, symbol, order_type, quantity, price=0.0):
+        if not self.exchange:
+            return {"status": "FAILED", "reason": "Binance Exchange Not Initialized"}
+        try:
+            sym_upper = str(symbol).upper()
+            pair = "BTC/USDT" if ("BITCOIN" in sym_upper or "BTC" in sym_upper) else ("ETH/USDT" if "ETH" in sym_upper else f"{sym_upper}/USDT")
+            
+            if order_type.upper() in ["BUY", "CALL"]:
+                order = self.exchange.create_market_buy_order(pair, quantity)
+            else:
+                order = self.exchange.create_market_sell_order(pair, quantity)
+            return {"status": "SUCCESS", "order": order, "order_id": order.get('id')}
+        except Exception as e:
+            logging.error(f"Binance Live Order Error: {e}")
+            return {"status": "FAILED", "reason": str(e)}
+
+    def get_positions(self):
+        try:
+            if self.exchange:
+                return self.exchange.fetch_balance()
+        except:
+            pass
+        return {}
+
 class ZerodhaKiteBroker(BaseBroker):
     def __init__(self, api_key="", access_token=""):
         self.api_key = api_key

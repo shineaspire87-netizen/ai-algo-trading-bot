@@ -793,6 +793,22 @@ def log_trade_to_csv_and_update(active_data, exit_price, exit_reason, live_pnl, 
             json.dump({"status": "NO_POSITION"}, f, indent=4)
     st.session_state.active_trade_memory = {"status": "NO_POSITION"}
 
+    # Live Binance Real Money Exit Execution Hook
+    if any(k in sym.upper() for k in ["BITCOIN", "ETHEREUM", "BTC", "ETH"]) and st.session_state.get('binance_authenticated', False):
+        b_key = st.session_state.get('binance_api_key', '')
+        b_sec = st.session_state.get('binance_secret_key', '')
+        try:
+            from broker_interface import BinanceSpotBroker
+            b_broker = BinanceSpotBroker(b_key, b_sec)
+            if b_broker.is_authenticated:
+                b_broker.place_order(sym, "SELL", 0.001 if "BTC" in sym.upper() else 0.01)
+                new_bal = b_broker.get_spot_usdt_balance()
+                if new_bal > 0:
+                    st.session_state['binance_live_usdt_balance'] = new_bal
+                    new_capital = new_bal
+        except Exception as e:
+            print(f"Live Binance Exit Error: {e}")
+
     # 5. Guaranteed Telegram Alert with Correct Currency Symbol
     alert_msg = (
         f"🏁 <b>TRADE COMPLETED & LOGGED!</b>\n\n"
@@ -1042,11 +1058,11 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
     curr_symbol, conversion_factor = get_asset_currency_info(asset_name)
 
     # Check if Binance Live Real-Money Execution is Active
-    is_binance_live_active = st.session_state.get('BINANCE_LIVE_ENABLED', False)
+    is_binance_live_active = st.session_state.get('binance_authenticated', False) or (st.session_state.get('execution_mode') == 'REAL') or st.session_state.get('BINANCE_LIVE_ENABLED', False)
 
     if is_binance_live_active:
-        # 100% Direct Override to show user's exact Live Binance USDT Balance!
-        display_capital = float(st.session_state.get('input_real_usdt_cap_v15', st.session_state.get('total_capital', 5.56)))
+        # 100% Direct Override to show user's exact Live Binance USDT Balance from exchange!
+        display_capital = float(st.session_state.get('binance_live_usdt_balance', st.session_state.get('total_capital', 5.56)))
     else:
         # Paper Mode Simulation Capital
         display_capital = float(st.session_state.get('total_capital', current_capital / conversion_factor if curr_symbol == "$" else current_capital))
@@ -1355,6 +1371,21 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
             with open(active_json_file, "w", encoding="utf-8") as f:
                 json.dump(active_data, f, indent=4)
             st.session_state.active_trade_memory = active_data
+
+            # Live Binance Real Money Execution Hook
+            if is_crypto_selected and is_binance_live_active:
+                b_key = st.session_state.get('binance_api_key', '')
+                b_sec = st.session_state.get('binance_secret_key', '')
+                try:
+                    from broker_interface import BinanceSpotBroker
+                    b_broker = BinanceSpotBroker(b_key, b_sec)
+                    if b_broker.is_authenticated:
+                        order_res = b_broker.place_order(asset_name, "BUY", 0.001 if "BTC" in asset_name else 0.01)
+                        new_bal = b_broker.get_spot_usdt_balance()
+                        if new_bal > 0:
+                            st.session_state['binance_live_usdt_balance'] = new_bal
+                except Exception as e:
+                    print(f"Live Binance Order Error: {e}")
 
             alert_msg = (
                 f"🚨 <b>ALGO TRADE ENTERED!</b>\n\n"
@@ -1720,76 +1751,7 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
     # TAB 3: BROKER KEY INTEGRATOR & PAPER MODE
     # ==========================================
     elif selected_tab == "🔑 Broker Integrator (2-Week Paper Test)":
-        st.markdown("### 🟡 Binance Crypto Live API Integrator")
-
-        default_b_key = st.secrets.get("BINANCE_API_KEY", os.getenv("BINANCE_API_KEY", st.session_state.get("BINANCE_API_KEY", "")))
-        default_b_sec = st.secrets.get("BINANCE_API_SECRET", st.secrets.get("BINANCE_SECRET_KEY", os.getenv("BINANCE_SECRET_KEY", st.session_state.get("BINANCE_API_SECRET", ""))))
-
-        # Safe Check to prevent UnboundLocalError
-        get_bal_func = globals().get('get_binance_spot_usdt_balance', None)
-
-        if get_bal_func is not None and default_b_key and default_b_sec:
-            try:
-                live_usdt_bal = get_bal_func(default_b_key, default_b_sec)
-            except Exception:
-                live_usdt_bal = 5.56
-        else:
-            live_usdt_bal = 5.56
-
-        st.success(f"💰 **Detected Binance Spot USDT Balance:** `${live_usdt_bal:.2f} USDT`")
-
-        with st.form(key="form_binance_live_real_money_v13"):
-            default_b_bal = st.session_state.get("total_capital", live_usdt_bal)
-            
-            b_key = st.text_input("Binance API Key", type="password", value=default_b_key, key="live_input_b_key_v13")
-            b_sec = st.text_input("Binance API Secret", type="password", value=default_b_sec, key="live_input_b_sec_v13")
-            
-            # 1. Real Binance Capital Input Field with Instant Auto-Sync
-            real_usdt_capital = st.number_input(
-                "💵 Enter Your Live Binance USDT Capital Balance ($):", 
-                min_value=0.01, 
-                max_value=100000.0, 
-                value=float(live_usdt_bal), 
-                step=1.0, 
-                key="input_real_usdt_cap_v15"
-            )
-
-            # 2. INSTANTLY SYNC TOTAL CAPITAL METRIC CARD AUTOMATICALLY!
-            st.session_state['total_capital'] = float(real_usdt_capital)
-            
-            enable_live = st.checkbox("🟢 Activate Binance Real-Money Execution Engine", value=st.session_state.get("BINANCE_LIVE_ENABLED", True))
-            
-            submit_b = st.form_submit_button("💾 Connect & Save Binance Live API Credentials", use_container_width=True)
-
-        if submit_b:
-            verify_func = globals().get('verify_and_save_binance_credentials', None)
-            if verify_func is not None and b_key and b_sec:
-                with st.spinner("Connecting & Verifying Binance Live API Credentials..."):
-                    is_valid, verified_balance = verify_func(b_key, b_sec)
-                    
-                    if is_valid:
-                        st.session_state['BINANCE_API_KEY'] = b_key
-                        st.session_state['BINANCE_API_SECRET'] = b_sec
-                        st.session_state['BINANCE_LIVE_ENABLED'] = enable_live
-                        st.session_state['real_usdt_balance'] = verified_balance
-                        st.session_state['total_capital'] = verified_balance if verified_balance > 0 else float(real_usdt_capital)
-                        st.success(f"🎉 BINANCE LIVE API VERIFIED BY EXCHANGE! Spot USDT Balance: ${verified_balance:.2f}")
-                        if enable_live:
-                            st.info(f"⚡ Live Binance Capital Updated: **${st.session_state['total_capital']:,.2f} USDT**.")
-                    else:
-                        st.session_state['BINANCE_LIVE_ENABLED'] = False
-                        st.error("🚨 API KEY VALIDATION FAILED! Real-Money Execution Auto-Disabled for Safety.")
-            else:
-                st.session_state['BINANCE_API_KEY'] = b_key
-                st.session_state['BINANCE_API_SECRET'] = b_sec
-                st.session_state['BINANCE_LIVE_ENABLED'] = enable_live
-                st.session_state['total_capital'] = float(real_usdt_capital)
-                if enable_live:
-                    st.success("🎉 **BINANCE REAL-MONEY LIVE EXECUTION ENGINE ACTIVATED!**")
-                else:
-                    st.warning("🎮 **PAPER TRADING SIMULATOR ACTIVE:** Binance keys saved, but real-money execution is paused.")
-                
-            st.rerun() # Refresh immediately to update Top Total Capital Metric Card!
+        render_broker_integrator_tab()
 
         st.divider()
         render_system_health_panel()
