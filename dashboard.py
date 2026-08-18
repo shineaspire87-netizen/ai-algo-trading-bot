@@ -614,25 +614,60 @@ def calculate_hurst_exponent(ts: pd.Series, max_lag: int = 20) -> float:
 
 st.sidebar.header("🕹️ Control Panel")
 
-# 🟢 SIDEBAR ACTIVE TRADE GLOW INDICATOR
+# 🟢 SIDEBAR ACTIVE TRADE GLOW INDICATOR & AUTO-SWITCH TO RUNNING TRADE
 active_json_file = get_active_trade_file_path()
+asset_list = list(WATCHLIST.keys())
+asset_index = 0
+
 if os.path.exists(active_json_file):
     try:
         with open(active_json_file, "r", encoding="utf-8") as f:
             side_active = json.load(f)
             if side_active.get("status") == "ACTIVE":
-                act_sym = side_active.get("symbol", "").split("_")[0]
+                running_symbol = str(side_active.get("symbol", "BITCOIN")).upper()
                 act_type = side_active.get("type", "CALL")
+                
+                # Extract base asset name
+                if 'SOL' in running_symbol:
+                    default_asset = "SOLANA"
+                elif 'ETH' in running_symbol:
+                    default_asset = "ETHEREUM"
+                elif 'BNB' in running_symbol:
+                    default_asset = "BNB"
+                elif 'XRP' in running_symbol:
+                    default_asset = "XRP"
+                elif 'BANK' in running_symbol:
+                    default_asset = "BANKNIFTY"
+                elif 'NIFTY' in running_symbol:
+                    default_asset = "NIFTY50"
+                elif 'RELIANCE' in running_symbol:
+                    default_asset = "RELIANCE"
+                elif 'HDFC' in running_symbol:
+                    default_asset = "HDFCBANK"
+                elif 'ICICI' in running_symbol:
+                    default_asset = "ICICIBANK"
+                elif 'INFY' in running_symbol:
+                    default_asset = "INFY"
+                elif 'SBIN' in running_symbol:
+                    default_asset = "SBIN"
+                else:
+                    default_asset = "BITCOIN"
+
+                if default_asset in asset_list:
+                    asset_index = asset_list.index(default_asset)
+
+                act_sym = default_asset
                 st.sidebar.markdown(f"""
                 <div style="background: rgba(225, 29, 72, 0.25); border: 2px solid #f43f5e; border-radius: 10px; padding: 12px; margin-bottom: 15px; color: white;">
                     <h4 style="margin:0; color:#f43f5e;">🚨 ACTIVE TRADE RUNNING!</h4>
                     <p style="margin:5px 0 0 0; font-size:15px; font-weight:bold;">Asset: {act_sym} ({act_type})</p>
-                    <small style="color:#cbd5e1;">Select <b>{act_sym}</b> in chart to manage position.</small>
+                    <small style="color:#cbd5e1;">Chart auto-switched to active <b>{act_sym}</b>.</small>
                 </div>
                 """, unsafe_allow_html=True)
     except:
         pass
-selected_name = st.sidebar.selectbox("Select Asset Chart to View:", list(WATCHLIST.keys()), index=0)
+
+selected_name = st.sidebar.selectbox("Select Asset Chart to View:", asset_list, index=asset_index)
 selected_symbol = WATCHLIST[selected_name]
 timeframe = st.sidebar.selectbox("Select Candle Timeframe:", ["1m", "5m", "15m", "1h", "1d"], index=1)
 

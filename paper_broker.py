@@ -55,7 +55,7 @@ def evaluate_paper_trade_exit(trade: dict, live_price: float, elapsed_minutes: f
 
 
 def execute_paper_trade(symbol, option_type, entry_price, target_price, stop_loss, ai_confidence, qty=0.001):
-    """Executes Paper Trade and sends Direct Telegram Push Alert"""
+    """Executes Paper Trade and sends Direct Fail-Safe Telegram Push Alert"""
     
     trade_dict = {
         'symbol': symbol,
@@ -69,24 +69,26 @@ def execute_paper_trade(symbol, option_type, entry_price, target_price, stop_los
         'entry_time': datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     }
     
-    # Direct Telegram Push Alert
-    entry_html_msg = f"""
-🚀 <b>NEW ACTIVE TRADE ENTERED!</b>
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-• <b>Symbol</b>      : {symbol}
-• <b>Direction</b>   : {option_type}
-• <b>Entry Price</b> : ${entry_price:,.2f}
-• <b>Target 1</b>    : ${target_price:,.2f}
-• <b>Stop Loss</b>   : ${stop_loss:,.2f}
-• <b>AI Score</b>    : {ai_confidence:.1f}% Confidence
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-<i>ANTONY Quant AI Algo Trading Terminal</i>
-"""
+    # Clean HTML Format for Telegram API
+    clean_symbol = str(symbol).replace('_OPT_', ' ').replace('_', ' ')
+    conf_pct = float(ai_confidence) if float(ai_confidence) <= 1.0 else float(ai_confidence) / 100.0
+
+    entry_html_msg = f"🚀 <b>NEW ACTIVE TRADE ENTERED!</b>\n" \
+                     f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n" \
+                     f"• <b>Symbol</b>      : {clean_symbol}\n" \
+                     f"• <b>Direction</b>   : {option_type}\n" \
+                     f"• <b>Entry Price</b> : ${entry_price:,.2f}\n" \
+                     f"• <b>Target 1</b>    : ${target_price:,.2f}\n" \
+                     f"• <b>Stop Loss</b>   : ${stop_loss:,.2f}\n" \
+                     f"• <b>AI Score</b>    : {conf_pct:.1%} Confidence\n" \
+                     f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n" \
+                     f"<i>ANTONY Quant AI Algo Trading Terminal</i>"
     try:
-        from notifier import send_telegram_alert
-        send_telegram_alert(entry_html_msg)
+        sent = send_telegram_alert(entry_html_msg)
+        if sent:
+            print(f"✅ TELEGRAM ENTRY ALERT SENT FOR {symbol}!")
     except Exception as e:
-        print(f"Direct Telegram Alert Dispatch Error: {e}")
+        print(f"Telegram Dispatch Error: {e}")
 
     return trade_dict
 
