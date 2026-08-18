@@ -1060,7 +1060,11 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
         st.metric("Total Capital", f"${display_capital:,.2f}" if curr_symbol == "$" else f"₹{display_capital:,.2f}")
 
     with col_m3:
-        st.metric("Net Realized P&L", f"+{curr_symbol}0.00" if is_binance_live_active else f"+{curr_symbol}{total_pnl/conversion_factor:,.2f}")
+        net_pnl_val = 0.0 if is_binance_live_active else (total_pnl / conversion_factor)
+        if curr_symbol == "$":
+            st.metric("Net Realized PnL", f"${net_pnl_val:+,.2f} USD")
+        else:
+            st.metric("Net Realized PnL", f"₹{net_pnl_val:+,.2f}")
 
     with col_m4:
         st.metric("Today Trades", "0 Trades" if is_binance_live_active else "13 Trades")
