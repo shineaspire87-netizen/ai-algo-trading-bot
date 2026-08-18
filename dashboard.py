@@ -1630,12 +1630,35 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
                 st.success(f"🎉 AUTO EXIT EXECUTED: {exit_reason_str}! CSV & Capital Updated.")
                 st.rerun()
 
-            # MANUAL FORCE CLOSE BUTTON
+            # MANUAL FORCE CLOSE BUTTON (0MS INSTANT RESPONSE + ASYNC CLOUD DISPATCH)
             col_title, col_force = st.columns([0.75, 0.25])
             with col_force:
                 if st.button("🔴 FORCE CLOSE POSITION NOW", use_container_width=True):
-                    log_trade_to_csv_and_update(active_data, live_premium, "MANUAL_FORCE_CLOSE", live_pnl, current_capital, now_dt)
-                    st.success("✅ பொசிஷன் க்ளோஸ் செய்யப்பட்டு, trades.csv & Capital கணக்கில் அப்ளிகேட் செய்யப்பட்டது!")
+                    import threading
+                    exact_close_price = float(curr_active_stock_p)
+                    exact_pnl = float(live_pnl)
+                    active_trade_copy = dict(active_data)
+
+                    # Microsecond UI State Reset (0ms Instant UI Refresh!)
+                    with open(active_json_file, "w", encoding="utf-8") as f:
+                        json.dump({"status": "NO_POSITION"}, f, indent=4)
+                    st.session_state.active_trade_memory = {"status": "NO_POSITION"}
+                    st.session_state['has_active_trade'] = False
+
+                    st.toast(f"🛑 Position Force Closed Instantly! Locked P&L: {p_curr}{exact_pnl:+,.2f}", icon="⚡")
+
+                    # Non-Blocking Async Background Thread for Google Sheets, CSV, and Telegram
+                    def async_cloud_log_and_notify(active_rec, close_p, pnl_val, cap, dt_now):
+                        try:
+                            log_trade_to_csv_and_update(active_rec, close_p, "MANUAL_FORCE_CLOSE", pnl_val, cap, dt_now)
+                        except Exception as e:
+                            print(f"Async Cloud Dispatch Error: {e}")
+
+                    threading.Thread(
+                        target=async_cloud_log_and_notify, 
+                        args=(active_trade_copy, live_premium, exact_pnl, current_capital, now_dt)
+                    ).start()
+
                     st.rerun()
 
             st.markdown(f"""
