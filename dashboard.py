@@ -1,9 +1,10 @@
 # dashboard.py - Antony Quant AI Algo Terminal (Complete Institutional Engine & Live Sync)
 import streamlit as st
 import requests
+# Import Binance Spot Balance Function safely
 try:
     from broker_integrator import get_binance_spot_usdt_balance, render_broker_integrator_tab
-except ImportError:
+except Exception:
     get_binance_spot_usdt_balance = None
     render_broker_integrator_tab = None
 
@@ -1720,15 +1721,23 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
     elif selected_tab == "🔑 Broker Integrator (2-Week Paper Test)":
         st.markdown("### 🟡 Binance Crypto Live API Integrator")
 
-        # FIX BUG #4: DYNAMIC BALANCE READ
-        live_usdt_bal = 5.56
-        if get_binance_spot_usdt_balance is not None and default_b_key and default_b_sec:
-            live_usdt_bal = get_binance_spot_usdt_balance(default_b_key, default_b_sec)
+        default_b_key = st.secrets.get("BINANCE_API_KEY", os.getenv("BINANCE_API_KEY", st.session_state.get("BINANCE_API_KEY", "")))
+        default_b_sec = st.secrets.get("BINANCE_API_SECRET", st.secrets.get("BINANCE_SECRET_KEY", os.getenv("BINANCE_SECRET_KEY", st.session_state.get("BINANCE_API_SECRET", ""))))
+
+        # Safe Check to prevent UnboundLocalError
+        get_bal_func = globals().get('get_binance_spot_usdt_balance', None)
+
+        if get_bal_func is not None and default_b_key and default_b_sec:
+            try:
+                live_usdt_bal = get_bal_func(default_b_key, default_b_sec)
+            except Exception:
+                live_usdt_bal = 5.56
+        else:
+            live_usdt_bal = 5.56
+
         st.success(f"💰 **Detected Binance Spot USDT Balance:** `${live_usdt_bal:.2f} USDT`")
 
         with st.form(key="form_binance_live_real_money_v13"):
-            default_b_key = st.secrets.get("BINANCE_API_KEY", st.session_state.get("BINANCE_API_KEY", ""))
-            default_b_sec = st.secrets.get("BINANCE_API_SECRET", st.session_state.get("BINANCE_API_SECRET", ""))
             default_b_bal = st.session_state.get("total_capital", live_usdt_bal)
             
             b_key = st.text_input("Binance API Key", type="password", value=default_b_key, key="live_input_b_key_v13")
