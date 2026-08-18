@@ -1223,6 +1223,40 @@ def render_dashboard_main(asset_name, asset_symbol, tf_str):
     # TAB 1: LIVE EXECUTION TERMINAL
     # -------------------------------------------------------------
     if selected_tab == "🖥️ Live Execution Terminal":
+        # -------------------------------------------------------------
+        # 🎯 AI CO-PILOT LIVE MANUAL ORDER TICKET WIDGET
+        # -------------------------------------------------------------
+        ai_score_val = float(st.session_state.get('last_ai_score', 0.624))
+        sig_dir = st.session_state.get('last_signal_dir', 'BUY_CALL')
+        
+        if ai_score_val >= 0.70 or st.session_state.get('show_copilot_ticket', False):
+            entry_p = current_price if (current_price and current_price > 0) else 64156.00
+            target_1 = entry_p * 1.012 if 'CALL' in sig_dir else entry_p * 0.988
+            target_2 = entry_p * 1.025 if 'CALL' in sig_dir else entry_p * 0.975
+            sl_price = entry_p * 0.995 if 'CALL' in sig_dir else entry_p * 1.005
+            
+            time_now = datetime.datetime.now().strftime('%H:%M:%S IST')
+            curr_tag = "$" if is_crypto_selected else "₹"
+            
+            st.markdown(f"""
+            <div style="background-color: #064e3b; border: 2px solid #10b981; border-radius: 12px; padding: 20px; margin-bottom: 25px;">
+                <h2 style="color: #34d399; margin: 0;">🎯 AI CO-PILOT — LIVE MANUAL ORDER TICKET</h2>
+                <p style="color: #a7f3d0; margin-top: 5px;"><i>Generated at {time_now} | AI Win Confidence: {ai_score_val*100:.1f}%</i></p>
+                <div style="display: flex; justify-content: space-between; margin-top: 15px; font-size: 16px; flex-wrap: wrap; gap: 10px;">
+                    <div><b>Asset Pair:</b> {asset_name}{'/USDT' if is_crypto_selected else ''}</div>
+                    <div><b>Recommended Action:</b> <span style="color: #34d399; font-weight: bold;">{sig_dir}</span></div>
+                    <div><b>Order Type:</b> LIMIT / MARKET ORDER</div>
+                </div>
+                <hr style="border-color: #059669; margin: 15px 0;">
+                <div style="display: flex; justify-content: space-between; font-size: 18px; font-weight: bold; flex-wrap: wrap; gap: 10px;">
+                    <div style="color: #38bdf8;">📍 ENTRY: {curr_tag}{entry_p:,.2f}</div>
+                    <div style="color: #34d399;">🎯 TARGET 1: {curr_tag}{target_1:,.2f}</div>
+                    <div style="color: #6ee7b7;">🎯 TARGET 2: {curr_tag}{target_2:,.2f}</div>
+                    <div style="color: #f87171;">🛡️ STOP LOSS: {curr_tag}{sl_price:,.2f}</div>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+
         # 🟢 CLOUD SESSION MEMORY FALLBACK (Prevents trade wipe on code deploy)
         if "active_trade_memory" not in st.session_state:
             st.session_state.active_trade_memory = {"status": "NO_POSITION"}
