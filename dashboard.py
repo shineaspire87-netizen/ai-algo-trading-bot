@@ -1,5 +1,5 @@
 # ================================================================================
-# ANTONY QUANT AI TERMINAL - DUAL-ASSET DASHBOARD (NIFTY 50 + BITCOIN 24/7)
+# ANTONY QUANT AI TERMINAL - DASHBOARD (0MS WEBSOCKET LIVE TICKER V11.0)
 # ================================================================================
 import streamlit as st
 import pandas as pd
@@ -61,28 +61,54 @@ st.markdown("""
 
 # SIDEBAR CONTROL PANEL
 st.sidebar.title("⚙️ System Control")
-selected_asset = st.sidebar.selectbox("🎯 Select Active Trading Market:", ["NIFTY 50 (₹)", "BITCOIN (BTC/USDT)"])
+selected_asset = st.sidebar.selectbox("🎯 Select Active Trading Market:", ["BITCOIN (BTC/USDT)", "NIFTY 50 (₹)"])
 
 is_open, market_status_text = check_market_status(selected_asset)
 
 st.markdown(f"<div class='main-title'>🎯 ANTONY QUANT AI: {selected_asset.upper()} CO-PILOT</div>", unsafe_allow_html=True)
 st.markdown("<div class='sub-title'>Dual-Asset Multi-Engine | NIFTY 50 Options & Bitcoin 24/7</div>", unsafe_allow_html=True)
 
-# Live Ticking Javascript Clock
-st.components.v1.html("""
-<div style="background-color: #111827; border: 1px solid #374151; padding: 10px; border-radius: 10px; text-align: center; font-family: monospace; color: #F3F4F6;">
-    <span id="live-date" style="color: #60A5FA; font-size: 15px; font-weight: bold;"></span> &nbsp;|&nbsp; 
-    <span id="live-clock" style="color: #FBBF24; font-size: 18px; font-weight: bold;"></span>
-</div>
-<script>
-function updateClock() {
-    const now = new Date();
-    document.getElementById('live-date').innerText = '📅 ' + now.toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' });
-    document.getElementById('live-clock').innerText = '⏰ ' + now.toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true }) + ' IST';
-}
-setInterval(updateClock, 1000); updateClock();
-</script>
-""", height=65)
+# REAL-TIME SECOND-BY-SECOND TICKING CLOCK & BITCOIN LIVE WEBSOCKET TICKER
+if selected_asset == "BITCOIN (BTC/USDT)":
+    st.components.v1.html("""
+    <div style="background-color: #111827; border: 1px solid #374151; padding: 12px; border-radius: 10px; text-align: center; font-family: monospace; color: #F3F4F6;">
+        <span id="live-date" style="color: #60A5FA; font-size: 14px; font-weight: bold;"></span> &nbsp;|&nbsp; 
+        <span id="live-clock" style="color: #FBBF24; font-size: 16px; font-weight: bold;"></span> &nbsp;|&nbsp;
+        <span style="color:#00E676; font-weight:bold;">⚡ BTC LIVE TICKER: </span>
+        <span id="btc-ticker-price" style="color: #00E676; font-size: 20px; font-weight: bold;">$Loading...</span>
+    </div>
+    <script>
+    function updateClock() {
+        const now = new Date();
+        document.getElementById('live-date').innerText = '📅 ' + now.toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' });
+        document.getElementById('live-clock').innerText = '⏰ ' + now.toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true }) + ' IST';
+    }
+    setInterval(updateClock, 1000); updateClock();
+
+    // BINANCE DIRECT WEBSOCKET TICK-BY-TICK STREAM
+    const ws = new WebSocket('wss://stream.binance.com:9443/ws/btcusdt@ticker');
+    ws.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+        const price = parseFloat(data.c).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+        document.getElementById('btc-ticker-price').innerText = '$' + price;
+    };
+    </script>
+    """, height=70)
+else:
+    st.components.v1.html("""
+    <div style="background-color: #111827; border: 1px solid #374151; padding: 10px; border-radius: 10px; text-align: center; font-family: monospace; color: #F3F4F6;">
+        <span id="live-date" style="color: #60A5FA; font-size: 15px; font-weight: bold;"></span> &nbsp;|&nbsp; 
+        <span id="live-clock" style="color: #FBBF24; font-size: 18px; font-weight: bold;"></span>
+    </div>
+    <script>
+    function updateClock() {
+        const now = new Date();
+        document.getElementById('live-date').innerText = '📅 ' + now.toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' });
+        document.getElementById('live-clock').innerText = '⏰ ' + now.toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true }) + ' IST';
+    }
+    setInterval(updateClock, 1000); updateClock();
+    </script>
+    """, height=65)
 
 # Market Status Indicator
 if is_open:
@@ -92,9 +118,9 @@ else:
 
 # --- ENGINE EXECUTION BASED ON ASSET SELECTION ---
 if selected_asset == "BITCOIN (BTC/USDT)":
-    df_btc = data_feed.fetch_btc_live_data(config.BTC_SYMBOL, config.TIMEFRAME)
+    df_btc = data_feed.fetch_btc_live_data("BTCUSDT", config.TIMEFRAME)
     if df_btc.empty or len(df_btc) < 5:
-        st.warning("⏳ Connecting to Bitcoin 24/7 Live Feed... Please wait 3 seconds.")
+        st.warning("⏳ Connecting to Binance 0ms Bitcoin Live Feed... Please wait 3 seconds.")
         time_lib.sleep(3)
         st.rerun()
         
@@ -203,7 +229,7 @@ else: # NIFTY 50 MODE
         </div>
         """, unsafe_allow_html=True)
 
-# Render 5-Layer Breakdown Box
+# Render Breakdown Box
 if breakdown:
     st.markdown(f"""
     <div class='layer-box'>
