@@ -1,5 +1,5 @@
 # ================================================================================
-# ANTONY QUANT AI TERMINAL - CONFIGURATION ENGINE (CHAMPION MASTER EDITION)
+# ANTONY QUANT AI TERMINAL - CONFIGURATION ENGINE (15M PURE CANDLE SCALPER)
 # ================================================================================
 import os
 from datetime import time
@@ -8,20 +8,23 @@ PRIMARY_MODE = "NIFTY50_OPTIONS"
 DEFAULT_SYMBOL = "^NSEI"           # NIFTY 50 Ticker
 BTC_SYMBOL = "BTC-USD"             # Bitcoin Ticker
 VIX_SYMBOL = "^INDIAVIX"           # India VIX Ticker
-TIMEFRAME = "15m"                  # 15-Minute Timeframe
+TIMEFRAME = "15m"                  # 15-Minute Candle Timeframe
 
-# NIFTY OPTIONS RISK PARAMETERS (RUPEES ₹)
+# --- NIFTY 15M MICRO-SCALP RISK PARAMETERS (RUPEES ₹) ---
 NIFTY_LOT_SIZE = 25
 DEFAULT_LOTS = 1
-STOP_LOSS_POINTS = 15.0            # -15 pts (₹375 / lot)
-TARGET_1_POINTS = 20.0             # +20 pts (₹500 / lot)
-TARGET_2_POINTS = 45.0             # +45 pts (₹1,125 / lot)
-UNDERLYING_TARGET_NIFTY = 30.0
+STOP_LOSS_POINTS = 8.0             # Micro SL: -8 pts (Strict Risk: ₹200 / lot)
+TARGET_1_POINTS = 12.0            # Micro TP1: +12 pts (Quick Profit: ₹300 / lot)
+TARGET_2_POINTS = 25.0            # Micro TP2: +25 pts (Max Profit: ₹625 / lot)
+UNDERLYING_TARGET_NIFTY = 15.0     # Micro NIFTY spot move target
 
-# BITCOIN 15M QUANT RISK PARAMETERS ($ USD)
-BTC_STOP_LOSS_PCT = 0.30           # Strict -0.30% Stop Loss
-BTC_TARGET_1_PCT = 0.50            # Quick Target +0.50%
-BTC_TARGET_2_PCT = 1.20            # Trend Target +1.20%
+# --- BITCOIN 15M MICRO-SCALP RISK PARAMETERS ($ USD) ---
+BTC_STOP_LOSS_PCT = 0.15           # Micro -0.15% Stop Loss (Just ~$100 USD)
+BTC_TARGET_1_PCT = 0.25            # Micro +0.25% Quick Target (Just ~$170 USD)
+BTC_TARGET_2_PCT = 0.50            # Micro +0.45% Trend Target (Just ~$300 USD)
+
+# STRICT 1-CANDLE EXPIRATION
+MAX_HOLDING_CANDLES = 1            # Strictly exit at 15-Min candle close (15m MAX)
 
 # 5-LAYER INSTITUTIONAL THRESHOLDS
 MIN_HEAVYWEIGHT_K = 4
