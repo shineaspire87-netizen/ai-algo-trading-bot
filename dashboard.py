@@ -113,7 +113,7 @@ else:
     st.components.v1.html("""
     <div style="background-color: #111827; border: 1px solid #374151; padding: 10px; border-radius: 10px; text-align: center; font-family: monospace; color: #F3F4F6;">
         <span id="live-date" style="color: #60A5FA; font-size: 15px; font-weight: bold;"></span> &nbsp;|&nbsp; 
-        <span id="live-clock" style="color: #FBBF24; font-size: 18px; font-weight: bold;"></span><br>
+        <span id="live-clock" style="color: #FBBF24; font-size: 16px; font-weight: bold;"></span><br>
         <span id="candle-timer" style="color: #FFD54F; font-size: 16px; font-weight: bold;">⏳ 15M CANDLE: Loading...</span>
     </div>
     <script>
@@ -167,32 +167,57 @@ if selected_asset == "BITCOIN (BTC/USDT)":
     
     signal_type, confidence_score, reason_code, breakdown = quant_math_engine.evaluate_btc_15m_signal(df_btc)
     
-    btc_tp1 = spot_price * (1 + config.BTC_TARGET_1_PCT / 100.0) if signal_type == "BUY_CALL" else spot_price * (1 - config.BTC_TARGET_1_PCT / 100.0)
-    btc_tp2 = spot_price * (1 + config.BTC_TARGET_2_PCT / 100.0) if signal_type == "BUY_CALL" else spot_price * (1 - config.BTC_TARGET_2_PCT / 100.0)
-    btc_sl = spot_price * (1 - config.BTC_STOP_LOSS_PCT / 100.0) if signal_type == "BUY_CALL" else spot_price * (1 + config.BTC_STOP_LOSS_PCT / 100.0)
+    try:
+        conf_val = float(confidence_score)
+    except (ValueError, TypeError):
+        conf_val = 0.0
 
-    if signal_type in ["BUY_CALL", "BUY_PUT"] and st.session_state.last_notified_signal != f"BTC_{signal_type}_{spot_price}":
-        alert_msg = f"<b>🚨 BITCOIN 15M CANDLE WIN SIGNAL</b>\n\nDirection: <b>{signal_type}</b>\nWin Confidence: <b>{confidence_score:.1f}%</b>\nEntry Zone: <b>${spot_price:,.2f}</b>\nTP1 (+0.25%): <b>${btc_tp1:,.2f}</b>\nSL (-0.15%): <b>${btc_sl:,.2f}</b>"
+    try:
+        spot_val = float(spot_price)
+    except (ValueError, TypeError):
+        spot_val = 0.0
+
+    btc_tp1 = spot_val * (1 + config.BTC_TARGET_1_PCT / 100.0) if signal_type == "BUY_CALL" else spot_val * (1 - config.BTC_TARGET_1_PCT / 100.0)
+    btc_tp2 = spot_val * (1 + config.BTC_TARGET_2_PCT / 100.0) if signal_type == "BUY_CALL" else spot_val * (1 - config.BTC_TARGET_2_PCT / 100.0)
+    btc_sl = spot_val * (1 - config.BTC_STOP_LOSS_PCT / 100.0) if signal_type == "BUY_CALL" else spot_val * (1 + config.BTC_STOP_LOSS_PCT / 100.0)
+
+    try:
+        tp1_val = float(btc_tp1)
+    except (ValueError, TypeError):
+        tp1_val = 0.0
+
+    try:
+        tp2_val = float(btc_tp2)
+    except (ValueError, TypeError):
+        tp2_val = 0.0
+
+    try:
+        sl_val = float(btc_sl)
+    except (ValueError, TypeError):
+        sl_val = 0.0
+
+    if signal_type in ["BUY_CALL", "BUY_PUT"] and st.session_state.last_notified_signal != f"BTC_{signal_type}_{spot_val}":
+        alert_msg = f"<b>🚨 BITCOIN 15M CANDLE WIN SIGNAL</b>\n\nDirection: <b>{signal_type}</b>\nWin Confidence: <b>{conf_val:.1f}%</b>\nEntry Zone: <b>${spot_val:,.2f}</b>\nTP1 (+0.25%): <b>${tp1_val:,.2f}</b>\nSL (-0.15%): <b>${sl_val:,.2f}</b>"
         send_telegram_alert(alert_msg)
-        st.session_state.last_notified_signal = f"BTC_{signal_type}_{spot_price}"
+        st.session_state.last_notified_signal = f"BTC_{signal_type}_{spot_val}"
 
     st.subheader("📍 LIVE BITCOIN 15M CANDLE WIN PREDICTOR")
     if signal_type == "BUY_CALL":
         st.markdown(f"""
         <div class='signal-card-buy'>
             <h1 style='color:#00E676; margin:0;'>🟩 PREDICTED WINNING CANDLE: GREEN (UP)</h1>
-            <p style='font-size:18px; margin-top:8px;'>Candle Win Confidence: <b>{confidence_score:.1f}%</b> | Price: <b>${spot_price:,.2f}</b></p>
+            <p style='font-size:18px; margin-top:8px;'>Candle Win Confidence: <b>{conf_val:.1f}%</b> | Price: <b>${spot_val:,.2f}</b></p>
             <hr style='border-color:#00E676;'>
-            <h2>🎯 ENTRY ZONE: <u style='color:#00E676;'>${spot_price:,.2f}</u></h2>
+            <h2>🎯 ENTRY ZONE: <u style='color:#00E676;'>${spot_val:,.2f}</u></h2>
         </div>
         """, unsafe_allow_html=True)
     elif signal_type == "BUY_PUT":
         st.markdown(f"""
         <div class='signal-card-sell'>
             <h1 style='color:#E040FB; margin:0;'>🟪 PREDICTED WINNING CANDLE: RED (DOWN)</h1>
-            <p style='font-size:18px; margin-top:8px;'>Candle Win Confidence: <b>{confidence_score:.1f}%</b> | Price: <b>${spot_price:,.2f}</b></p>
+            <p style='font-size:18px; margin-top:8px;'>Candle Win Confidence: <b>{conf_val:.1f}%</b> | Price: <b>${spot_val:,.2f}</b></p>
             <hr style='border-color:#E040FB;'>
-            <h2>🎯 ENTRY ZONE: <u style='color:#E040FB;'>${spot_price:,.2f}</u></h2>
+            <h2>🎯 ENTRY ZONE: <u style='color:#E040FB;'>${spot_val:,.2f}</u></h2>
         </div>
         """, unsafe_allow_html=True)
     else:
@@ -208,10 +233,10 @@ if selected_asset == "BITCOIN (BTC/USDT)":
         <div class='cheat-box'>
             <b>📋 BITCOIN 15M CANDLE SCALPER CHEAT SHEET ($ USD):</b><br>
             • <b>Asset Contract  :</b> BTC/USDT (Spot / Futures / Paper Trading)<br>
-            • <b>Entry Strategy   :</b> Buy Market Price @ ${spot_price:,.2f}<br>
-            • <b>Stop Loss (SL)   :</b> ${btc_sl:,.2f} (-0.15% Micro Risk)<br>
-            • <b>Target 1 (TP1)   :</b> ${btc_tp1:,.2f} (+0.25% Fast Target)<br>
-            • <b>Target 2 (TP2)   :</b> ${btc_tp2:,.2f} (+0.50% Trend Target)<br>
+            • <b>Entry Strategy   :</b> Buy Market Price @ ${spot_val:,.2f}<br>
+            • <b>Stop Loss (SL)   :</b> ${sl_val:,.2f} (-0.15% Micro Risk)<br>
+            • <b>Target 1 (TP1)   :</b> ${tp1_val:,.2f} (+0.25% Fast Target)<br>
+            • <b>Target 2 (TP2)   :</b> ${tp2_val:,.2f} (+0.50% Trend Target)<br>
             • <b>Candle Expiration:</b> Strict Exit @ 15M Candle Close
         </div>
         """, unsafe_allow_html=True)

@@ -7,10 +7,15 @@ import config
 
 def calculate_candle_body_ratio(high, low, open_p, close_p):
     """Calculates Candle Body Intensity Ratio (Body / Range)."""
-    total_range = high - low
+    try:
+        h, l, o, c = float(high), float(low), float(open_p), float(close_p)
+    except (ValueError, TypeError):
+        return 0.0
+
+    total_range = h - l
     if total_range <= 0:
         return 0.0
-    body = abs(close_p - open_p)
+    body = abs(c - o)
     return round((body / total_range) * 100.0, 1)
 
 def predict_15m_candle_winning_direction(df):
@@ -39,7 +44,7 @@ def predict_15m_candle_winning_direction(df):
     body_ratio = calculate_candle_body_ratio(high, low, open_p, close)
     
     # 3. Volume Acceleration Proxy
-    avg_vol = df['volume'].rolling(5).mean().iloc[-1] if 'volume' in df else 50000.0
+    avg_vol = float(df['volume'].rolling(5).mean().iloc[-1]) if ('volume' in df and len(df) >= 5) else 50000.0
     vol_ratio = (volume / avg_vol) if (avg_vol is not None and avg_vol > 0) else 1.0
     
     # 4. Fib Retrace
@@ -58,7 +63,7 @@ def predict_15m_candle_winning_direction(df):
     if 0.20 <= retrace <= 0.886:
         confidence += 8.0
         
-    confidence = min(95.0, confidence)
+    confidence = float(min(95.0, confidence))
     
     breakdown = {
         "l1_status": f"🟢 PASSED (Candle Body Intensity: {body_ratio}%)",
