@@ -1,5 +1,5 @@
 # ================================================================================
-# ANTONY QUANT AI TERMINAL - DUAL-ASSET QUANT MATH ENGINE
+# ANTONY QUANT AI TERMINAL - DUAL-ASSET QUANT MATH ENGINE (0MS PUMP FIX)
 # ================================================================================
 import numpy as np
 from datetime import time, datetime
@@ -7,10 +7,9 @@ import config
 
 def evaluate_btc_15m_signal(df):
     """
-    Evaluates Bitcoin 15M Candlestick Quant Signal (Garman-Klass Volatility + BBWP + Fib Discount).
-    Returns: Signal ("BUY_CALL", "BUY_PUT", "WAIT"), Reason Code, Position Multiplier, Breakdown Dict
+    Evaluates Bitcoin 15M Candlestick Quant Signal with Impulse Breakout Logic.
     """
-    if df.empty or len(df) < 20:
+    if df.empty or len(df) < 5:
         return "WAIT", "REJECT: Insufficient BTC Data", 0.0, {}
     
     last_row = df.iloc[-1]
@@ -21,37 +20,41 @@ def evaluate_btc_15m_signal(df):
     low = float(last_row['low'])
     prev_close = float(prev_row['close'])
     
-    # 1. Price Momentum (15M Candle Direction)
     price_change_pct = ((close - prev_close) / prev_close) * 100.0 if prev_close > 0 else 0.0
     
-    # 2. Garman-Klass Volatility Proxy
     log_hl = np.log(high / low) ** 2 if (low > 0 and high >= low) else 0
     gk_vol = np.sqrt(0.5 * log_hl) * 100.0
     
-    # 3. Fib Golden Pocket Check (0.705 - 0.886)
     swing_range = high - low
     retrace = (high - close) / swing_range if swing_range > 0 else 0.5
     
     breakdown = {
-        "l1_heavyweights": "N/A (Crypto 24/7)",
+        "l1_heavyweights": "Crypto 24/7 (Binance Direct 0ms)",
         "l2_vix": f"GK Volatility: {gk_vol:.2f}%",
         "l3_pcr": f"15M Momentum: {price_change_pct:+.2f}%",
         "l4_runway": f"Fib Retrace: {retrace:.3f}",
         "l5_status": "WAIT"
     }
     
-    if price_change_pct > +0.25 and 0.20 <= retrace <= 0.886:
-        breakdown["l5_status"] = f"CONFIRMED: BTC Bullish Momentum ({price_change_pct:+.2f}%)"
+    # 💥 IMPULSE PUMP RULE: If 15M candle move >= +0.30%, trigger BUY CALL (LONG) immediately!
+    if price_change_pct >= +0.30:
+        breakdown["l5_status"] = f"CONFIRMED: BTC Bullish Impulse Pump ({price_change_pct:+.2f}%)"
         return "BUY_CALL", breakdown["l5_status"], 1.0, breakdown
-    elif price_change_pct < -0.25 and 0.20 <= retrace <= 0.886:
-        breakdown["l5_status"] = f"CONFIRMED: BTC Bearish Momentum ({price_change_pct:+.2f}%)"
+    elif price_change_pct <= -0.30:
+        breakdown["l5_status"] = f"CONFIRMED: BTC Bearish Impulse Dump ({price_change_pct:+.2f}%)"
+        return "BUY_PUT", breakdown["l5_status"], 1.0, breakdown
+    elif price_change_pct > +0.15 and retrace <= 0.886:
+        breakdown["l5_status"] = f"CONFIRMED: BTC Moderate Bullish Move ({price_change_pct:+.2f}%)"
+        return "BUY_CALL", breakdown["l5_status"], 1.0, breakdown
+    elif price_change_pct < -0.15 and retrace <= 0.886:
+        breakdown["l5_status"] = f"CONFIRMED: BTC Moderate Bearish Move ({price_change_pct:+.2f}%)"
         return "BUY_PUT", breakdown["l5_status"], 1.0, breakdown
     else:
-        breakdown["l5_status"] = "REJECT: Sideways BTC Range (No Breakout)"
+        breakdown["l5_status"] = f"REJECT: Sideways BTC Range ({price_change_pct:+.2f}%)"
         return "WAIT", breakdown["l5_status"], 0.0, breakdown
 
 
-# --- EXISTING NIFTY 5-LAYER ENGINE ---
+# --- EXISTING NIFTY ENGINE ---
 def evaluate_volume_and_time_filter(volume, ist_time):
     try:
         vol = float(volume) if volume is not None else 65000.0
