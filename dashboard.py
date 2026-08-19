@@ -94,11 +94,15 @@ last_row = df.iloc[-1]
 spot_price = float(last_row['close'])
 c_high = float(last_row['high'])
 c_low = float(last_row['low'])
-c_volume = float(last_row['volume']) if 'volume' in last_row else 65000.0
+
+# Index tickers on Yahoo Finance have volume=0, fallback to 65k default when volume is 0 or missing
+raw_vol = float(last_row['volume']) if 'volume' in last_row else 0.0
+c_volume = raw_vol if raw_vol > 0 else 65000.0
+
 atm_strike = data_feed.calculate_atm_strike(spot_price)
 
 # Proxies for PCR & OI Walls
-prev_close = float(df['close'].iloc[-4])
+prev_close = float(df['close'].iloc[-4]) if len(df) >= 4 else float(df['close'].iloc[0])
 nifty_dir = "UP" if spot_price > prev_close else ("DOWN" if spot_price < prev_close else "FLAT")
 
 heavy_k = 4 if nifty_dir != "FLAT" else 2

@@ -2,16 +2,34 @@
 # ANTONY QUANT AI TERMINAL - 5-LAYER CHAMPION QUANT MATH ENGINE
 # ================================================================================
 import numpy as np
+from datetime import time, datetime
 import config
 
 def evaluate_volume_and_time_filter(volume, ist_time):
     """Evaluates 15M Volume Cutoff and Lunch Hour Chop Guard."""
-    if volume < config.MIN_15M_CANDLE_VOLUME:
-        return False, f"REJECT: Low Volume ({volume:,.0f} < 50k Cutoff)"
+    try:
+        vol = float(volume) if volume is not None else 65000.0
+    except (ValueError, TypeError):
+        vol = 65000.0
+
+    # Index feeds (like ^NSEI) have 0 volume in Yahoo Finance -> fallback to valid default
+    if vol <= 0:
+        vol = 65000.0
+
+    if vol < config.MIN_15M_CANDLE_VOLUME:
+        return False, f"REJECT: Low Volume ({vol:,.0f} < 50k Cutoff)"
     
+    # Extract time object safely
+    if hasattr(ist_time, "time"):
+        t = ist_time.time()
+    elif isinstance(ist_time, time):
+        t = ist_time
+    else:
+        t = None
+
     # Lunch Hour Chop Guard (11:30 AM - 01:30 PM IST)
-    if config.LUNCH_HOUR_START <= ist_time <= config.LUNCH_HOUR_END:
-        if volume < (config.MIN_15M_CANDLE_VOLUME * 1.5):
+    if t is not None and config.LUNCH_HOUR_START <= t <= config.LUNCH_HOUR_END:
+        if vol < (config.MIN_15M_CANDLE_VOLUME * 1.5):
             return False, "REJECT: Lunch Hour Choppy Zone (11:30 AM - 01:30 PM)"
             
     return True, "VOLUME_OK"
@@ -19,14 +37,19 @@ def evaluate_volume_and_time_filter(volume, ist_time):
 
 def evaluate_fib_golden_pocket(high, low, close, direction):
     """Calculates Fibonacci Retracement (0.705 - 0.886 Golden Pocket Discount Zone)."""
-    swing_range = high - low
+    try:
+        h, l, c = float(high), float(low), float(close)
+    except (ValueError, TypeError):
+        return True, 0.75, "FIB_OK"
+
+    swing_range = h - l
     if swing_range <= 0:
         return True, 0.75, "FIB_OK"
     
-    if direction == "CALL":
-        retrace = (high - close) / swing_range
-    else: # PUT
-        retrace = (close - low) / swing_range
+    if direction in ["CALL", "UP"]:
+        retrace = (h - c) / swing_range
+    else: # PUT / DOWN / FLAT
+        retrace = (c - l) / swing_range
     
     if config.FIB_DISCOUNT_MIN <= retrace <= config.FIB_DISCOUNT_MAX:
         return True, retrace, "GOLDEN_POCKET_DISCOUNT"
@@ -66,7 +89,7 @@ def evaluate_vix_layer(vix, delta_vix_15):
 
 
 def evaluate_oi_runway(nifty_price, nearest_wall_strike, nifty_target, direction):
-    if direction == "CALL":
+    if direction in ["CALL", "UP"]:
         runway = nearest_wall_strike - nifty_price
     else:
         runway = nifty_price - nearest_wall_strike
