@@ -1,5 +1,5 @@
 # ================================================================================
-# ANTONY QUANT AI TERMINAL - DASHBOARD (7-DAY WEEKLY TRACKER V9.0)
+# ANTONY QUANT AI TERMINAL - DASHBOARD (CHAMPION EDITION V10.0)
 # ================================================================================
 import streamlit as st
 import pandas as pd
@@ -21,7 +21,6 @@ st.set_page_config(
     layout="centered"
 )
 
-# Telegram Push Alert Function
 def send_telegram_alert(message):
     token = config.TELEGRAM_BOT_TOKEN
     chat_id = config.TELEGRAM_CHAT_ID
@@ -33,7 +32,6 @@ def send_telegram_alert(message):
         except Exception:
             pass
 
-# Check Market Status
 def check_market_status():
     ist_now = data_feed.get_ist_now()
     if ist_now.weekday() >= 5:
@@ -59,7 +57,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 st.markdown("<div class='main-title'>🎯 ANTONY QUANT AI: NIFTY 50 SIGNAL CO-PILOT</div>", unsafe_allow_html=True)
-st.markdown("<div class='sub-title'>5-Layer Institutional Decision Hierarchy & 7-Day Performance Tracker</div>", unsafe_allow_html=True)
+st.markdown("<div class='sub-title'>Champion Edition | Fib Golden Pocket & Volume Cutoff Engine</div>", unsafe_allow_html=True)
 
 # Live Ticking Javascript Clock
 st.components.v1.html("""
@@ -94,6 +92,9 @@ if df.empty or len(df) < 5:
 
 last_row = df.iloc[-1]
 spot_price = float(last_row['close'])
+c_high = float(last_row['high'])
+c_low = float(last_row['low'])
+c_volume = float(last_row['volume']) if 'volume' in last_row else 65000.0
 atm_strike = data_feed.calculate_atm_strike(spot_price)
 
 # Proxies for PCR & OI Walls
@@ -107,7 +108,9 @@ delta_pcr = +0.03 if nifty_dir == "UP" else (-0.03 if nifty_dir == "DOWN" else 0
 ce_wall = atm_strike + 200
 pe_wall = atm_strike - 200
 
-# Execute 5-Layer Master Decision Engine
+ist_now = data_feed.get_ist_now()
+
+# Execute Champion Engine with Fib & Volume Cutoff
 signal_type, reason_code, pos_multiplier, breakdown = quant_math_engine.master_institutional_decision_engine(
     nifty_direction=nifty_dir,
     heavyweight_k=heavy_k,
@@ -119,6 +122,10 @@ signal_type, reason_code, pos_multiplier, breakdown = quant_math_engine.master_i
     nifty_spot=spot_price,
     nearest_ce_wall=ce_wall,
     nearest_pe_wall=pe_wall,
+    volume_15m=c_volume,
+    candle_high=c_high,
+    candle_low=c_low,
+    ist_time=ist_now.time(),
     nifty_target=config.UNDERLYING_TARGET_NIFTY
 )
 
@@ -178,7 +185,7 @@ if signal_type != "WAIT":
     </div>
     """, unsafe_allow_html=True)
 
-# --- TRADE PERFORMANCE LOGS (TODAY VS 7-DAY WEEKLY TRACKER) ---
+# --- TRADE PERFORMANCE LOGS ---
 st.divider()
 st.subheader("📊 BOT PERFORMANCE LOGS & ACCURACY TRACKER")
 

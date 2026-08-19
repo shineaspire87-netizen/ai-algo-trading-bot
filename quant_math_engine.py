@@ -1,12 +1,42 @@
 # ================================================================================
-# ANTONY QUANT AI TERMINAL - 5-LAYER INSTITUTIONAL MATH ENGINE
+# ANTONY QUANT AI TERMINAL - 5-LAYER CHAMPION QUANT MATH ENGINE
 # ================================================================================
 import numpy as np
+import config
+
+def evaluate_volume_and_time_filter(volume, ist_time):
+    """Evaluates 15M Volume Cutoff and Lunch Hour Chop Guard."""
+    if volume < config.MIN_15M_CANDLE_VOLUME:
+        return False, f"REJECT: Low Volume ({volume:,.0f} < 50k Cutoff)"
+    
+    # Lunch Hour Chop Guard (11:30 AM - 01:30 PM IST)
+    if config.LUNCH_HOUR_START <= ist_time <= config.LUNCH_HOUR_END:
+        if volume < (config.MIN_15M_CANDLE_VOLUME * 1.5):
+            return False, "REJECT: Lunch Hour Choppy Zone (11:30 AM - 01:30 PM)"
+            
+    return True, "VOLUME_OK"
+
+
+def evaluate_fib_golden_pocket(high, low, close, direction):
+    """Calculates Fibonacci Retracement (0.705 - 0.886 Golden Pocket Discount Zone)."""
+    swing_range = high - low
+    if swing_range <= 0:
+        return True, 0.75, "FIB_OK"
+    
+    if direction == "CALL":
+        retrace = (high - close) / swing_range
+    else: # PUT
+        retrace = (close - low) / swing_range
+    
+    if config.FIB_DISCOUNT_MIN <= retrace <= config.FIB_DISCOUNT_MAX:
+        return True, retrace, "GOLDEN_POCKET_DISCOUNT"
+    elif retrace < config.FIB_DISCOUNT_MIN:
+        return True, retrace, "STRONG_BREAKOUT"
+    else:
+        return False, retrace, "OVEREXTENDED_PREMIUM_TRAP"
+
 
 def evaluate_pcr_layer(pcr_oi, delta_pcr_15):
-    """
-    Evaluates PCR Level & 15M Momentum.
-    """
     if 0.90 <= pcr_oi <= 1.10:
         return "NEUTRAL_TRAP", False, False
     
@@ -22,15 +52,12 @@ def evaluate_pcr_layer(pcr_oi, delta_pcr_15):
 
 
 def evaluate_vix_layer(vix, delta_vix_15):
-    """
-    Evaluates India VIX Regime and Volatility Momentum.
-    """
     if vix < 12.0:
         return "LOW_VIX_BLOCK", 0.0, False
     elif 12.0 <= vix <= 18.0:
         regime = "OPTIMAL"
         pos_size = 1.0
-    else: # VIX > 18
+    else:
         regime = "HIGH_VOLATILITY"
         pos_size = 0.50
     
@@ -39,12 +66,9 @@ def evaluate_vix_layer(vix, delta_vix_15):
 
 
 def evaluate_oi_runway(nifty_price, nearest_wall_strike, nifty_target, direction):
-    """
-    Calculates OI Runway Distance and Target Coverage Ratio (R >= 2.0).
-    """
     if direction == "CALL":
         runway = nearest_wall_strike - nifty_price
-    else: # PUT
+    else:
         runway = nifty_price - nearest_wall_strike
         
     if runway < 75.0:
@@ -71,12 +95,12 @@ def master_institutional_decision_engine(
     nifty_spot,            # e.g., 24154.90
     nearest_ce_wall,       # e.g., 24300
     nearest_pe_wall,       # e.g., 24000
+    volume_15m=65000,      # 15M Candle Volume
+    candle_high=24200,     # Candle High
+    candle_low=24100,      # Candle Low
+    ist_time=None,         # Current IST Time
     nifty_target=30.0
 ):
-    """
-    Executes the 5-Layer Institutional Decision Hierarchy.
-    Returns: Final Decision ("BUY_CALL", "BUY_PUT", "WAIT"), Reason Code, Position Multiplier, Layer Breakdown Dict
-    """
     breakdown = {
         "l1_heavyweights": f"K={heavyweight_k}/5 (A={heavyweight_a:.2f})",
         "l2_vix": f"VIX={india_vix:.1f} (Δ={delta_vix_15:+.2f})",
@@ -85,11 +109,24 @@ def master_institutional_decision_engine(
         "l5_status": "WAIT"
     }
 
+    # VOLUME & TIME FILTER (CHRIS CREAMER RULE)
+    if ist_time is not None:
+        vol_ok, vol_msg = evaluate_volume_and_time_filter(volume_15m, ist_time)
+        if not vol_ok:
+            breakdown["l5_status"] = vol_msg
+            return "WAIT", breakdown["l5_status"], 0.0, breakdown
+
     # LAYER 1: HEAVYWEIGHT ALIGNMENT
     if heavyweight_k < 4 or heavyweight_a < 0.75:
         breakdown["l5_status"] = "REJECT: Heavyweights disagree (K < 4)"
         return "WAIT", breakdown["l5_status"], 0.0, breakdown
     
+    # FIB GOLDEN POCKET DISCOUNT CHECK
+    fib_ok, fib_ratio, fib_status = evaluate_fib_golden_pocket(candle_high, candle_low, nifty_spot, nifty_direction)
+    if not fib_ok:
+        breakdown["l5_status"] = f"REJECT: Overextended Premium Trap (Fib={fib_ratio:.3f})"
+        return "WAIT", breakdown["l5_status"], 0.0, breakdown
+
     # LAYER 2: VIX REGIME & MOMENTUM
     vix_regime, pos_multiplier, vix_expanding = evaluate_vix_layer(india_vix, delta_vix_15)
     if vix_regime == "LOW_VIX_BLOCK":
@@ -115,7 +152,7 @@ def master_institutional_decision_engine(
             breakdown["l5_status"] = f"REJECT: CE Wall too close ({runway:.0f} pts)"
             return "WAIT", breakdown["l5_status"], 0.0, breakdown
         
-        breakdown["l5_status"] = f"CONFIRMED: Clear Runway ({runway:.0f} pts, R={ratio:.1f}x)"
+        breakdown["l5_status"] = f"CONFIRMED: Golden Fib ({fib_ratio:.2f}) + Clear Runway ({runway:.0f} pts)"
         return "BUY_CALL", breakdown["l5_status"], pos_multiplier, breakdown
 
     elif nifty_direction == "DOWN":
@@ -131,7 +168,7 @@ def master_institutional_decision_engine(
             breakdown["l5_status"] = f"REJECT: PE Wall too close ({runway:.0f} pts)"
             return "WAIT", breakdown["l5_status"], 0.0, breakdown
         
-        breakdown["l5_status"] = f"CONFIRMED: Clear Runway ({runway:.0f} pts, R={ratio:.1f}x)"
+        breakdown["l5_status"] = f"CONFIRMED: Golden Fib ({fib_ratio:.2f}) + Clear Runway ({runway:.0f} pts)"
         return "BUY_PUT", breakdown["l5_status"], pos_multiplier, breakdown
 
     breakdown["l5_status"] = "REJECT: No Directional Momentum"
