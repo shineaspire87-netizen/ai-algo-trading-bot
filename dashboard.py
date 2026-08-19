@@ -1,5 +1,5 @@
 # ================================================================================
-# ANTONY QUANT AI TERMINAL - DASHBOARD (CHAMPION EDITION V10.0)
+# ANTONY QUANT AI TERMINAL - DUAL-ASSET DASHBOARD (NIFTY 50 + BITCOIN 24/7)
 # ================================================================================
 import streamlit as st
 import pandas as pd
@@ -16,11 +16,12 @@ import ai_analyst
 
 # Page Setup
 st.set_page_config(
-    page_title="ANTONY Quant AI - NIFTY 50 Co-Pilot",
+    page_title="ANTONY Quant AI Terminal",
     page_icon="🎯",
     layout="centered"
 )
 
+# Telegram Push Alert Function
 def send_telegram_alert(message):
     token = config.TELEGRAM_BOT_TOKEN
     chat_id = config.TELEGRAM_CHAT_ID
@@ -32,13 +33,15 @@ def send_telegram_alert(message):
         except Exception:
             pass
 
-def check_market_status():
+# Check Market Status
+def check_market_status(asset_choice):
+    if asset_choice == "BITCOIN (BTC/USDT)":
+        return True, "🟢 BITCOIN 24/7 MARKET LIVE (CONTINUOUS TRADING)"
+    
     ist_now = data_feed.get_ist_now()
     if ist_now.weekday() >= 5:
         return False, "🔴 NSE CLOSED (WEEKEND)"
     return (time(9, 15) <= ist_now.time() <= time(15, 30)), "🟢 NSE MARKET LIVE (09:15 AM - 03:30 PM IST)" if (time(9, 15) <= ist_now.time() <= time(15, 30)) else "🔴 NSE MARKET CLOSED (AFTER HOURS)"
-
-is_open, market_status_text = check_market_status()
 
 # Custom Styling
 st.markdown("""
@@ -56,8 +59,14 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-st.markdown("<div class='main-title'>🎯 ANTONY QUANT AI: NIFTY 50 SIGNAL CO-PILOT</div>", unsafe_allow_html=True)
-st.markdown("<div class='sub-title'>Champion Edition | Fib Golden Pocket & Volume Cutoff Engine</div>", unsafe_allow_html=True)
+# SIDEBAR CONTROL PANEL
+st.sidebar.title("⚙️ System Control")
+selected_asset = st.sidebar.selectbox("🎯 Select Active Trading Market:", ["NIFTY 50 (₹)", "BITCOIN (BTC/USDT)"])
+
+is_open, market_status_text = check_market_status(selected_asset)
+
+st.markdown(f"<div class='main-title'>🎯 ANTONY QUANT AI: {selected_asset.upper()} CO-PILOT</div>", unsafe_allow_html=True)
+st.markdown("<div class='sub-title'>Dual-Asset Multi-Engine | NIFTY 50 Options & Bitcoin 24/7</div>", unsafe_allow_html=True)
 
 # Live Ticking Javascript Clock
 st.components.v1.html("""
@@ -81,115 +90,133 @@ if is_open:
 else:
     st.markdown(f"<div class='market-badge-closed'>{market_status_text} — LAST CLOSE DATA SHOWN</div>", unsafe_allow_html=True)
 
-# Fetch NIFTY Live Data & VIX
-df = data_feed.fetch_nifty_live_data(config.DEFAULT_SYMBOL, config.TIMEFRAME)
-india_vix, delta_vix_15 = data_feed.fetch_india_vix()
+# --- ENGINE EXECUTION BASED ON ASSET SELECTION ---
+if selected_asset == "BITCOIN (BTC/USDT)":
+    df_btc = data_feed.fetch_btc_live_data(config.BTC_SYMBOL, config.TIMEFRAME)
+    if df_btc.empty or len(df_btc) < 5:
+        st.warning("⏳ Connecting to Bitcoin 24/7 Live Feed... Please wait 3 seconds.")
+        time_lib.sleep(3)
+        st.rerun()
+        
+    last_row = df_btc.iloc[-1]
+    spot_price = float(last_row['close'])
+    
+    st.sidebar.info(f"Symbol: {config.BTC_SYMBOL}")
+    st.sidebar.info(f"Timeframe: {config.TIMEFRAME}")
+    st.sidebar.metric("Bitcoin Live Spot", f"${spot_price:,.2f}")
+    
+    signal_type, reason_code, pos_multiplier, breakdown = quant_math_engine.evaluate_btc_15m_signal(df_btc)
+    
+    st.subheader("📍 LIVE BITCOIN 15M SIGNAL CARD")
+    if signal_type == "BUY_CALL":
+        st.markdown(f"""
+        <div class='signal-card-buy'>
+            <h1 style='color:#00E676; margin:0;'>🟩 BUY BITCOIN (LONG / CALL)</h1>
+            <p style='font-size:18px; margin-top:8px;'>Bitcoin Price: <b>${spot_price:,.2f}</b></p>
+            <hr style='border-color:#00E676;'>
+            <h2>🎯 ENTRY ZONE: <u style='color:#00E676;'>${spot_price:,.2f}</u></h2>
+        </div>
+        """, unsafe_allow_html=True)
+    elif signal_type == "BUY_PUT":
+        st.markdown(f"""
+        <div class='signal-card-sell'>
+            <h1 style='color:#E040FB; margin:0;'>🟪 SELL BITCOIN (SHORT / PUT)</h1>
+            <p style='font-size:18px; margin-top:8px;'>Bitcoin Price: <b>${spot_price:,.2f}</b></p>
+            <hr style='border-color:#E040FB;'>
+            <h2>🎯 ENTRY ZONE: <u style='color:#E040FB;'>${spot_price:,.2f}</u></h2>
+        </div>
+        """, unsafe_allow_html=True)
+    else:
+        st.markdown(f"""
+        <div class='signal-card-wait'>
+            <h1 style='color:#B0BEC5; margin:0;'>⚪ WAIT - NO 15M BTC BREAKOUT SETUP</h1>
+            <p style='font-size:15px; margin-top:8px;'>Reason: <b>{reason_code}</b></p>
+        </div>
+        """, unsafe_allow_html=True)
 
-if df.empty or len(df) < 5:
-    st.warning("⏳ Connecting to NIFTY 50 Live Feed... Please wait 3 seconds.")
-    time_lib.sleep(3)
-    st.rerun()
+else: # NIFTY 50 MODE
+    df = data_feed.fetch_nifty_live_data(config.DEFAULT_SYMBOL, config.TIMEFRAME)
+    india_vix, delta_vix_15 = data_feed.fetch_india_vix()
 
-last_row = df.iloc[-1]
-spot_price = float(last_row['close'])
-c_high = float(last_row['high'])
-c_low = float(last_row['low'])
+    if df.empty or len(df) < 5:
+        st.warning("⏳ Connecting to NIFTY 50 Live Feed... Please wait 3 seconds.")
+        time_lib.sleep(3)
+        st.rerun()
 
-# Index tickers on Yahoo Finance have volume=0, fallback to 65k default when volume is 0 or missing
-raw_vol = float(last_row['volume']) if 'volume' in last_row else 0.0
-c_volume = raw_vol if raw_vol > 0 else 65000.0
+    last_row = df.iloc[-1]
+    spot_price = float(last_row['close'])
+    c_high = float(last_row['high'])
+    c_low = float(last_row['low'])
+    raw_vol = float(last_row['volume']) if 'volume' in last_row else 0.0
+    c_volume = raw_vol if raw_vol > 0 else 65000.0
+    atm_strike = data_feed.calculate_atm_strike(spot_price)
 
-atm_strike = data_feed.calculate_atm_strike(spot_price)
+    st.sidebar.info(f"Symbol: {config.DEFAULT_SYMBOL}")
+    st.sidebar.info(f"Timeframe: {config.TIMEFRAME}")
+    st.sidebar.metric("NIFTY 50 Spot", f"₹{spot_price:,.2f}")
+    st.sidebar.metric("India VIX", f"{india_vix:.2f}", delta=f"{delta_vix_15:+.2f}")
 
-# Proxies for PCR & OI Walls
-prev_close = float(df['close'].iloc[-4]) if len(df) >= 4 else float(df['close'].iloc[0])
-nifty_dir = "UP" if spot_price > prev_close else ("DOWN" if spot_price < prev_close else "FLAT")
+    prev_close = float(df['close'].iloc[-4]) if len(df) >= 4 else float(df['close'].iloc[0])
+    nifty_dir = "UP" if spot_price > prev_close else ("DOWN" if spot_price < prev_close else "FLAT")
 
-heavy_k = 4 if nifty_dir != "FLAT" else 2
-heavy_a = 0.82
-pcr_val = 1.18 if nifty_dir == "UP" else (0.82 if nifty_dir == "DOWN" else 1.0)
-delta_pcr = +0.03 if nifty_dir == "UP" else (-0.03 if nifty_dir == "DOWN" else 0.0)
-ce_wall = atm_strike + 200
-pe_wall = atm_strike - 200
+    heavy_k = 4 if nifty_dir != "FLAT" else 2
+    heavy_a = 0.82
+    pcr_val = 1.18 if nifty_dir == "UP" else (0.82 if nifty_dir == "DOWN" else 1.0)
+    delta_pcr = +0.03 if nifty_dir == "UP" else (-0.03 if nifty_dir == "DOWN" else 0.0)
+    ce_wall = atm_strike + 200
+    pe_wall = atm_strike - 200
 
-ist_now = data_feed.get_ist_now()
+    ist_now = data_feed.get_ist_now()
 
-# Execute Champion Engine with Fib & Volume Cutoff
-signal_type, reason_code, pos_multiplier, breakdown = quant_math_engine.master_institutional_decision_engine(
-    nifty_direction=nifty_dir,
-    heavyweight_k=heavy_k,
-    heavyweight_a=heavy_a,
-    india_vix=india_vix,
-    delta_vix_15=delta_vix_15,
-    pcr_oi=pcr_val,
-    delta_pcr_15=delta_pcr,
-    nifty_spot=spot_price,
-    nearest_ce_wall=ce_wall,
-    nearest_pe_wall=pe_wall,
-    volume_15m=c_volume,
-    candle_high=c_high,
-    candle_low=c_low,
-    ist_time=ist_now.time(),
-    nifty_target=config.UNDERLYING_TARGET_NIFTY
-)
+    signal_type, reason_code, pos_multiplier, breakdown = quant_math_engine.master_institutional_decision_engine(
+        nifty_direction=nifty_dir, heavyweight_k=heavy_k, heavyweight_a=heavy_a,
+        india_vix=india_vix, delta_vix_15=delta_vix_15, pcr_oi=pcr_val, delta_pcr_15=delta_pcr,
+        nifty_spot=spot_price, nearest_ce_wall=ce_wall, nearest_pe_wall=pe_wall,
+        volume_15m=c_volume, candle_high=c_high, candle_low=c_low, ist_time=ist_now.time(),
+        nifty_target=config.UNDERLYING_TARGET_NIFTY
+    )
 
-# Render Signal Card
-st.subheader("📍 LIVE NIFTY 50 SIGNAL CARD")
-
-if signal_type == "BUY_CALL":
-    st.markdown(f"""
-    <div class='signal-card-buy'>
-        <h1 style='color:#00E676; margin:0;'>🟩 BUY CALL OPTION (CE)</h1>
-        <p style='font-size:18px; margin-top:8px;'>NIFTY 50 Spot: <b>₹{spot_price:,.2f}</b> | Position Size: <b>{int(pos_multiplier*100)}%</b></p>
-        <hr style='border-color:#00E676;'>
-        <h2>🎯 TARGET STRIKE: <u style='color:#00E676;'>NIFTY {atm_strike} CE</u></h2>
-    </div>
-    """, unsafe_allow_html=True)
-
-elif signal_type == "BUY_PUT":
-    st.markdown(f"""
-    <div class='signal-card-sell'>
-        <h1 style='color:#E040FB; margin:0;'>🟪 BUY PUT OPTION (PE)</h1>
-        <p style='font-size:18px; margin-top:8px;'>NIFTY 50 Spot: <b>₹{spot_price:,.2f}</b> | Position Size: <b>{int(pos_multiplier*100)}%</b></p>
-        <hr style='border-color:#E040FB;'>
-        <h2>🎯 TARGET STRIKE: <u style='color:#E040FB;'>NIFTY {atm_strike} PE</u></h2>
-    </div>
-    """, unsafe_allow_html=True)
-
-else:
-    st.markdown(f"""
-    <div class='signal-card-wait'>
-        <h1 style='color:#B0BEC5; margin:0;'>⚪ WAIT - REJECTED BY 5-LAYER FILTER</h1>
-        <p style='font-size:15px; margin-top:8px;'>Reason: <b>{reason_code}</b></p>
-    </div>
-    """, unsafe_allow_html=True)
+    st.subheader("📍 LIVE NIFTY 50 SIGNAL CARD")
+    if signal_type == "BUY_CALL":
+        st.markdown(f"""
+        <div class='signal-card-buy'>
+            <h1 style='color:#00E676; margin:0;'>🟩 BUY CALL OPTION (CE)</h1>
+            <p style='font-size:18px; margin-top:8px;'>NIFTY 50 Spot: <b>₹{spot_price:,.2f}</b> | Size: <b>{int(pos_multiplier*100)}%</b></p>
+            <hr style='border-color:#00E676;'>
+            <h2>🎯 TARGET STRIKE: <u style='color:#00E676;'>NIFTY {atm_strike} CE</u></h2>
+        </div>
+        """, unsafe_allow_html=True)
+    elif signal_type == "BUY_PUT":
+        st.markdown(f"""
+        <div class='signal-card-sell'>
+            <h1 style='color:#E040FB; margin:0;'>🟪 BUY PUT OPTION (PE)</h1>
+            <p style='font-size:18px; margin-top:8px;'>NIFTY 50 Spot: <b>₹{spot_price:,.2f}</b> | Size: <b>{int(pos_multiplier*100)}%</b></p>
+            <hr style='border-color:#E040FB;'>
+            <h2>🎯 TARGET STRIKE: <u style='color:#E040FB;'>NIFTY {atm_strike} PE</u></h2>
+        </div>
+        """, unsafe_allow_html=True)
+    else:
+        st.markdown(f"""
+        <div class='signal-card-wait'>
+            <h1 style='color:#B0BEC5; margin:0;'>⚪ WAIT - REJECTED BY 5-LAYER FILTER</h1>
+            <p style='font-size:15px; margin-top:8px;'>Reason: <b>{reason_code}</b></p>
+        </div>
+        """, unsafe_allow_html=True)
 
 # Render 5-Layer Breakdown Box
-st.markdown(f"""
-<div class='layer-box'>
-    <b>🛡️ INSTITUTIONAL 5-LAYER FILTER STATUS:</b><br>
-    • <b>Layer 1 (Heavyweights K/A) :</b> {breakdown['l1_heavyweights']}<br>
-    • <b>Layer 2 (India VIX & ΔVIX) :</b> {breakdown['l2_vix']}<br>
-    • <b>Layer 3 (PCR & ΔPCR 15M)  :</b> {breakdown['l3_pcr']}<br>
-    • <b>Layer 4 (OI Clear Runway) :</b> {breakdown['l4_runway']}<br>
-    • <b>Layer 5 (Engine Verdict)   :</b> {breakdown['l5_status']}
-</div>
-""", unsafe_allow_html=True)
-
-# Render Cheat Sheet Numbers
-if signal_type != "WAIT":
+if breakdown:
     st.markdown(f"""
-    <div class='cheat-box'>
-        <b>📋 DHAN / TRADINGVIEW EXECUTION CHEAT SHEET:</b><br>
-        • <b>Option Contract  :</b> NIFTY {atm_strike} {"CE" if signal_type == "BUY_CALL" else "PE"}<br>
-        • <b>Entry Strategy   :</b> Buy Market Price on Dhan / TradingView<br>
-        • <b>Stop Loss (SL)   :</b> -15 Points Premium (Strict Risk: ₹375 / lot)<br>
-        • <b>Target 1 (TP1)   :</b> +20 Points Premium (Profit: ₹500 / lot)<br>
-        • <b>Target 2 (TP2)   :</b> +45 Points Premium (Profit: ₹1,125 / lot)
+    <div class='layer-box'>
+        <b>🛡️ QUANT ENGINE BREAKDOWN STATUS:</b><br>
+        • <b>Layer 1 (Heavyweights / Market) :</b> {breakdown.get('l1_heavyweights', 'N/A')}<br>
+        • <b>Layer 2 (Volatility Filter)    :</b> {breakdown.get('l2_vix', 'N/A')}<br>
+        • <b>Layer 3 (15M Momentum)         :</b> {breakdown.get('l3_pcr', 'N/A')}<br>
+        • <b>Layer 4 (Fib / OI Runway)      :</b> {breakdown.get('l4_runway', 'N/A')}<br>
+        • <b>Layer 5 (Engine Verdict)       :</b> {breakdown.get('l5_status', 'N/A')}
     </div>
     """, unsafe_allow_html=True)
 
-# --- TRADE PERFORMANCE LOGS ---
+# --- TRADE PERFORMANCE LOGS & ACCURACY TRACKER ---
 st.divider()
 st.subheader("📊 BOT PERFORMANCE LOGS & ACCURACY TRACKER")
 
@@ -198,7 +225,7 @@ tab1, tab2 = st.tabs(["📅 Today's Live Log", "📊 7-Day Weekly Performance Tr
 with tab1:
     today_summary = trade_logger.get_today_summary()
     col1, col2, col3, col4 = st.columns(4)
-    col1.metric("Today's Trades", f"{today_summary['total_trades']} / 3")
+    col1.metric("Today's Trades", f"{today_summary['total_trades']}")
     col2.metric("Win Rate", f"{today_summary['win_rate']}%")
     col3.metric("Wins / Losses", f"{today_summary['wins']} W / {today_summary['losses']} L")
     col4.metric("Net Daily PnL", f"₹{today_summary['net_pnl']:,.2f}")
@@ -206,13 +233,7 @@ with tab1:
     today_trades = trade_logger.get_today_trades()
     if today_trades:
         df_today = pd.DataFrame(today_trades)
-        st.dataframe(
-            df_today[["date_time", "symbol", "entry_price", "exit_price", "quantity", "gross_pnl", "brokerage_fee", "net_pnl", "result"]],
-            use_container_width=True
-        )
-        st.subheader("🔍 Today's AI Post-Mortem Analysis")
-        for t in today_trades:
-            st.markdown(ai_analyst.generate_trade_post_mortem(t["result"], t["layers"], t["net_pnl"]))
+        st.dataframe(df_today[["date_time", "symbol", "entry_price", "exit_price", "quantity", "gross_pnl", "brokerage_fee", "net_pnl", "result"]], use_container_width=True)
     else:
         st.info("ℹ️ No trades recorded today yet. Bot is scanning 15M candles for high-probability setups.")
 
@@ -227,25 +248,15 @@ with tab2:
     weekly_trades = trade_logger.get_weekly_trades(days=7)
     if weekly_trades:
         df_weekly = pd.DataFrame(weekly_trades)
-        st.dataframe(
-            df_weekly[["date_time", "symbol", "entry_price", "exit_price", "quantity", "gross_pnl", "brokerage_fee", "net_pnl", "result"]],
-            use_container_width=True
-        )
+        st.dataframe(df_weekly[["date_time", "symbol", "entry_price", "exit_price", "quantity", "gross_pnl", "brokerage_fee", "net_pnl", "result"]], use_container_width=True)
     else:
-        st.info("ℹ️ No weekly trade history recorded yet. New live signals will accumulate here over the 7-day test period.")
+        st.info("ℹ️ No weekly trade history recorded yet.")
 
 # --- END-OF-DAY AI SELF-DIAGNOSTIC REPORT ---
 st.divider()
 today_trades = trade_logger.get_today_trades()
-eod_report = ai_analyst.generate_eod_bot_diagnostic(today_trades, india_vix, pcr_val)
+eod_report = ai_analyst.generate_eod_bot_diagnostic(today_trades, india_vix if selected_asset == "NIFTY 50 (₹)" else 15.0, 1.0)
 st.markdown(f"<div class='diagnostic-box'>{eod_report}</div>", unsafe_allow_html=True)
-
-# Sidebar System Control
-st.sidebar.title("⚙️ System Control")
-st.sidebar.info(f"Symbol: {config.DEFAULT_SYMBOL}")
-st.sidebar.info(f"Timeframe: {config.TIMEFRAME}")
-st.sidebar.metric("NIFTY 50 Spot", f"₹{spot_price:,.2f}")
-st.sidebar.metric("India VIX", f"{india_vix:.2f}", delta=f"{delta_vix_15:+.2f}")
 
 if st.sidebar.button("🧹 Clear All Trade History"):
     trade_logger.clear_all_trades()

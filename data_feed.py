@@ -1,5 +1,5 @@
 # ================================================================================
-# ANTONY QUANT AI TERMINAL - DATA FEED ENGINE (IST TIMEZONE FIXED)
+# ANTONY QUANT AI TERMINAL - DATA FEED ENGINE (NIFTY 50 + BITCOIN 24/7)
 # ================================================================================
 import yfinance as yf
 import pandas as pd
@@ -30,6 +30,24 @@ def fetch_nifty_live_data(symbol=config.DEFAULT_SYMBOL, timeframe=config.TIMEFRA
         print(f"Error fetching NIFTY data: {e}")
         return pd.DataFrame()
 
+def fetch_btc_live_data(symbol=config.BTC_SYMBOL, timeframe=config.TIMEFRAME, period="5d"):
+    """Fetches 24/7 real-time BITCOIN (BTC-USD) 15M candles."""
+    try:
+        df = yf.download(tickers=symbol, period=period, interval=timeframe, progress=False)
+        if df.empty:
+            return pd.DataFrame()
+        
+        if isinstance(df.columns, pd.MultiIndex):
+            df.columns = [col[0].lower() for col in df.columns]
+        else:
+            df.columns = [col.lower() for col in df.columns]
+            
+        df.dropna(inplace=True)
+        return df
+    except Exception as e:
+        print(f"Error fetching Bitcoin data: {e}")
+        return pd.DataFrame()
+
 def fetch_india_vix():
     """Fetches real-time India VIX level and calculates 15m delta."""
     try:
@@ -50,11 +68,9 @@ def fetch_india_vix():
         return 11.51, +0.12
 
 def calculate_atm_strike(spot_price):
-    """Calculates At-The-Money (ATM) Option Strike for NIFTY 50."""
     return int(round(spot_price / 50.0) * 50)
 
 def is_market_open():
-    """Checks if Indian Equity Market (NSE) is open (9:15 AM - 3:30 PM IST)."""
     ist_now = get_ist_now()
     if ist_now.weekday() >= 5:
         return False
