@@ -1,5 +1,5 @@
 # ================================================================================
-# ANTONY QUANT AI TERMINAL - TRADE LOGGER & BROKERAGE CALCULATOR
+# ANTONY QUANT AI TERMINAL - 7-DAY PERMANENT WEEKLY TRADE LOGGER
 # ================================================================================
 import json
 import os
@@ -24,11 +24,14 @@ def save_trades(trades):
     with open(TRADES_FILE, "w") as f:
         json.dump(trades, f, indent=4)
 
+def clear_all_trades():
+    """Clears trade logs only when manually requested."""
+    save_trades([])
+
 def calculate_brokerage_fees(qty, entry_price, exit_price):
-    """Calculates Indian Brokerage (Zerodha/Dhan) = Flat ₹20 Buy + ₹20 Sell + STT/GST (~₹45 Total)."""
     flat_brokerage = 40.0
     turnover = (entry_price + exit_price) * qty
-    stt_and_taxes = turnover * 0.0005  # Approx STT/GST/Exchange turnover charges
+    stt_and_taxes = turnover * 0.0005
     return round(flat_brokerage + stt_and_taxes, 2)
 
 def record_completed_trade(symbol, strike, entry_price, exit_price, qty, status, win_loss_reason, layer_breakdown):
@@ -80,4 +83,30 @@ def get_today_summary():
         "win_rate": round(win_rate, 1),
         "net_pnl": round(net_pnl, 2),
         "trades_remaining": max(0, 3 - total_trades)
+    }
+
+def get_weekly_trades(days=7):
+    """Fetches all trades from the past 7 days for 1-Week evaluation."""
+    trades = load_trades()
+    if not trades:
+        return []
+    ist_now = get_ist_now()
+    cutoff_date = (ist_now - timedelta(days=days)).strftime("%Y-%m-%d")
+    return [t for t in trades if t.get("date", "") >= cutoff_date]
+
+def get_weekly_summary(days=7):
+    """Calculates aggregate statistics over 1-Week testing period."""
+    weekly_trades = get_weekly_trades(days)
+    total_trades = len(weekly_trades)
+    wins = len([t for t in weekly_trades if t["result"] == "WIN"])
+    losses = len([t for t in weekly_trades if t["result"] == "LOSS"])
+    net_pnl = sum([t["net_pnl"] for t in weekly_trades])
+    win_rate = (wins / total_trades * 100) if total_trades > 0 else 0.0
+    
+    return {
+        "total_trades": total_trades,
+        "wins": wins,
+        "losses": losses,
+        "win_rate": round(win_rate, 1),
+        "net_pnl": round(net_pnl, 2)
     }

@@ -1,5 +1,5 @@
 # ================================================================================
-# ANTONY QUANT AI TERMINAL - ULTRA-SIMPLE DASHBOARD (V8.0 AUTONOMOUS EDITION)
+# ANTONY QUANT AI TERMINAL - DASHBOARD (7-DAY WEEKLY TRACKER V9.0)
 # ================================================================================
 import streamlit as st
 import pandas as pd
@@ -7,7 +7,6 @@ import numpy as np
 import time as time_lib
 from datetime import datetime, time, timezone, timedelta
 import requests
-import threading
 
 import config
 import data_feed
@@ -24,8 +23,8 @@ st.set_page_config(
 
 # Telegram Push Alert Function
 def send_telegram_alert(message):
-    token = getattr(config, "TELEGRAM_BOT_TOKEN", "")
-    chat_id = getattr(config, "TELEGRAM_CHAT_ID", "")
+    token = config.TELEGRAM_BOT_TOKEN
+    chat_id = config.TELEGRAM_CHAT_ID
     if token and chat_id:
         url = f"https://api.telegram.org/bot{token}/sendMessage"
         payload = {"chat_id": chat_id, "text": message, "parse_mode": "HTML"}
@@ -60,7 +59,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 st.markdown("<div class='main-title'>🎯 ANTONY QUANT AI: NIFTY 50 SIGNAL CO-PILOT</div>", unsafe_allow_html=True)
-st.markdown("<div class='sub-title'>5-Layer Institutional Decision Hierarchy & AI Self-Diagnostic Engine</div>", unsafe_allow_html=True)
+st.markdown("<div class='sub-title'>5-Layer Institutional Decision Hierarchy & 7-Day Performance Tracker</div>", unsafe_allow_html=True)
 
 # Live Ticking Javascript Clock
 st.components.v1.html("""
@@ -85,9 +84,7 @@ else:
     st.markdown(f"<div class='market-badge-closed'>{market_status_text} — LAST CLOSE DATA SHOWN</div>", unsafe_allow_html=True)
 
 # Fetch NIFTY Live Data & VIX
-default_sym = getattr(config, "DEFAULT_SYMBOL", "^NSEI")
-tf_val = getattr(config, "TIMEFRAME", "15m")
-df = data_feed.fetch_nifty_live_data(default_sym, tf_val)
+df = data_feed.fetch_nifty_live_data(config.DEFAULT_SYMBOL, config.TIMEFRAME)
 india_vix, delta_vix_15 = data_feed.fetch_india_vix()
 
 if df.empty or len(df) < 5:
@@ -122,11 +119,8 @@ signal_type, reason_code, pos_multiplier, breakdown = quant_math_engine.master_i
     nifty_spot=spot_price,
     nearest_ce_wall=ce_wall,
     nearest_pe_wall=pe_wall,
-    nifty_target=getattr(config, "UNDERLYING_TARGET_NIFTY", 30.0)
+    nifty_target=config.UNDERLYING_TARGET_NIFTY
 )
-
-# Get Today's Summary
-today_summary = trade_logger.get_today_summary()
 
 # Render Signal Card
 st.subheader("📍 LIVE NIFTY 50 SIGNAL CARD")
@@ -184,65 +178,67 @@ if signal_type != "WAIT":
     </div>
     """, unsafe_allow_html=True)
 
-# --- NEW SECTION 1: TODAY'S PERFORMANCE SUMMARY & TRADE LOG TABLE ---
+# --- TRADE PERFORMANCE LOGS (TODAY VS 7-DAY WEEKLY TRACKER) ---
 st.divider()
-st.subheader("📊 TODAY'S LIVE TRADE PERFORMANCE LOG")
+st.subheader("📊 BOT PERFORMANCE LOGS & ACCURACY TRACKER")
 
-col1, col2, col3, col4 = st.columns(4)
-col1.metric("Today's Trades", f"{today_summary['total_trades']} / 3")
-col2.metric("Win Rate", f"{today_summary['win_rate']}%")
-col3.metric("Wins / Losses", f"{today_summary['wins']} W / {today_summary['losses']} L")
-col4.metric("Net Daily PnL", f"₹{today_summary['net_pnl']:,.2f}")
+tab1, tab2 = st.tabs(["📅 Today's Live Log", "📊 7-Day Weekly Performance Tracker"])
 
-today_trades = trade_logger.get_today_trades()
-
-if today_trades:
-    df_trades = pd.DataFrame(today_trades)
-    st.dataframe(
-        df_trades[[
-            "date_time", "symbol", "entry_price", "exit_price", "quantity", 
-            "gross_pnl", "brokerage_fee", "net_pnl", "result"
-        ]],
-        use_container_width=True
-    )
+with tab1:
+    today_summary = trade_logger.get_today_summary()
+    col1, col2, col3, col4 = st.columns(4)
+    col1.metric("Today's Trades", f"{today_summary['total_trades']} / 3")
+    col2.metric("Win Rate", f"{today_summary['win_rate']}%")
+    col3.metric("Wins / Losses", f"{today_summary['wins']} W / {today_summary['losses']} L")
+    col4.metric("Net Daily PnL", f"₹{today_summary['net_pnl']:,.2f}")
     
-    st.subheader("🔍 AI POST-TRADE POST-MORTEM ANALYSIS")
-    for t in today_trades:
-        post_mortem_text = ai_analyst.generate_trade_post_mortem(t["result"], t["layers"], t["net_pnl"])
-        st.markdown(post_mortem_text)
-else:
-    st.info("ℹ️ No trades recorded today yet. Bot is scanning 15M candles for high-probability setups.")
+    today_trades = trade_logger.get_today_trades()
+    if today_trades:
+        df_today = pd.DataFrame(today_trades)
+        st.dataframe(
+            df_today[["date_time", "symbol", "entry_price", "exit_price", "quantity", "gross_pnl", "brokerage_fee", "net_pnl", "result"]],
+            use_container_width=True
+        )
+        st.subheader("🔍 Today's AI Post-Mortem Analysis")
+        for t in today_trades:
+            st.markdown(ai_analyst.generate_trade_post_mortem(t["result"], t["layers"], t["net_pnl"]))
+    else:
+        st.info("ℹ️ No trades recorded today yet. Bot is scanning 15M candles for high-probability setups.")
 
-# --- NEW SECTION 2: END-OF-DAY AI SELF-DIAGNOSTIC REPORT ---
+with tab2:
+    weekly_summary = trade_logger.get_weekly_summary(days=7)
+    col1, col2, col3, col4 = st.columns(4)
+    col1.metric("1-Week Total Trades", f"{weekly_summary['total_trades']}")
+    col2.metric("1-Week Win Rate", f"{weekly_summary['win_rate']}%")
+    col3.metric("Wins / Losses", f"{weekly_summary['wins']} W / {weekly_summary['losses']} L")
+    col4.metric("1-Week Net PnL", f"₹{weekly_summary['net_pnl']:,.2f}")
+    
+    weekly_trades = trade_logger.get_weekly_trades(days=7)
+    if weekly_trades:
+        df_weekly = pd.DataFrame(weekly_trades)
+        st.dataframe(
+            df_weekly[["date_time", "symbol", "entry_price", "exit_price", "quantity", "gross_pnl", "brokerage_fee", "net_pnl", "result"]],
+            use_container_width=True
+        )
+    else:
+        st.info("ℹ️ No weekly trade history recorded yet. New live signals will accumulate here over the 7-day test period.")
+
+# --- END-OF-DAY AI SELF-DIAGNOSTIC REPORT ---
 st.divider()
+today_trades = trade_logger.get_today_trades()
 eod_report = ai_analyst.generate_eod_bot_diagnostic(today_trades, india_vix, pcr_val)
 st.markdown(f"<div class='diagnostic-box'>{eod_report}</div>", unsafe_allow_html=True)
 
 # Sidebar System Control
 st.sidebar.title("⚙️ System Control")
-st.sidebar.info(f"Symbol: {getattr(config, 'DEFAULT_SYMBOL', '^NSEI')}")
-st.sidebar.info(f"Timeframe: {getattr(config, 'TIMEFRAME', '15m')}")
+st.sidebar.info(f"Symbol: {config.DEFAULT_SYMBOL}")
+st.sidebar.info(f"Timeframe: {config.TIMEFRAME}")
 st.sidebar.metric("NIFTY 50 Spot", f"₹{spot_price:,.2f}")
 st.sidebar.metric("India VIX", f"{india_vix:.2f}", delta=f"{delta_vix_15:+.2f}")
 
-# Manual Demo Trade Simulator Button (For Testing)
-if st.sidebar.button("🧪 Simulate Paper Trade Result"):
-    mock_status = "WIN" if np.random.rand() > 0.3 else "LOSS"
-    mock_entry = 100.0
-    mock_exit = 120.0 if mock_status == "WIN" else 85.0
-    mock_reason = ai_analyst.generate_trade_post_mortem(mock_status, breakdown, (mock_exit - mock_entry) * 25)
-    
-    trade_logger.record_completed_trade(
-        symbol=f"NIFTY {atm_strike} {'CE' if signal_type == 'BUY_CALL' else 'PE'}",
-        strike=f"{atm_strike} {'CE' if signal_type == 'BUY_CALL' else 'PE'}",
-        entry_price=mock_entry,
-        exit_price=mock_exit,
-        qty=25,
-        status=mock_status,
-        win_loss_reason=mock_reason,
-        layer_breakdown=breakdown
-    )
-    st.sidebar.success("Paper Trade Simulated & Logged!")
+if st.sidebar.button("🧹 Clear All Trade History"):
+    trade_logger.clear_all_trades()
+    st.sidebar.success("Trade Logs Reset!")
     st.rerun()
 
 if st.sidebar.button("🔄 Refresh Signal Engine"):
