@@ -1,5 +1,5 @@
 # ================================================================================
-# ANTONY QUANT AI TERMINAL - DASHBOARD (CANDLE WIN CONFIDENCE ENGINE V13.0)
+# ANTONY QUANT AI TERMINAL - DASHBOARD (100% PERSISTENT STATE ENGINE V14.0)
 # ================================================================================
 import streamlit as st
 import pandas as pd
@@ -20,6 +20,7 @@ st.set_page_config(
     layout="centered"
 )
 
+# Telegram Push Alert Function
 def send_telegram_alert(message):
     token = config.TELEGRAM_BOT_TOKEN
     chat_id = config.TELEGRAM_CHAT_ID
@@ -31,8 +32,11 @@ def send_telegram_alert(message):
         except Exception:
             pass
 
+# Load Persistent Disk State Across Browser Refreshes (F5)
+disk_state = trade_logger.load_live_state()
+
 if "last_notified_signal" not in st.session_state:
-    st.session_state.last_notified_signal = "WAIT"
+    st.session_state.last_notified_signal = disk_state.get("last_notified_signal", "WAIT")
 
 def check_market_status(asset_choice):
     if asset_choice == "BITCOIN (BTC/USDT)":
@@ -51,6 +55,7 @@ st.markdown("""
     .signal-card-buy { background-color: #00332c; border: 2px solid #00E676; padding: 22px; border-radius: 15px; text-align: center; color: white; }
     .signal-card-sell { background-color: #311b92; border: 2px solid #E040FB; padding: 22px; border-radius: 15px; text-align: center; color: white; }
     .signal-card-wait { background-color: #1c1c1c; border: 2px solid #757575; padding: 22px; border-radius: 15px; text-align: center; color: white; }
+    .active-trade-box { background-color: #1a2e05; border: 2px dashed #00E676; padding: 18px; border-radius: 12px; margin-top: 15px; color: white; font-size: 15px; line-height: 1.6; }
     .layer-box { background-color: #0d1b2a; border: 1px solid #1e3a8a; padding: 15px; border-radius: 10px; color: #e2e8f0; font-size: 15px; margin-top: 15px; line-height: 1.6; }
     .diagnostic-box { background-color: #1a102f; border: 1px solid #9c27b0; padding: 18px; border-radius: 12px; margin-top: 20px; color: #e1bee7; font-size: 15px; line-height: 1.6; }
     .cheat-box { background-color: #0d47a1; padding: 18px; border-radius: 12px; margin-top: 15px; color: white; font-size: 16px; line-height: 1.6; }
@@ -63,7 +68,7 @@ selected_asset = st.sidebar.selectbox("🎯 Select Active Trading Market:", ["BI
 is_open, market_status_text = check_market_status(selected_asset)
 
 st.markdown(f"<div class='main-title'>🎯 ANTONY QUANT AI: {selected_asset.upper()} CO-PILOT</div>", unsafe_allow_html=True)
-st.markdown("<div class='sub-title'>15M Candle Winning Direction Engine | High Confidence (>70%) Execution</div>", unsafe_allow_html=True)
+st.markdown("<div class='sub-title'>15M Candle Winning Direction Engine | Persistent Active Trade State</div>", unsafe_allow_html=True)
 
 if selected_asset == "BITCOIN (BTC/USDT)":
     st.components.v1.html("""
@@ -113,7 +118,7 @@ else:
     st.components.v1.html("""
     <div style="background-color: #111827; border: 1px solid #374151; padding: 10px; border-radius: 10px; text-align: center; font-family: monospace; color: #F3F4F6;">
         <span id="live-date" style="color: #60A5FA; font-size: 15px; font-weight: bold;"></span> &nbsp;|&nbsp; 
-        <span id="live-clock" style="color: #FBBF24; font-size: 16px; font-weight: bold;"></span><br>
+        <span id="live-clock" style="color: #FBBF24; font-size: 18px; font-weight: bold;"></span><br>
         <span id="candle-timer" style="color: #FFD54F; font-size: 16px; font-weight: bold;">⏳ 15M CANDLE: Loading...</span>
     </div>
     <script>
@@ -196,10 +201,38 @@ if selected_asset == "BITCOIN (BTC/USDT)":
     except (ValueError, TypeError):
         sl_val = 0.0
 
-    if signal_type in ["BUY_CALL", "BUY_PUT"] and st.session_state.last_notified_signal != f"BTC_{signal_type}_{spot_val}":
+    signal_key = f"BTC_{signal_type}_{spot_val:.1f}"
+
+    # Persistent State Save
+    if signal_type in ["BUY_CALL", "BUY_PUT"]:
+        trade_logger.save_live_state({
+            "last_notified_signal": signal_key,
+            "last_signal": {
+                "asset": "BITCOIN",
+                "signal_type": signal_type,
+                "confidence_score": conf_val,
+                "spot_price": spot_val,
+                "tp1": tp1_val,
+                "tp2": tp2_val,
+                "sl": sl_val,
+                "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            },
+            "active_trade": {
+                "status": "ACTIVE",
+                "asset": "BITCOIN",
+                "signal_type": signal_type,
+                "entry_price": spot_val,
+                "target_1": tp1_val,
+                "target_2": tp2_val,
+                "stop_loss": sl_val,
+                "entry_time": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            }
+        })
+
+    if signal_type in ["BUY_CALL", "BUY_PUT"] and st.session_state.last_notified_signal != signal_key:
         alert_msg = f"<b>🚨 BITCOIN 15M CANDLE WIN SIGNAL</b>\n\nDirection: <b>{signal_type}</b>\nWin Confidence: <b>{conf_val:.1f}%</b>\nEntry Zone: <b>${spot_val:,.2f}</b>\nTP1 (+0.25%): <b>${tp1_val:,.2f}</b>\nSL (-0.15%): <b>${sl_val:,.2f}</b>"
         send_telegram_alert(alert_msg)
-        st.session_state.last_notified_signal = f"BTC_{signal_type}_{spot_val}"
+        st.session_state.last_notified_signal = signal_key
 
     st.subheader("📍 LIVE BITCOIN 15M CANDLE WIN PREDICTOR")
     if signal_type == "BUY_CALL":
@@ -283,10 +316,27 @@ else: # NIFTY 50 MODE
         nifty_target=config.UNDERLYING_TARGET_NIFTY
     )
 
-    if signal_type in ["BUY_CALL", "BUY_PUT"] and st.session_state.last_notified_signal != f"NIFTY_{signal_type}_{spot_price}":
+    signal_key = f"NIFTY_{signal_type}_{spot_price:.1f}"
+
+    if signal_type in ["BUY_CALL", "BUY_PUT"]:
+        trade_logger.save_live_state({
+            "last_notified_signal": signal_key,
+            "active_trade": {
+                "status": "ACTIVE",
+                "asset": "NIFTY50",
+                "signal_type": signal_type,
+                "strike": atm_strike,
+                "entry_price": spot_price,
+                "target_1": spot_price + config.TARGET_1_POINTS if signal_type == "BUY_CALL" else spot_price - config.TARGET_1_POINTS,
+                "stop_loss": spot_price - config.STOP_LOSS_POINTS if signal_type == "BUY_CALL" else spot_price + config.STOP_LOSS_POINTS,
+                "entry_time": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            }
+        })
+
+    if signal_type in ["BUY_CALL", "BUY_PUT"] and st.session_state.last_notified_signal != signal_key:
         alert_msg = f"<b>🚨 NIFTY 50 CANDLE WIN SIGNAL</b>\n\nDirection: <b>{signal_type}</b>\nStrike: <b>NIFTY {atm_strike}</b>\nSpot: <b>₹{spot_price:,.2f}</b>\nSL: <b>-8 pts</b>\nTP1: <b>+12 pts</b>"
         send_telegram_alert(alert_msg)
-        st.session_state.last_notified_signal = f"NIFTY_{signal_type}_{spot_price}"
+        st.session_state.last_notified_signal = signal_key
 
     st.subheader("📍 LIVE NIFTY 50 15M CANDLE WIN PREDICTOR")
     if signal_type == "BUY_CALL":
@@ -327,6 +377,27 @@ else: # NIFTY 50 MODE
             • <b>Candle Expiration:</b> Strict Exit @ 15M Candle Close
         </div>
         """, unsafe_allow_html=True)
+
+# DISPLAY ACTIVE TRADE PERSISTENCE BANNER (Survives Browser Refresh F5)
+current_active_trade = trade_logger.load_live_state().get("active_trade", {})
+if current_active_trade.get("status") == "ACTIVE":
+    act_asset = current_active_trade.get("asset", selected_asset)
+    act_dir = current_active_trade.get("signal_type", "BUY_CALL")
+    act_entry = current_active_trade.get("entry_price", 0.0)
+    act_tp1 = current_active_trade.get("target_1", 0.0)
+    act_sl = current_active_trade.get("stop_loss", 0.0)
+    act_curr = "$" if act_asset == "BITCOIN" else "₹"
+    
+    st.markdown(f"""
+    <div class='active-trade-box'>
+        <b>⚡ LIVE ACTIVE POSITION RUNNING (PERSISTENT):</b><br>
+        • <b>Active Market</b>   : {act_asset} ({act_dir})<br>
+        • <b>Entry Price</b>     : {act_curr}{act_entry:,.2f}<br>
+        • <b>Target 1 (TP1)</b>   : {act_curr}{act_tp1:,.2f}<br>
+        • <b>Stop Loss (SL)</b>   : {act_curr}{act_sl:,.2f}<br>
+        • <b>Trade Status</b>    : 🟢 ACTIVE RUNNING (State Restored on F5 Refresh)
+    </div>
+    """, unsafe_allow_html=True)
 
 if breakdown:
     st.markdown(f"""

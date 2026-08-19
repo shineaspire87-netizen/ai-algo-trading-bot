@@ -1,11 +1,12 @@
 # ================================================================================
-# ANTONY QUANT AI TERMINAL - 7-DAY PERMANENT WEEKLY TRADE LOGGER
+# ANTONY QUANT AI TERMINAL - 7-DAY PERMANENT WEEKLY TRADE LOGGER & STATE ENGINE
 # ================================================================================
 import json
 import os
 from datetime import datetime, timezone, timedelta
 
 TRADES_FILE = "trades.json"
+STATE_FILE = "live_state.json"
 
 def get_ist_now():
     utc_now = datetime.now(timezone.utc)
@@ -27,6 +28,25 @@ def save_trades(trades):
 def clear_all_trades():
     """Clears trade logs only when manually requested."""
     save_trades([])
+    save_live_state({"last_signal": {}, "active_trade": {"status": "NO_POSITION"}})
+
+def load_live_state():
+    if not os.path.exists(STATE_FILE):
+        return {}
+    try:
+        with open(STATE_FILE, "r") as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+def save_live_state(state_data):
+    try:
+        existing = load_live_state()
+        existing.update(state_data)
+        with open(STATE_FILE, "w") as f:
+            json.dump(existing, f, indent=4)
+    except Exception as e:
+        print(f"Error saving live state: {e}")
 
 def calculate_brokerage_fees(qty, entry_price, exit_price):
     flat_brokerage = 40.0
