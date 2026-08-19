@@ -1,0 +1,83 @@
+# ================================================================================
+# ANTONY QUANT AI TERMINAL - TRADE LOGGER & BROKERAGE CALCULATOR
+# ================================================================================
+import json
+import os
+from datetime import datetime, timezone, timedelta
+
+TRADES_FILE = "trades.json"
+
+def get_ist_now():
+    utc_now = datetime.now(timezone.utc)
+    return utc_now + timedelta(hours=5, minutes=30)
+
+def load_trades():
+    if not os.path.exists(TRADES_FILE):
+        return []
+    try:
+        with open(TRADES_FILE, "r") as f:
+            return json.load(f)
+    except Exception:
+        return []
+
+def save_trades(trades):
+    with open(TRADES_FILE, "w") as f:
+        json.dump(trades, f, indent=4)
+
+def calculate_brokerage_fees(qty, entry_price, exit_price):
+    """Calculates Indian Brokerage (Zerodha/Dhan) = Flat ₹20 Buy + ₹20 Sell + STT/GST (~₹45 Total)."""
+    flat_brokerage = 40.0
+    turnover = (entry_price + exit_price) * qty
+    stt_and_taxes = turnover * 0.0005  # Approx STT/GST/Exchange turnover charges
+    return round(flat_brokerage + stt_and_taxes, 2)
+
+def record_completed_trade(symbol, strike, entry_price, exit_price, qty, status, win_loss_reason, layer_breakdown):
+    trades = load_trades()
+    ist_now = get_ist_now()
+    
+    gross_pnl = round((exit_price - entry_price) * qty if status == "WIN" else (exit_price - entry_price) * qty, 2)
+    brokerage = calculate_brokerage_fees(qty, entry_price, exit_price)
+    net_pnl = round(gross_pnl - brokerage, 2)
+    
+    trade_record = {
+        "trade_id": len(trades) + 1,
+        "date_time": ist_now.strftime("%Y-%m-%d %I:%M:%S %p IST"),
+        "date": ist_now.strftime("%Y-%m-%d"),
+        "symbol": symbol,
+        "strike": strike,
+        "entry_price": entry_price,
+        "exit_price": exit_price,
+        "quantity": qty,
+        "gross_pnl": gross_pnl,
+        "brokerage_fee": brokerage,
+        "net_pnl": net_pnl,
+        "result": "WIN" if net_pnl > 0 else "LOSS",
+        "post_mortem": win_loss_reason,
+        "layers": layer_breakdown
+    }
+    
+    trades.append(trade_record)
+    save_trades(trades)
+    return trade_record
+
+def get_today_trades():
+    trades = load_trades()
+    today_str = get_ist_now().strftime("%Y-%m-%d")
+    return [t for t in trades if t.get("date") == today_str]
+
+def get_today_summary():
+    today_trades = get_today_trades()
+    total_trades = len(today_trades)
+    wins = len([t for t in today_trades if t["result"] == "WIN"])
+    losses = len([t for t in today_trades if t["result"] == "LOSS"])
+    net_pnl = sum([t["net_pnl"] for t in today_trades])
+    win_rate = (wins / total_trades * 100) if total_trades > 0 else 0.0
+    
+    return {
+        "total_trades": total_trades,
+        "wins": wins,
+        "losses": losses,
+        "win_rate": round(win_rate, 1),
+        "net_pnl": round(net_pnl, 2),
+        "trades_remaining": max(0, 3 - total_trades)
+    }

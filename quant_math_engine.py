@@ -1,189 +1,138 @@
-"""
-ANTONY QUANT AI ALGO TERMINAL - QUANT MATH ENGINE V3.0
-Includes:
-1. Multi-Level Order-Flow Imbalance (MLOFI) with Exponential Decay (w_i = 0.5^(i-1))
-2. VPIN (Volume-Synchronized Probability of Informed Trading) via Bulk Volume Classification
-3. Corwin-Schultz Bid-Ask Spread Estimator (S_t)
-4. Garman-Klass Volatility (sigma_GK) & BBWP Squeeze Filter
-"""
-
+# ================================================================================
+# ANTONY QUANT AI TERMINAL - 5-LAYER INSTITUTIONAL MATH ENGINE
+# ================================================================================
 import numpy as np
-import pandas as pd
-from scipy.stats import norm
 
-def compute_decay_weighted_mlofi(bids: list, asks: list, levels: int = 10) -> float:
+def evaluate_pcr_layer(pcr_oi, delta_pcr_15):
     """
-    Computes Decay-Weighted Multi-Level Order Flow Imbalance (MLOFI)
-    OFI_decay = sum(0.5^(i-1) * ofi_i) / sum(0.5^(i-1))
+    Evaluates PCR Level & 15M Momentum.
     """
-    try:
-        if not bids or not asks:
-            return 0.0
-            
-        n_levels = min(len(bids), len(asks), levels)
-        if n_levels == 0:
-            return 0.0
-            
-        weights = [0.5 ** (i) for i in range(n_levels)]
-        ofi_levels = []
-        
-        for i in range(n_levels):
-            bid_vol = float(bids[i][1]) if len(bids[i]) > 1 else 0.0
-            ask_vol = float(asks[i][1]) if len(asks[i]) > 1 else 0.0
-            total_vol = bid_vol + ask_vol
-            
-            if total_vol > 0:
-                imbalance = (bid_vol - ask_vol) / total_vol
-            else:
-                imbalance = 0.0
-            ofi_levels.append(imbalance)
-            
-        weighted_sum = sum(w * ofi for w, ofi in zip(weights, ofi_levels))
-        total_weight = sum(weights)
-        
-        return weighted_sum / total_weight if total_weight > 0 else 0.0
-    except Exception:
-        return 0.0
+    if 0.90 <= pcr_oi <= 1.10:
+        return "NEUTRAL_TRAP", False, False
+    
+    call_pcr_confirmed = (pcr_oi >= 1.10) and (delta_pcr_15 > 0)
+    put_pcr_confirmed = (pcr_oi <= 0.90) and (delta_pcr_15 < 0)
+    
+    if call_pcr_confirmed:
+        return "BULLISH_CONFIRMED", True, False
+    elif put_pcr_confirmed:
+        return "BEARISH_CONFIRMED", False, True
+    else:
+        return "PCR_CONTRADICTION", False, False
 
 
-def compute_vpin_bvc(df: pd.DataFrame, bucket_vol: float = 10.0, window: int = 20) -> float:
+def evaluate_vix_layer(vix, delta_vix_15):
     """
-    Computes VPIN (Volume-Synchronized Probability of Informed Trading) 
-    using Bulk Volume Classification (BVC) with Gaussian CDF
+    Evaluates India VIX Regime and Volatility Momentum.
     """
-    try:
-        # Standardize column names (lowercase or capitalized)
-        df_cols = {col.lower(): col for col in df.columns}
-        c_col = df_cols.get('close', 'Close')
-        v_col = df_cols.get('volume', 'Volume')
-        
-        if len(df) < window or c_col not in df.columns or v_col not in df.columns:
-            return 0.15 # Baseline normal flow
-            
-        prices = df[c_col].values
-        volumes = df[v_col].values
-        
-        price_diffs = np.diff(prices)
-        if len(price_diffs) == 0:
-            return 0.15
-            
-        sigma_dp = np.std(price_diffs) if np.std(price_diffs) > 0 else 1e-5
-        
-        buy_vols = []
-        sell_vols = []
-        
-        for i in range(1, len(prices)):
-            dp = prices[i] - prices[i-1]
-            z_score = dp / sigma_dp
-            buy_frac = norm.cdf(z_score)
-            
-            v_b = volumes[i] * buy_frac
-            v_s = volumes[i] * (1.0 - buy_frac)
-            
-            buy_vols.append(v_b)
-            sell_vols.append(v_s)
-            
-        buy_arr = np.array(buy_vols[-window:])
-        sell_arr = np.array(sell_vols[-window:])
-        
-        vpin = np.sum(np.abs(buy_arr - sell_arr)) / (np.sum(buy_arr + sell_arr) + 1e-5)
-        return float(np.clip(vpin, 0.0, 1.0))
-    except Exception:
-        return 0.15
+    if vix < 12.0:
+        return "LOW_VIX_BLOCK", 0.0, False
+    elif 12.0 <= vix <= 18.0:
+        regime = "OPTIMAL"
+        pos_size = 1.0
+    else: # VIX > 18
+        regime = "HIGH_VOLATILITY"
+        pos_size = 0.50
+    
+    vol_expansion = (delta_vix_15 >= 0)
+    return regime, pos_size, vol_expansion
 
 
-def compute_corwin_schultz_spread(df: pd.DataFrame) -> float:
+def evaluate_oi_runway(nifty_price, nearest_wall_strike, nifty_target, direction):
     """
-    Computes Corwin-Schultz Effective Bid-Ask Spread Estimator (S_t) from High-Low Ranges
+    Calculates OI Runway Distance and Target Coverage Ratio (R >= 2.0).
     """
-    try:
-        if len(df) < 2:
-            return 0.0005 # 0.05% baseline spread
-            
-        df_cols = {col.lower(): col for col in df.columns}
-        h_col = df_cols.get('high', 'High')
-        l_col = df_cols.get('low', 'Low')
+    if direction == "CALL":
+        runway = nearest_wall_strike - nifty_price
+    else: # PUT
+        runway = nifty_price - nearest_wall_strike
         
-        h1, l1 = df[h_col].iloc[-2], df[l_col].iloc[-2]
-        h2, l2 = df[h_col].iloc[-1], df[l_col].iloc[-1]
-        
-        h2_combined = max(h1, h2)
-        l2_combined = min(l1, l2)
-        
-        if l1 <= 0 or l2 <= 0 or l2_combined <= 0:
-            return 0.0005
-            
-        beta = (np.log(h1 / l1))**2 + (np.log(h2 / l2))**2
-        gamma = (np.log(h2_combined / l2_combined))**2
-        
-        sqrt_2beta = np.sqrt(2 * beta)
-        sqrt_beta = np.sqrt(beta)
-        denom = 3.0 - 2.0 * np.sqrt(2)
-        
-        alpha = (sqrt_2beta - sqrt_beta) / denom - np.sqrt(gamma / denom)
-        
-        if np.isnan(alpha) or alpha <= 0:
-            return 0.0001
-            
-        spread = (2.0 * (np.exp(alpha) - 1.0)) / (1.0 + np.exp(alpha))
-        return float(max(spread, 0.0))
-    except Exception:
-        return 0.0005
+    if runway < 75.0:
+        return runway, 0.0, "IMMEDIATE_WALL_BLOCK"
+    
+    runway_ratio = runway / nifty_target if nifty_target > 0 else 0.0
+    
+    if runway >= 100.0 and runway_ratio >= 2.0:
+        return runway, runway_ratio, "CLEAR_RUNWAY"
+    elif runway >= 75.0 and runway_ratio >= 1.5:
+        return runway, runway_ratio, "WEAK_RUNWAY"
+    else:
+        return runway, runway_ratio, "RUNWAY_TOO_TIGHT"
 
 
-def compute_garman_klass_volatility(df: pd.DataFrame, window: int = 14) -> float:
+def master_institutional_decision_engine(
+    nifty_direction,      # "UP" or "DOWN"
+    heavyweight_k,         # K >= 4
+    heavyweight_a,         # A >= 0.75
+    india_vix,            # e.g., 14.2
+    delta_vix_15,          # e.g., +0.15
+    pcr_oi,               # e.g., 1.18
+    delta_pcr_15,          # e.g., +0.04
+    nifty_spot,            # e.g., 24154.90
+    nearest_ce_wall,       # e.g., 24300
+    nearest_pe_wall,       # e.g., 24000
+    nifty_target=30.0
+):
     """
-    Computes Garman-Klass Range-Based Volatility Estimator (8x efficiency)
-    sigma^2_GK = 0.5 * (ln(H/L))^2 - (2*ln(2) - 1) * (ln(C/O))^2
+    Executes the 5-Layer Institutional Decision Hierarchy.
+    Returns: Final Decision ("BUY_CALL", "BUY_PUT", "WAIT"), Reason Code, Position Multiplier, Layer Breakdown Dict
     """
-    try:
-        if len(df) < window:
-            return 0.01
-            
-        df_cols = {col.lower(): col for col in df.columns}
-        h_col = df_cols.get('high', 'High')
-        l_col = df_cols.get('low', 'Low')
-        c_col = df_cols.get('close', 'Close')
-        o_col = df_cols.get('open', 'Open')
-        
-        log_hl = np.log(df[h_col] / df[l_col])**2
-        log_co = np.log(df[c_col] / df[o_col])**2
-        
-        gk_var = 0.5 * log_hl - (2.0 * np.log(2) - 1.0) * log_co
-        rolling_gk = np.sqrt(np.maximum(gk_var.rolling(window).mean(), 1e-8))
-        
-        return float(rolling_gk.iloc[-1])
-    except Exception:
-        return 0.01
+    breakdown = {
+        "l1_heavyweights": f"K={heavyweight_k}/5 (A={heavyweight_a:.2f})",
+        "l2_vix": f"VIX={india_vix:.1f} (Δ={delta_vix_15:+.2f})",
+        "l3_pcr": f"PCR={pcr_oi:.2f} (Δ={delta_pcr_15:+.2f})",
+        "l4_runway": "Pending",
+        "l5_status": "WAIT"
+    }
 
+    # LAYER 1: HEAVYWEIGHT ALIGNMENT
+    if heavyweight_k < 4 or heavyweight_a < 0.75:
+        breakdown["l5_status"] = "REJECT: Heavyweights disagree (K < 4)"
+        return "WAIT", breakdown["l5_status"], 0.0, breakdown
+    
+    # LAYER 2: VIX REGIME & MOMENTUM
+    vix_regime, pos_multiplier, vix_expanding = evaluate_vix_layer(india_vix, delta_vix_15)
+    if vix_regime == "LOW_VIX_BLOCK":
+        breakdown["l5_status"] = "REJECT: VIX < 12 (Premium Decay Trap)"
+        return "WAIT", breakdown["l5_status"], 0.0, breakdown
+    if not vix_expanding:
+        breakdown["l5_status"] = "REJECT: Falling VIX (Weak Premium Expansion)"
+        return "WAIT", breakdown["l5_status"], 0.0, breakdown
+    
+    # LAYER 3 & 4: PCR & PCR MOMENTUM
+    pcr_status, call_pcr_ok, put_pcr_ok = evaluate_pcr_layer(pcr_oi, delta_pcr_15)
+    
+    if nifty_direction == "UP":
+        if not call_pcr_ok:
+            breakdown["l5_status"] = f"REJECT: CALL contradicted by PCR ({pcr_status})"
+            return "WAIT", breakdown["l5_status"], 0.0, breakdown
+        
+        # LAYER 5: OI RUNWAY (CALL)
+        runway, ratio, runway_status = evaluate_oi_runway(nifty_spot, nearest_ce_wall, nifty_target, "CALL")
+        breakdown["l4_runway"] = f"CE Wall: {nearest_ce_wall} ({runway:.0f} pts, R={ratio:.1f}x)"
+        
+        if runway_status != "CLEAR_RUNWAY":
+            breakdown["l5_status"] = f"REJECT: CE Wall too close ({runway:.0f} pts)"
+            return "WAIT", breakdown["l5_status"], 0.0, breakdown
+        
+        breakdown["l5_status"] = f"CONFIRMED: Clear Runway ({runway:.0f} pts, R={ratio:.1f}x)"
+        return "BUY_CALL", breakdown["l5_status"], pos_multiplier, breakdown
 
-def compute_bbwp_squeeze(df: pd.DataFrame, n: int = 20, k: float = 2.0, lookback: int = 252) -> float:
-    """
-    Computes Bollinger Band Width Percentile (BBWP) over macro lookback L=252.
-    Returns percentile (0.0 to 100.0). BBWP < 20.0 indicates severe VCP squeeze!
-    """
-    try:
-        df_cols = {col.lower(): col for col in df.columns}
-        c_col = df_cols.get('close', 'Close')
+    elif nifty_direction == "DOWN":
+        if not put_pcr_ok:
+            breakdown["l5_status"] = f"REJECT: PUT contradicted by PCR ({pcr_status})"
+            return "WAIT", breakdown["l5_status"], 0.0, breakdown
         
-        if len(df) < n or c_col not in df.columns:
-            return 50.0
-            
-        sma = df[c_col].rolling(n).mean()
-        std = df[c_col].rolling(n).std()
+        # LAYER 5: OI RUNWAY (PUT)
+        runway, ratio, runway_status = evaluate_oi_runway(nifty_spot, nearest_pe_wall, nifty_target, "PUT")
+        breakdown["l4_runway"] = f"PE Wall: {nearest_pe_wall} ({runway:.0f} pts, R={ratio:.1f}x)"
         
-        ub = sma + k * std
-        lb = sma - k * std
+        if runway_status != "CLEAR_RUNWAY":
+            breakdown["l5_status"] = f"REJECT: PE Wall too close ({runway:.0f} pts)"
+            return "WAIT", breakdown["l5_status"], 0.0, breakdown
         
-        bbw = (ub - lb) / (sma + 1e-8)
-        
-        curr_bbw = bbw.iloc[-1]
-        hist_bbw = bbw.tail(lookback).values
-        
-        if len(hist_bbw) == 0:
-            return 50.0
-            
-        percentile = (np.sum(hist_bbw < curr_bbw) / len(hist_bbw)) * 100.0
-        return float(percentile)
-    except Exception:
-        return 50.0
+        breakdown["l5_status"] = f"CONFIRMED: Clear Runway ({runway:.0f} pts, R={ratio:.1f}x)"
+        return "BUY_PUT", breakdown["l5_status"], pos_multiplier, breakdown
+
+    breakdown["l5_status"] = "REJECT: No Directional Momentum"
+    return "WAIT", breakdown["l5_status"], 0.0, breakdown

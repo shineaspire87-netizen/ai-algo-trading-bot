@@ -1,46 +1,32 @@
 # ================================================================================
-# ANTONY QUANT AI TERMINAL - CONFIGURATION ENGINE (NIFTY 50 EDITION)
+# ANTONY QUANT AI TERMINAL - CONFIGURATION ENGINE (5-LAYER INSTITUTIONAL EDITION)
 # ================================================================================
 import os
 
 # --- CORE TRADING MODE ---
-PRIMARY_MODE = "NIFTY50_OPTIONS"  # Primary focus mode
+PRIMARY_MODE = "NIFTY50_OPTIONS"
 DEFAULT_SYMBOL = "^NSEI"           # Yahoo Finance Ticker for NIFTY 50
-ALT_SYMBOL = "^NSEBANK"            # Bank Nifty Ticker
-TIMEFRAME = "15m"                  # 15-Minute Candle (Pressure-Free Execution)
-SECONDARY_TIMEFRAME = "5m"         # 5-Minute Candle (Micro scalp option)
+VIX_SYMBOL = "^INDIAVIX"           # India VIX Ticker
+TIMEFRAME = "15m"                  # 15-Minute Candle Timeframe
 
 # --- NIFTY OPTIONS RISK PARAMETERS (RUPEES ₹) ---
-NIFTY_LOT_SIZE = 25               # Shares per 1 NIFTY Lot (or 50/75 as per index)
-LOT_SIZE = 25
+NIFTY_LOT_SIZE = 25               # Shares per 1 NIFTY Lot
 DEFAULT_LOTS = 1                   # Initial Trading Size (1 Lot)
 
-# Option Premium Point Targets (Example: ₹15 SL, ₹20 TP1, ₹45 TP2)
-STOP_LOSS_POINTS = 15.0            # Strict Risk per Lot (15 points = ₹375)
-TARGET_1_POINTS = 20.0             # Quick Target (20 points = ₹500)
-TARGET_2_POINTS = 45.0             # Trend Target (45 points = ₹1,125)
+STOP_LOSS_POINTS = 15.0            # Strict Risk per Lot (-15 pts = ₹375)
+TARGET_1_POINTS = 20.0             # Quick Target (+20 pts = ₹500)
+TARGET_2_POINTS = 45.0             # Trend Target (+45 pts = ₹1,125)
+UNDERLYING_TARGET_NIFTY = 30.0     # Default NIFTY spot move target in points
 
-# --- RISK CONTROL LIMITS ---
-MAX_DAILY_TRADES = 3               # Maximum trades allowed per day
-CONSECUTIVE_LOSS_LOCK = 2          # Lock terminal after 2 consecutive losses
-SAFE_MID_CANDLE_START = 60         # Wait 60s after 15M candle opens
-SAFE_MID_CANDLE_END = 840          # Stop entries 60s before 15M candle closes
+# --- 5-LAYER INSTITUTIONAL THRESHOLDS ---
+MIN_HEAVYWEIGHT_K = 4              # At least 4 out of 5 Heavyweights aligned
+MIN_HEAVYWEIGHT_A = 0.75           # Alignment score threshold
+MIN_VIX_BUY_THRESHOLD = 12.0       # Disable option buying if VIX < 12
+HIGH_VIX_THRESHOLD = 18.0          # Reduce size to 50% if VIX > 18
+PCR_BULLISH_THRESHOLD = 1.10       # PCR >= 1.10 + rising PCR for CALL
+PCR_BEARISH_THRESHOLD = 0.90       # PCR <= 0.90 + falling PCR for PUT
+MIN_OI_RUNWAY_POINTS = 100.0       # Minimum 100 points runway to nearest OI wall
+MIN_TARGET_COVERAGE_RATIO = 2.0    # Runway / Target >= 2.0
 
-# --- SEBI QUANTITY FREEZE LIMITS ---
-SEBI_FREEZE_LIMITS = {
-    "NIFTY50": 1755,    # 27 Lots
-    "BANKNIFTY": 600,   # 20 Lots
-    "DEFAULT": 1800
-}
-
-# --- BROKER & INTEGRATION ENGINE PARAMETERS ---
-ACTIVE_BROKER = "ZERODHA"
-PAPER_TRADING_MODE = True
-
-# --- TELEGRAM & CLOUD SYNC CONFIGURATION ---
-GOOGLE_SHEET_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbyavkzC8zCDG0gR274a3EiusQ1ji72mMi6_Ot5dT0L0r0uXfxDHfEnF87NVniJXyybg/exec"
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "8939955418:AAFXd58Nwr84uIGeqrvIqvntveWwHjqmenE")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "1072750499")
-
-# --- GOOGLE AI STUDIO GEMINI API ---
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "AIzaSyB2qbWqyI6gxy8mNty3ZmVPCIols5l8mhM")

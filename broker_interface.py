@@ -205,3 +205,5 @@ def execute_multi_coin_live_order(symbol: str, side: str, usdt_amount: float = 5
     except Exception as e:
         print(f"Multi-Coin Order Error ({symbol}): {e}")
         return None
+
+execute_binance_live_order = execute_multi_coin_live_order
