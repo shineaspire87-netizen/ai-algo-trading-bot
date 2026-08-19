@@ -24,8 +24,8 @@ st.set_page_config(
 
 # Telegram Push Alert Function
 def send_telegram_alert(message):
-    token = config.TELEGRAM_BOT_TOKEN
-    chat_id = config.TELEGRAM_CHAT_ID
+    token = getattr(config, "TELEGRAM_BOT_TOKEN", "")
+    chat_id = getattr(config, "TELEGRAM_CHAT_ID", "")
     if token and chat_id:
         url = f"https://api.telegram.org/bot{token}/sendMessage"
         payload = {"chat_id": chat_id, "text": message, "parse_mode": "HTML"}
@@ -85,7 +85,9 @@ else:
     st.markdown(f"<div class='market-badge-closed'>{market_status_text} — LAST CLOSE DATA SHOWN</div>", unsafe_allow_html=True)
 
 # Fetch NIFTY Live Data & VIX
-df = data_feed.fetch_nifty_live_data(config.DEFAULT_SYMBOL, config.TIMEFRAME)
+default_sym = getattr(config, "DEFAULT_SYMBOL", "^NSEI")
+tf_val = getattr(config, "TIMEFRAME", "15m")
+df = data_feed.fetch_nifty_live_data(default_sym, tf_val)
 india_vix, delta_vix_15 = data_feed.fetch_india_vix()
 
 if df.empty or len(df) < 5:
@@ -120,7 +122,7 @@ signal_type, reason_code, pos_multiplier, breakdown = quant_math_engine.master_i
     nifty_spot=spot_price,
     nearest_ce_wall=ce_wall,
     nearest_pe_wall=pe_wall,
-    nifty_target=config.UNDERLYING_TARGET_NIFTY
+    nifty_target=getattr(config, "UNDERLYING_TARGET_NIFTY", 30.0)
 )
 
 # Get Today's Summary
@@ -218,8 +220,8 @@ st.markdown(f"<div class='diagnostic-box'>{eod_report}</div>", unsafe_allow_html
 
 # Sidebar System Control
 st.sidebar.title("⚙️ System Control")
-st.sidebar.info(f"Symbol: {config.DEFAULT_SYMBOL}")
-st.sidebar.info(f"Timeframe: {config.TIMEFRAME}")
+st.sidebar.info(f"Symbol: {getattr(config, 'DEFAULT_SYMBOL', '^NSEI')}")
+st.sidebar.info(f"Timeframe: {getattr(config, 'TIMEFRAME', '15m')}")
 st.sidebar.metric("NIFTY 50 Spot", f"₹{spot_price:,.2f}")
 st.sidebar.metric("India VIX", f"{india_vix:.2f}", delta=f"{delta_vix_15:+.2f}")
 
