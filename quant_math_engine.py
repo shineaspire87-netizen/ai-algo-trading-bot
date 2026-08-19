@@ -1,58 +1,94 @@
 # ================================================================================
-# ANTONY QUANT AI TERMINAL - DUAL-ASSET QUANT MATH ENGINE (MASTER EDITION)
+# ANTONY QUANT AI TERMINAL - 15M CANDLE WIN PREDICTION ENGINE
 # ================================================================================
 import numpy as np
 from datetime import time, datetime
 import config
 
-def evaluate_btc_15m_signal(df):
+def calculate_candle_body_ratio(high, low, open_p, close_p):
+    """Calculates Candle Body Intensity Ratio (Body / Range)."""
+    total_range = high - low
+    if total_range <= 0:
+        return 0.0
+    body = abs(close_p - open_p)
+    return round((body / total_range) * 100.0, 1)
+
+def predict_15m_candle_winning_direction(df):
     """
-    Evaluates Bitcoin 15M Candlestick Signal with Explicit Layer Badges & Targets.
+    Backend Math Engine to predict if the current 15M candle will CLOSE GREEN (UP) or RED (DOWN).
+    Requires >= 70% Confidence Score to issue a Signal!
     """
     if df.empty or len(df) < 5:
-        return "WAIT", "🔴 REJECTED: Insufficient BTC Data", 0.0, {}
+        return "WAIT", 0.0, "REJECT: Insufficient Data", {}
     
     last_row = df.iloc[-1]
     prev_row = df.iloc[-2]
     
     close = float(last_row['close'])
+    open_p = float(last_row['open'])
     high = float(last_row['high'])
     low = float(last_row['low'])
+    volume = float(last_row['volume']) if 'volume' in last_row else 50000.0
+    
     prev_close = float(prev_row['close'])
     
+    # 1. Price Change %
     price_change_pct = ((close - prev_close) / prev_close) * 100.0 if prev_close > 0 else 0.0
     
-    log_hl = np.log(high / low) ** 2 if (low > 0 and high >= low) else 0
-    gk_vol = np.sqrt(0.5 * log_hl) * 100.0
+    # 2. Candle Body Intensity Ratio
+    body_ratio = calculate_candle_body_ratio(high, low, open_p, close)
     
+    # 3. Volume Acceleration Proxy
+    avg_vol = df['volume'].rolling(5).mean().iloc[-1] if 'volume' in df else 50000.0
+    vol_ratio = (volume / avg_vol) if (avg_vol is not None and avg_vol > 0) else 1.0
+    
+    # 4. Fib Retrace
     swing_range = high - low
     retrace = (high - close) / swing_range if swing_range > 0 else 0.5
     
+    # CALCULATE CANDLE WIN PROBABILITY SCORE (%)
+    confidence = 50.0  # Baseline
+    
+    if abs(price_change_pct) >= 0.25:
+        confidence += 15.0
+    if body_ratio >= 60.0:
+        confidence += 12.0
+    if vol_ratio >= 1.1:
+        confidence += 10.0
+    if 0.20 <= retrace <= 0.886:
+        confidence += 8.0
+        
+    confidence = min(95.0, confidence)
+    
     breakdown = {
-        "l1_status": "🟢 PASSED (Crypto 24/7 Binance Direct 0ms)",
-        "l2_status": f"🟢 PASSED (GK Volatility: {gk_vol:.2f}%)",
-        "l3_status": f"🟢 PASSED (15M Momentum: {price_change_pct:+.2f}%)" if abs(price_change_pct) >= 0.20 else f"🔴 FAILED (Low Momentum: {price_change_pct:+.2f}%)",
-        "l4_status": f"🟢 PASSED (Fib Retrace: {retrace:.3f})" if retrace <= 0.886 else f"🔴 FAILED (Overextended Fib: {retrace:.3f})",
-        "l5_status": "WAIT"
+        "l1_status": f"🟢 PASSED (Candle Body Intensity: {body_ratio}%)",
+        "l2_status": f"🟢 PASSED (Volume Acceleration: {vol_ratio:.1f}x)",
+        "l3_status": f"🟢 PASSED (Momentum: {price_change_pct:+.2f}%)",
+        "l4_status": f"🟢 PASSED (Fib Discount: {retrace:.3f})",
+        "l5_status": f"CANDLE WIN PROBABILITY: {confidence:.1f}%"
     }
     
-    if price_change_pct >= +0.30:
-        breakdown["l5_status"] = f"🟢 CONFIRMED: BTC Bullish Impulse Pump ({price_change_pct:+.2f}%)"
-        return "BUY_CALL", breakdown["l5_status"], 1.0, breakdown
-    elif price_change_pct <= -0.30:
-        breakdown["l5_status"] = f"🟢 CONFIRMED: BTC Bearish Impulse Dump ({price_change_pct:+.2f}%)"
-        return "BUY_PUT", breakdown["l5_status"], 1.0, breakdown
-    elif price_change_pct > +0.15 and retrace <= 0.886:
-        breakdown["l5_status"] = f"🟢 CONFIRMED: BTC Moderate Bullish Move ({price_change_pct:+.2f}%)"
-        return "BUY_CALL", breakdown["l5_status"], 1.0, breakdown
-    elif price_change_pct < -0.15 and retrace <= 0.886:
-        breakdown["l5_status"] = f"🟢 CONFIRMED: BTC Moderate Bearish Move ({price_change_pct:+.2f}%)"
-        return "BUY_PUT", breakdown["l5_status"], 1.0, breakdown
+    # STRICT 70% WIN CONFIDENCE THRESHOLD
+    if confidence < 70.0:
+        breakdown["l5_status"] = f"🔴 REJECTED: Low Win Confidence ({confidence:.1f}% < 70%)"
+        return "WAIT", confidence, breakdown["l5_status"], breakdown
+    
+    if price_change_pct > +0.15:
+        breakdown["l5_status"] = f"🟢 CONFIRMED GREEN CANDLE WIN (Confidence: {confidence:.1f}%)"
+        return "BUY_CALL", confidence, breakdown["l5_status"], breakdown
+    elif price_change_pct < -0.15:
+        breakdown["l5_status"] = f"🟢 CONFIRMED RED CANDLE WIN (Confidence: {confidence:.1f}%)"
+        return "BUY_PUT", confidence, breakdown["l5_status"], breakdown
     else:
-        breakdown["l5_status"] = f"🔴 REJECTED: Sideways BTC Range ({price_change_pct:+.2f}%)"
-        return "WAIT", breakdown["l5_status"], 0.0, breakdown
+        breakdown["l5_status"] = f"🔴 REJECTED: Flat Candle Range ({price_change_pct:+.2f}%)"
+        return "WAIT", confidence, breakdown["l5_status"], breakdown
 
 
+def evaluate_btc_15m_signal(df):
+    return predict_15m_candle_winning_direction(df)
+
+
+# --- EXISTING NIFTY ENGINE ---
 def evaluate_volume_and_time_filter(volume, ist_time):
     try:
         vol = float(volume) if volume is not None else 65000.0

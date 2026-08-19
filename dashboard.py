@@ -1,5 +1,5 @@
 # ================================================================================
-# ANTONY QUANT AI TERMINAL - DASHBOARD (LIVE 15M CANDLE TIMER V12.0)
+# ANTONY QUANT AI TERMINAL - DASHBOARD (CANDLE WIN CONFIDENCE ENGINE V13.0)
 # ================================================================================
 import streamlit as st
 import pandas as pd
@@ -14,14 +14,12 @@ import quant_math_engine
 import trade_logger
 import ai_analyst
 
-# Page Setup
 st.set_page_config(
     page_title="ANTONY Quant AI Terminal",
     page_icon="🎯",
     layout="centered"
 )
 
-# Telegram Push Alert Function
 def send_telegram_alert(message):
     token = config.TELEGRAM_BOT_TOKEN
     chat_id = config.TELEGRAM_CHAT_ID
@@ -33,7 +31,6 @@ def send_telegram_alert(message):
         except Exception:
             pass
 
-# Session State Persistence
 if "last_notified_signal" not in st.session_state:
     st.session_state.last_notified_signal = "WAIT"
 
@@ -45,7 +42,6 @@ def check_market_status(asset_choice):
         return False, "🔴 NSE CLOSED (WEEKEND)"
     return (time(9, 15) <= ist_now.time() <= time(15, 30)), "🟢 NSE MARKET LIVE (09:15 AM - 03:30 PM IST)" if (time(9, 15) <= ist_now.time() <= time(15, 30)) else "🔴 NSE MARKET CLOSED (AFTER HOURS)"
 
-# Custom Styling
 st.markdown("""
 <style>
     .main-title { font-size: 26px; font-weight: bold; text-align: center; color: #1E88E5; }
@@ -61,16 +57,14 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# SIDEBAR CONTROL PANEL
 st.sidebar.title("⚙️ System Control")
 selected_asset = st.sidebar.selectbox("🎯 Select Active Trading Market:", ["BITCOIN (BTC/USDT)", "NIFTY 50 (₹)"])
 
 is_open, market_status_text = check_market_status(selected_asset)
 
 st.markdown(f"<div class='main-title'>🎯 ANTONY QUANT AI: {selected_asset.upper()} CO-PILOT</div>", unsafe_allow_html=True)
-st.markdown("<div class='sub-title'>Dual-Asset Multi-Engine | NIFTY 50 Options & Bitcoin 24/7</div>", unsafe_allow_html=True)
+st.markdown("<div class='sub-title'>15M Candle Winning Direction Engine | High Confidence (>70%) Execution</div>", unsafe_allow_html=True)
 
-# LIVE TICKING IST CLOCK + LIVE 15M CANDLE COUNTDOWN TIMER + BINANCE WEBSOCKET TICKER
 if selected_asset == "BITCOIN (BTC/USDT)":
     st.components.v1.html("""
     <div style="background-color: #111827; border: 1px solid #374151; padding: 12px; border-radius: 10px; text-align: center; font-family: monospace; color: #F3F4F6;">
@@ -86,7 +80,6 @@ if selected_asset == "BITCOIN (BTC/USDT)":
         document.getElementById('live-date').innerText = '📅 ' + now.toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' });
         document.getElementById('live-clock').innerText = '⏰ ' + now.toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true }) + ' IST';
         
-        // 15M Candle Remaining Seconds Calculation
         const min = now.getMinutes();
         const sec = now.getSeconds();
         const elapsedSec = ((min % 15) * 60) + sec;
@@ -118,7 +111,7 @@ if selected_asset == "BITCOIN (BTC/USDT)":
     """, height=85)
 else:
     st.components.v1.html("""
-    <div style="background-color: #111827; border: 1px solid #374151; padding: 12px; border-radius: 10px; text-align: center; font-family: monospace; color: #F3F4F6;">
+    <div style="background-color: #111827; border: 1px solid #374151; padding: 10px; border-radius: 10px; text-align: center; font-family: monospace; color: #F3F4F6;">
         <span id="live-date" style="color: #60A5FA; font-size: 15px; font-weight: bold;"></span> &nbsp;|&nbsp; 
         <span id="live-clock" style="color: #FBBF24; font-size: 18px; font-weight: bold;"></span><br>
         <span id="candle-timer" style="color: #FFD54F; font-size: 16px; font-weight: bold;">⏳ 15M CANDLE: Loading...</span>
@@ -152,13 +145,12 @@ else:
     </script>
     """, height=75)
 
-# Market Status Indicator
 if is_open:
     st.markdown(f"<div class='market-badge-open'>{market_status_text}</div>", unsafe_allow_html=True)
 else:
     st.markdown(f"<div class='market-badge-closed'>{market_status_text} — LAST CLOSE DATA SHOWN</div>", unsafe_allow_html=True)
 
-# EXECUTION ENGINE
+# ENGINE EXECUTION
 if selected_asset == "BITCOIN (BTC/USDT)":
     df_btc = data_feed.fetch_btc_live_data("BTCUSDT", config.TIMEFRAME)
     if df_btc.empty or len(df_btc) < 5:
@@ -173,23 +165,23 @@ if selected_asset == "BITCOIN (BTC/USDT)":
     st.sidebar.info(f"Timeframe: {config.TIMEFRAME}")
     st.sidebar.metric("Bitcoin Live Spot", f"${spot_price:,.2f}")
     
-    signal_type, reason_code, pos_multiplier, breakdown = quant_math_engine.evaluate_btc_15m_signal(df_btc)
+    signal_type, confidence_score, reason_code, breakdown = quant_math_engine.evaluate_btc_15m_signal(df_btc)
     
     btc_tp1 = spot_price * (1 + config.BTC_TARGET_1_PCT / 100.0) if signal_type == "BUY_CALL" else spot_price * (1 - config.BTC_TARGET_1_PCT / 100.0)
     btc_tp2 = spot_price * (1 + config.BTC_TARGET_2_PCT / 100.0) if signal_type == "BUY_CALL" else spot_price * (1 - config.BTC_TARGET_2_PCT / 100.0)
     btc_sl = spot_price * (1 - config.BTC_STOP_LOSS_PCT / 100.0) if signal_type == "BUY_CALL" else spot_price * (1 + config.BTC_STOP_LOSS_PCT / 100.0)
 
     if signal_type in ["BUY_CALL", "BUY_PUT"] and st.session_state.last_notified_signal != f"BTC_{signal_type}_{spot_price}":
-        alert_msg = f"<b>🚨 BITCOIN 15M SIGNAL ACTIVE</b>\n\nDirection: <b>{signal_type}</b>\nEntry Zone: <b>${spot_price:,.2f}</b>\nTarget 1 (+0.50%): <b>${btc_tp1:,.2f}</b>\nTarget 2 (+1.20%): <b>${btc_tp2:,.2f}</b>\nStop Loss (-0.30%): <b>${btc_sl:,.2f}</b>"
+        alert_msg = f"<b>🚨 BITCOIN 15M CANDLE WIN SIGNAL</b>\n\nDirection: <b>{signal_type}</b>\nWin Confidence: <b>{confidence_score:.1f}%</b>\nEntry Zone: <b>${spot_price:,.2f}</b>\nTP1 (+0.25%): <b>${btc_tp1:,.2f}</b>\nSL (-0.15%): <b>${btc_sl:,.2f}</b>"
         send_telegram_alert(alert_msg)
         st.session_state.last_notified_signal = f"BTC_{signal_type}_{spot_price}"
 
-    st.subheader("📍 LIVE BITCOIN 15M SIGNAL CARD")
+    st.subheader("📍 LIVE BITCOIN 15M CANDLE WIN PREDICTOR")
     if signal_type == "BUY_CALL":
         st.markdown(f"""
         <div class='signal-card-buy'>
-            <h1 style='color:#00E676; margin:0;'>🟩 BUY BITCOIN (LONG / CALL)</h1>
-            <p style='font-size:18px; margin-top:8px;'>Bitcoin Price: <b>${spot_price:,.2f}</b></p>
+            <h1 style='color:#00E676; margin:0;'>🟩 PREDICTED WINNING CANDLE: GREEN (UP)</h1>
+            <p style='font-size:18px; margin-top:8px;'>Candle Win Confidence: <b>{confidence_score:.1f}%</b> | Price: <b>${spot_price:,.2f}</b></p>
             <hr style='border-color:#00E676;'>
             <h2>🎯 ENTRY ZONE: <u style='color:#00E676;'>${spot_price:,.2f}</u></h2>
         </div>
@@ -197,8 +189,8 @@ if selected_asset == "BITCOIN (BTC/USDT)":
     elif signal_type == "BUY_PUT":
         st.markdown(f"""
         <div class='signal-card-sell'>
-            <h1 style='color:#E040FB; margin:0;'>🟪 SELL BITCOIN (SHORT / PUT)</h1>
-            <p style='font-size:18px; margin-top:8px;'>Bitcoin Price: <b>${spot_price:,.2f}</b></p>
+            <h1 style='color:#E040FB; margin:0;'>🟪 PREDICTED WINNING CANDLE: RED (DOWN)</h1>
+            <p style='font-size:18px; margin-top:8px;'>Candle Win Confidence: <b>{confidence_score:.1f}%</b> | Price: <b>${spot_price:,.2f}</b></p>
             <hr style='border-color:#E040FB;'>
             <h2>🎯 ENTRY ZONE: <u style='color:#E040FB;'>${spot_price:,.2f}</u></h2>
         </div>
@@ -206,7 +198,7 @@ if selected_asset == "BITCOIN (BTC/USDT)":
     else:
         st.markdown(f"""
         <div class='signal-card-wait'>
-            <h1 style='color:#B0BEC5; margin:0;'>⚪ WAIT - NO 15M BTC BREAKOUT SETUP</h1>
+            <h1 style='color:#B0BEC5; margin:0;'>⚪ WAIT - LOW CANDLE WIN CONFIDENCE (< 70%)</h1>
             <p style='font-size:15px; margin-top:8px;'>Reason: <b>{reason_code}</b></p>
         </div>
         """, unsafe_allow_html=True)
@@ -214,12 +206,13 @@ if selected_asset == "BITCOIN (BTC/USDT)":
     if signal_type != "WAIT":
         st.markdown(f"""
         <div class='cheat-box'>
-            <b>📋 BITCOIN EXECUTION CHEAT SHEET ($ USD):</b><br>
+            <b>📋 BITCOIN 15M CANDLE SCALPER CHEAT SHEET ($ USD):</b><br>
             • <b>Asset Contract  :</b> BTC/USDT (Spot / Futures / Paper Trading)<br>
             • <b>Entry Strategy   :</b> Buy Market Price @ ${spot_price:,.2f}<br>
-            • <b>Stop Loss (SL)   :</b> ${btc_sl:,.2f} (-0.30% Risk Cap)<br>
-            • <b>Target 1 (TP1)   :</b> ${btc_tp1:,.2f} (+0.50% Quick Target)<br>
-            • <b>Target 2 (TP2)   :</b> ${btc_tp2:,.2f} (+1.20% Trend Target)
+            • <b>Stop Loss (SL)   :</b> ${btc_sl:,.2f} (-0.15% Micro Risk)<br>
+            • <b>Target 1 (TP1)   :</b> ${btc_tp1:,.2f} (+0.25% Fast Target)<br>
+            • <b>Target 2 (TP2)   :</b> ${btc_tp2:,.2f} (+0.50% Trend Target)<br>
+            • <b>Candle Expiration:</b> Strict Exit @ 15M Candle Close
         </div>
         """, unsafe_allow_html=True)
 
@@ -266,16 +259,16 @@ else: # NIFTY 50 MODE
     )
 
     if signal_type in ["BUY_CALL", "BUY_PUT"] and st.session_state.last_notified_signal != f"NIFTY_{signal_type}_{spot_price}":
-        alert_msg = f"<b>🚨 NIFTY 50 SIGNAL ACTIVE</b>\n\nDirection: <b>{signal_type}</b>\nStrike: <b>NIFTY {atm_strike}</b>\nSpot: <b>₹{spot_price:,.2f}</b>\nSL: <b>-15 pts</b>\nTP1: <b>+20 pts</b>\nTP2: <b>+45 pts</b>"
+        alert_msg = f"<b>🚨 NIFTY 50 CANDLE WIN SIGNAL</b>\n\nDirection: <b>{signal_type}</b>\nStrike: <b>NIFTY {atm_strike}</b>\nSpot: <b>₹{spot_price:,.2f}</b>\nSL: <b>-8 pts</b>\nTP1: <b>+12 pts</b>"
         send_telegram_alert(alert_msg)
         st.session_state.last_notified_signal = f"NIFTY_{signal_type}_{spot_price}"
 
-    st.subheader("📍 LIVE NIFTY 50 SIGNAL CARD")
+    st.subheader("📍 LIVE NIFTY 50 15M CANDLE WIN PREDICTOR")
     if signal_type == "BUY_CALL":
         st.markdown(f"""
         <div class='signal-card-buy'>
-            <h1 style='color:#00E676; margin:0;'>🟩 BUY CALL OPTION (CE)</h1>
-            <p style='font-size:18px; margin-top:8px;'>NIFTY 50 Spot: <b>₹{spot_price:,.2f}</b> | Size: <b>{int(pos_multiplier*100)}%</b></p>
+            <h1 style='color:#00E676; margin:0;'>🟩 PREDICTED WINNING CANDLE: CALL (CE)</h1>
+            <p style='font-size:18px; margin-top:8px;'>NIFTY 50 Spot: <b>₹{spot_price:,.2f}</b></p>
             <hr style='border-color:#00E676;'>
             <h2>🎯 TARGET STRIKE: <u style='color:#00E676;'>NIFTY {atm_strike} CE</u></h2>
         </div>
@@ -283,8 +276,8 @@ else: # NIFTY 50 MODE
     elif signal_type == "BUY_PUT":
         st.markdown(f"""
         <div class='signal-card-sell'>
-            <h1 style='color:#E040FB; margin:0;'>🟪 BUY PUT OPTION (PE)</h1>
-            <p style='font-size:18px; margin-top:8px;'>NIFTY 50 Spot: <b>₹{spot_price:,.2f}</b> | Size: <b>{int(pos_multiplier*100)}%</b></p>
+            <h1 style='color:#E040FB; margin:0;'>🟪 PREDICTED WINNING CANDLE: PUT (PE)</h1>
+            <p style='font-size:18px; margin-top:8px;'>NIFTY 50 Spot: <b>₹{spot_price:,.2f}</b></p>
             <hr style='border-color:#E040FB;'>
             <h2>🎯 TARGET STRIKE: <u style='color:#E040FB;'>NIFTY {atm_strike} PE</u></h2>
         </div>
@@ -292,7 +285,7 @@ else: # NIFTY 50 MODE
     else:
         st.markdown(f"""
         <div class='signal-card-wait'>
-            <h1 style='color:#B0BEC5; margin:0;'>⚪ WAIT - REJECTED BY 5-LAYER FILTER</h1>
+            <h1 style='color:#B0BEC5; margin:0;'>⚪ WAIT - LOW CANDLE WIN CONFIDENCE (< 70%)</h1>
             <p style='font-size:15px; margin-top:8px;'>Reason: <b>{reason_code}</b></p>
         </div>
         """, unsafe_allow_html=True)
@@ -303,26 +296,25 @@ else: # NIFTY 50 MODE
             <b>📋 DHAN / TRADINGVIEW EXECUTION CHEAT SHEET:</b><br>
             • <b>Option Contract  :</b> NIFTY {atm_strike} {"CE" if signal_type == "BUY_CALL" else "PE"}<br>
             • <b>Entry Strategy   :</b> Buy Market Price on Dhan / TradingView<br>
-            • <b>Stop Loss (SL)   :</b> -15 Points Premium (Strict Risk: ₹375 / lot)<br>
-            • <b>Target 1 (TP1)   :</b> +20 Points Premium (Profit: ₹500 / lot)<br>
-            • <b>Target 2 (TP2)   :</b> +45 Points Premium (Profit: ₹1,125 / lot)
+            • <b>Stop Loss (SL)   :</b> -8 Points Premium (Micro Risk: ₹200 / lot)<br>
+            • <b>Target 1 (TP1)   :</b> +12 Points Premium (Fast Profit: ₹300 / lot)<br>
+            • <b>Target 2 (TP2)   :</b> +25 Points Premium (Max Profit: ₹625 / lot)<br>
+            • <b>Candle Expiration:</b> Strict Exit @ 15M Candle Close
         </div>
         """, unsafe_allow_html=True)
 
-# Render Breakdown Box
 if breakdown:
     st.markdown(f"""
     <div class='layer-box'>
         <b>🛡️ QUANT ENGINE BREAKDOWN STATUS:</b><br>
-        • <b>Layer 1 (Heavyweights / Market) :</b> {breakdown.get('l1_status', 'N/A')}<br>
-        • <b>Layer 2 (Volatility Filter)    :</b> {breakdown.get('l2_status', 'N/A')}<br>
-        • <b>Layer 3 (15M Momentum)         :</b> {breakdown.get('l3_status', 'N/A')}<br>
-        • <b>Layer 4 (Fib / OI Runway)      :</b> {breakdown.get('l4_status', 'N/A')}<br>
-        • <b>Layer 5 (Engine Verdict)       :</b> {breakdown.get('l5_status', 'N/A')}
+        • <b>Layer 1 (Body Intensity)      :</b> {breakdown.get('l1_status', 'N/A')}<br>
+        • <b>Layer 2 (Volume Acceleration)  :</b> {breakdown.get('l2_status', 'N/A')}<br>
+        • <b>Layer 3 (Momentum Delta)       :</b> {breakdown.get('l3_status', 'N/A')}<br>
+        • <b>Layer 4 (Fib Discount Guard)   :</b> {breakdown.get('l4_status', 'N/A')}<br>
+        • <b>Layer 5 (Candle Win Verdict)   :</b> {breakdown.get('l5_status', 'N/A')}
     </div>
     """, unsafe_allow_html=True)
 
-# --- TRADE PERFORMANCE LOGS ---
 st.divider()
 st.subheader("📊 BOT PERFORMANCE LOGS & ACCURACY TRACKER")
 
@@ -358,7 +350,6 @@ with tab2:
     else:
         st.info("ℹ️ No weekly trade history recorded yet.")
 
-# --- END-OF-DAY AI SELF-DIAGNOSTIC REPORT ---
 st.divider()
 today_trades = trade_logger.get_today_trades()
 eod_report = ai_analyst.generate_eod_bot_diagnostic(today_trades, india_vix if selected_asset == "NIFTY 50 (₹)" else 15.0, 1.0)
