@@ -1,5 +1,5 @@
 # ================================================================================
-# ANTONY QUANT AI TERMINAL - DASHBOARD (MASTER CHAMPION EDITION V12.0)
+# ANTONY QUANT AI TERMINAL - DASHBOARD (LIVE 15M CANDLE TIMER V12.0)
 # ================================================================================
 import streamlit as st
 import pandas as pd
@@ -33,7 +33,7 @@ def send_telegram_alert(message):
         except Exception:
             pass
 
-# Session State Persistence Initialization
+# Session State Persistence
 if "last_notified_signal" not in st.session_state:
     st.session_state.last_notified_signal = "WAIT"
 
@@ -45,7 +45,7 @@ def check_market_status(asset_choice):
         return False, "🔴 NSE CLOSED (WEEKEND)"
     return (time(9, 15) <= ist_now.time() <= time(15, 30)), "🟢 NSE MARKET LIVE (09:15 AM - 03:30 PM IST)" if (time(9, 15) <= ist_now.time() <= time(15, 30)) else "🔴 NSE MARKET CLOSED (AFTER HOURS)"
 
-# Styling
+# Custom Styling
 st.markdown("""
 <style>
     .main-title { font-size: 26px; font-weight: bold; text-align: center; color: #1E88E5; }
@@ -61,7 +61,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# Sidebar Control
+# SIDEBAR CONTROL PANEL
 st.sidebar.title("⚙️ System Control")
 selected_asset = st.sidebar.selectbox("🎯 Select Active Trading Market:", ["BITCOIN (BTC/USDT)", "NIFTY 50 (₹)"])
 
@@ -70,22 +70,43 @@ is_open, market_status_text = check_market_status(selected_asset)
 st.markdown(f"<div class='main-title'>🎯 ANTONY QUANT AI: {selected_asset.upper()} CO-PILOT</div>", unsafe_allow_html=True)
 st.markdown("<div class='sub-title'>Dual-Asset Multi-Engine | NIFTY 50 Options & Bitcoin 24/7</div>", unsafe_allow_html=True)
 
-# Dynamic 0ms Clock & Binance WebSocket Ticker Header
+# LIVE TICKING IST CLOCK + LIVE 15M CANDLE COUNTDOWN TIMER + BINANCE WEBSOCKET TICKER
 if selected_asset == "BITCOIN (BTC/USDT)":
     st.components.v1.html("""
     <div style="background-color: #111827; border: 1px solid #374151; padding: 12px; border-radius: 10px; text-align: center; font-family: monospace; color: #F3F4F6;">
         <span id="live-date" style="color: #60A5FA; font-size: 14px; font-weight: bold;"></span> &nbsp;|&nbsp; 
-        <span id="live-clock" style="color: #FBBF24; font-size: 16px; font-weight: bold;"></span> &nbsp;|&nbsp;
-        <span style="color:#00E676; font-weight:bold;">⚡ BTC LIVE TICKER: </span>
+        <span id="live-clock" style="color: #FBBF24; font-size: 16px; font-weight: bold;"></span><br>
+        <span id="candle-timer" style="color: #FFD54F; font-size: 16px; font-weight: bold;">⏳ 15M CANDLE: Loading...</span> &nbsp;|&nbsp;
+        <span style="color:#00E676; font-weight:bold;">⚡ BTC TICKER: </span>
         <span id="btc-ticker-price" style="color: #00E676; font-size: 20px; font-weight: bold;">$Loading...</span>
     </div>
     <script>
-    function updateClock() {
+    function updateClockAndCandleTimer() {
         const now = new Date();
         document.getElementById('live-date').innerText = '📅 ' + now.toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' });
         document.getElementById('live-clock').innerText = '⏰ ' + now.toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true }) + ' IST';
+        
+        // 15M Candle Remaining Seconds Calculation
+        const min = now.getMinutes();
+        const sec = now.getSeconds();
+        const elapsedSec = ((min % 15) * 60) + sec;
+        const remSec = 900 - elapsedSec;
+        const remMin = Math.floor(remSec / 60);
+        const remS = remSec % 60;
+        
+        const minStr = String(remMin).padStart(2, '0');
+        const secStr = String(remS).padStart(2, '0');
+        
+        const timerElem = document.getElementById('candle-timer');
+        if (remSec <= 60) {
+            timerElem.style.color = '#FF5252';
+            timerElem.innerText = '⚠️ GET READY FOR NEXT CANDLE ENTRY (' + minStr + ':' + secStr + ' REMAINING)';
+        } else {
+            timerElem.style.color = '#FFD54F';
+            timerElem.innerText = '⏳ 15M CANDLE COUNTDOWN: ' + minStr + ':' + secStr + ' REMAINING';
+        }
     }
-    setInterval(updateClock, 1000); updateClock();
+    setInterval(updateClockAndCandleTimer, 1000); updateClockAndCandleTimer();
 
     const ws = new WebSocket('wss://stream.binance.com:9443/ws/btcusdt@ticker');
     ws.onmessage = (event) => {
@@ -94,22 +115,42 @@ if selected_asset == "BITCOIN (BTC/USDT)":
         document.getElementById('btc-ticker-price').innerText = '$' + price;
     };
     </script>
-    """, height=70)
+    """, height=85)
 else:
     st.components.v1.html("""
-    <div style="background-color: #111827; border: 1px solid #374151; padding: 10px; border-radius: 10px; text-align: center; font-family: monospace; color: #F3F4F6;">
+    <div style="background-color: #111827; border: 1px solid #374151; padding: 12px; border-radius: 10px; text-align: center; font-family: monospace; color: #F3F4F6;">
         <span id="live-date" style="color: #60A5FA; font-size: 15px; font-weight: bold;"></span> &nbsp;|&nbsp; 
-        <span id="live-clock" style="color: #FBBF24; font-size: 18px; font-weight: bold;"></span>
+        <span id="live-clock" style="color: #FBBF24; font-size: 18px; font-weight: bold;"></span><br>
+        <span id="candle-timer" style="color: #FFD54F; font-size: 16px; font-weight: bold;">⏳ 15M CANDLE: Loading...</span>
     </div>
     <script>
-    function updateClock() {
+    function updateClockAndCandleTimer() {
         const now = new Date();
         document.getElementById('live-date').innerText = '📅 ' + now.toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' });
         document.getElementById('live-clock').innerText = '⏰ ' + now.toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true }) + ' IST';
+        
+        const min = now.getMinutes();
+        const sec = now.getSeconds();
+        const elapsedSec = ((min % 15) * 60) + sec;
+        const remSec = 900 - elapsedSec;
+        const remMin = Math.floor(remSec / 60);
+        const remS = remSec % 60;
+        
+        const minStr = String(remMin).padStart(2, '0');
+        const secStr = String(remS).padStart(2, '0');
+        
+        const timerElem = document.getElementById('candle-timer');
+        if (remSec <= 60) {
+            timerElem.style.color = '#FF5252';
+            timerElem.innerText = '⚠️ GET READY FOR NEXT CANDLE ENTRY (' + minStr + ':' + secStr + ' REMAINING)';
+        } else {
+            timerElem.style.color = '#FFD54F';
+            timerElem.innerText = '⏳ 15M CANDLE COUNTDOWN: ' + minStr + ':' + secStr + ' REMAINING';
+        }
     }
-    setInterval(updateClock, 1000); updateClock();
+    setInterval(updateClockAndCandleTimer, 1000); updateClockAndCandleTimer();
     </script>
-    """, height=65)
+    """, height=75)
 
 # Market Status Indicator
 if is_open:
@@ -134,12 +175,10 @@ if selected_asset == "BITCOIN (BTC/USDT)":
     
     signal_type, reason_code, pos_multiplier, breakdown = quant_math_engine.evaluate_btc_15m_signal(df_btc)
     
-    # Calculate BTC Target & SL Prices
     btc_tp1 = spot_price * (1 + config.BTC_TARGET_1_PCT / 100.0) if signal_type == "BUY_CALL" else spot_price * (1 - config.BTC_TARGET_1_PCT / 100.0)
     btc_tp2 = spot_price * (1 + config.BTC_TARGET_2_PCT / 100.0) if signal_type == "BUY_CALL" else spot_price * (1 - config.BTC_TARGET_2_PCT / 100.0)
     btc_sl = spot_price * (1 - config.BTC_STOP_LOSS_PCT / 100.0) if signal_type == "BUY_CALL" else spot_price * (1 + config.BTC_STOP_LOSS_PCT / 100.0)
 
-    # Automated Telegram Push Alert Trigger
     if signal_type in ["BUY_CALL", "BUY_PUT"] and st.session_state.last_notified_signal != f"BTC_{signal_type}_{spot_price}":
         alert_msg = f"<b>🚨 BITCOIN 15M SIGNAL ACTIVE</b>\n\nDirection: <b>{signal_type}</b>\nEntry Zone: <b>${spot_price:,.2f}</b>\nTarget 1 (+0.50%): <b>${btc_tp1:,.2f}</b>\nTarget 2 (+1.20%): <b>${btc_tp2:,.2f}</b>\nStop Loss (-0.30%): <b>${btc_sl:,.2f}</b>"
         send_telegram_alert(alert_msg)
@@ -172,7 +211,6 @@ if selected_asset == "BITCOIN (BTC/USDT)":
         </div>
         """, unsafe_allow_html=True)
 
-    # Render Bitcoin Execution Cheat Sheet Box
     if signal_type != "WAIT":
         st.markdown(f"""
         <div class='cheat-box'>
@@ -245,7 +283,7 @@ else: # NIFTY 50 MODE
     elif signal_type == "BUY_PUT":
         st.markdown(f"""
         <div class='signal-card-sell'>
-            <h1 style='color:#E040FB; margin:0;'>🟪 SELL BITCOIN (SHORT / PUT)</h1>
+            <h1 style='color:#E040FB; margin:0;'>🟪 BUY PUT OPTION (PE)</h1>
             <p style='font-size:18px; margin-top:8px;'>NIFTY 50 Spot: <b>₹{spot_price:,.2f}</b> | Size: <b>{int(pos_multiplier*100)}%</b></p>
             <hr style='border-color:#E040FB;'>
             <h2>🎯 TARGET STRIKE: <u style='color:#E040FB;'>NIFTY {atm_strike} PE</u></h2>
@@ -271,7 +309,7 @@ else: # NIFTY 50 MODE
         </div>
         """, unsafe_allow_html=True)
 
-# Render Visual 🟢 PASSED / 🔴 FAILED Breakdown Box
+# Render Breakdown Box
 if breakdown:
     st.markdown(f"""
     <div class='layer-box'>
