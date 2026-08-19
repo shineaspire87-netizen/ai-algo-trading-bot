@@ -1,5 +1,5 @@
 # ================================================================================
-# ANTONY QUANT AI TERMINAL - DASHBOARD (0MS WEBSOCKET LIVE TICKER V11.0)
+# ANTONY QUANT AI TERMINAL - DASHBOARD (MASTER CHAMPION EDITION V12.0)
 # ================================================================================
 import streamlit as st
 import pandas as pd
@@ -33,17 +33,19 @@ def send_telegram_alert(message):
         except Exception:
             pass
 
-# Check Market Status
+# Session State Persistence Initialization
+if "last_notified_signal" not in st.session_state:
+    st.session_state.last_notified_signal = "WAIT"
+
 def check_market_status(asset_choice):
     if asset_choice == "BITCOIN (BTC/USDT)":
         return True, "🟢 BITCOIN 24/7 MARKET LIVE (CONTINUOUS TRADING)"
-    
     ist_now = data_feed.get_ist_now()
     if ist_now.weekday() >= 5:
         return False, "🔴 NSE CLOSED (WEEKEND)"
     return (time(9, 15) <= ist_now.time() <= time(15, 30)), "🟢 NSE MARKET LIVE (09:15 AM - 03:30 PM IST)" if (time(9, 15) <= ist_now.time() <= time(15, 30)) else "🔴 NSE MARKET CLOSED (AFTER HOURS)"
 
-# Custom Styling
+# Styling
 st.markdown("""
 <style>
     .main-title { font-size: 26px; font-weight: bold; text-align: center; color: #1E88E5; }
@@ -59,7 +61,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# SIDEBAR CONTROL PANEL
+# Sidebar Control
 st.sidebar.title("⚙️ System Control")
 selected_asset = st.sidebar.selectbox("🎯 Select Active Trading Market:", ["BITCOIN (BTC/USDT)", "NIFTY 50 (₹)"])
 
@@ -68,7 +70,7 @@ is_open, market_status_text = check_market_status(selected_asset)
 st.markdown(f"<div class='main-title'>🎯 ANTONY QUANT AI: {selected_asset.upper()} CO-PILOT</div>", unsafe_allow_html=True)
 st.markdown("<div class='sub-title'>Dual-Asset Multi-Engine | NIFTY 50 Options & Bitcoin 24/7</div>", unsafe_allow_html=True)
 
-# REAL-TIME SECOND-BY-SECOND TICKING CLOCK & BITCOIN LIVE WEBSOCKET TICKER
+# Dynamic 0ms Clock & Binance WebSocket Ticker Header
 if selected_asset == "BITCOIN (BTC/USDT)":
     st.components.v1.html("""
     <div style="background-color: #111827; border: 1px solid #374151; padding: 12px; border-radius: 10px; text-align: center; font-family: monospace; color: #F3F4F6;">
@@ -85,7 +87,6 @@ if selected_asset == "BITCOIN (BTC/USDT)":
     }
     setInterval(updateClock, 1000); updateClock();
 
-    // BINANCE DIRECT WEBSOCKET TICK-BY-TICK STREAM
     const ws = new WebSocket('wss://stream.binance.com:9443/ws/btcusdt@ticker');
     ws.onmessage = (event) => {
         const data = JSON.parse(event.data);
@@ -116,7 +117,7 @@ if is_open:
 else:
     st.markdown(f"<div class='market-badge-closed'>{market_status_text} — LAST CLOSE DATA SHOWN</div>", unsafe_allow_html=True)
 
-# --- ENGINE EXECUTION BASED ON ASSET SELECTION ---
+# EXECUTION ENGINE
 if selected_asset == "BITCOIN (BTC/USDT)":
     df_btc = data_feed.fetch_btc_live_data("BTCUSDT", config.TIMEFRAME)
     if df_btc.empty or len(df_btc) < 5:
@@ -133,6 +134,17 @@ if selected_asset == "BITCOIN (BTC/USDT)":
     
     signal_type, reason_code, pos_multiplier, breakdown = quant_math_engine.evaluate_btc_15m_signal(df_btc)
     
+    # Calculate BTC Target & SL Prices
+    btc_tp1 = spot_price * (1 + config.BTC_TARGET_1_PCT / 100.0) if signal_type == "BUY_CALL" else spot_price * (1 - config.BTC_TARGET_1_PCT / 100.0)
+    btc_tp2 = spot_price * (1 + config.BTC_TARGET_2_PCT / 100.0) if signal_type == "BUY_CALL" else spot_price * (1 - config.BTC_TARGET_2_PCT / 100.0)
+    btc_sl = spot_price * (1 - config.BTC_STOP_LOSS_PCT / 100.0) if signal_type == "BUY_CALL" else spot_price * (1 + config.BTC_STOP_LOSS_PCT / 100.0)
+
+    # Automated Telegram Push Alert Trigger
+    if signal_type in ["BUY_CALL", "BUY_PUT"] and st.session_state.last_notified_signal != f"BTC_{signal_type}_{spot_price}":
+        alert_msg = f"<b>🚨 BITCOIN 15M SIGNAL ACTIVE</b>\n\nDirection: <b>{signal_type}</b>\nEntry Zone: <b>${spot_price:,.2f}</b>\nTarget 1 (+0.50%): <b>${btc_tp1:,.2f}</b>\nTarget 2 (+1.20%): <b>${btc_tp2:,.2f}</b>\nStop Loss (-0.30%): <b>${btc_sl:,.2f}</b>"
+        send_telegram_alert(alert_msg)
+        st.session_state.last_notified_signal = f"BTC_{signal_type}_{spot_price}"
+
     st.subheader("📍 LIVE BITCOIN 15M SIGNAL CARD")
     if signal_type == "BUY_CALL":
         st.markdown(f"""
@@ -157,6 +169,19 @@ if selected_asset == "BITCOIN (BTC/USDT)":
         <div class='signal-card-wait'>
             <h1 style='color:#B0BEC5; margin:0;'>⚪ WAIT - NO 15M BTC BREAKOUT SETUP</h1>
             <p style='font-size:15px; margin-top:8px;'>Reason: <b>{reason_code}</b></p>
+        </div>
+        """, unsafe_allow_html=True)
+
+    # Render Bitcoin Execution Cheat Sheet Box
+    if signal_type != "WAIT":
+        st.markdown(f"""
+        <div class='cheat-box'>
+            <b>📋 BITCOIN EXECUTION CHEAT SHEET ($ USD):</b><br>
+            • <b>Asset Contract  :</b> BTC/USDT (Spot / Futures / Paper Trading)<br>
+            • <b>Entry Strategy   :</b> Buy Market Price @ ${spot_price:,.2f}<br>
+            • <b>Stop Loss (SL)   :</b> ${btc_sl:,.2f} (-0.30% Risk Cap)<br>
+            • <b>Target 1 (TP1)   :</b> ${btc_tp1:,.2f} (+0.50% Quick Target)<br>
+            • <b>Target 2 (TP2)   :</b> ${btc_tp2:,.2f} (+1.20% Trend Target)
         </div>
         """, unsafe_allow_html=True)
 
@@ -202,6 +227,11 @@ else: # NIFTY 50 MODE
         nifty_target=config.UNDERLYING_TARGET_NIFTY
     )
 
+    if signal_type in ["BUY_CALL", "BUY_PUT"] and st.session_state.last_notified_signal != f"NIFTY_{signal_type}_{spot_price}":
+        alert_msg = f"<b>🚨 NIFTY 50 SIGNAL ACTIVE</b>\n\nDirection: <b>{signal_type}</b>\nStrike: <b>NIFTY {atm_strike}</b>\nSpot: <b>₹{spot_price:,.2f}</b>\nSL: <b>-15 pts</b>\nTP1: <b>+20 pts</b>\nTP2: <b>+45 pts</b>"
+        send_telegram_alert(alert_msg)
+        st.session_state.last_notified_signal = f"NIFTY_{signal_type}_{spot_price}"
+
     st.subheader("📍 LIVE NIFTY 50 SIGNAL CARD")
     if signal_type == "BUY_CALL":
         st.markdown(f"""
@@ -215,7 +245,7 @@ else: # NIFTY 50 MODE
     elif signal_type == "BUY_PUT":
         st.markdown(f"""
         <div class='signal-card-sell'>
-            <h1 style='color:#E040FB; margin:0;'>🟪 BUY PUT OPTION (PE)</h1>
+            <h1 style='color:#E040FB; margin:0;'>🟪 SELL BITCOIN (SHORT / PUT)</h1>
             <p style='font-size:18px; margin-top:8px;'>NIFTY 50 Spot: <b>₹{spot_price:,.2f}</b> | Size: <b>{int(pos_multiplier*100)}%</b></p>
             <hr style='border-color:#E040FB;'>
             <h2>🎯 TARGET STRIKE: <u style='color:#E040FB;'>NIFTY {atm_strike} PE</u></h2>
@@ -229,20 +259,32 @@ else: # NIFTY 50 MODE
         </div>
         """, unsafe_allow_html=True)
 
-# Render Breakdown Box
+    if signal_type != "WAIT":
+        st.markdown(f"""
+        <div class='cheat-box'>
+            <b>📋 DHAN / TRADINGVIEW EXECUTION CHEAT SHEET:</b><br>
+            • <b>Option Contract  :</b> NIFTY {atm_strike} {"CE" if signal_type == "BUY_CALL" else "PE"}<br>
+            • <b>Entry Strategy   :</b> Buy Market Price on Dhan / TradingView<br>
+            • <b>Stop Loss (SL)   :</b> -15 Points Premium (Strict Risk: ₹375 / lot)<br>
+            • <b>Target 1 (TP1)   :</b> +20 Points Premium (Profit: ₹500 / lot)<br>
+            • <b>Target 2 (TP2)   :</b> +45 Points Premium (Profit: ₹1,125 / lot)
+        </div>
+        """, unsafe_allow_html=True)
+
+# Render Visual 🟢 PASSED / 🔴 FAILED Breakdown Box
 if breakdown:
     st.markdown(f"""
     <div class='layer-box'>
         <b>🛡️ QUANT ENGINE BREAKDOWN STATUS:</b><br>
-        • <b>Layer 1 (Heavyweights / Market) :</b> {breakdown.get('l1_heavyweights', 'N/A')}<br>
-        • <b>Layer 2 (Volatility Filter)    :</b> {breakdown.get('l2_vix', 'N/A')}<br>
-        • <b>Layer 3 (15M Momentum)         :</b> {breakdown.get('l3_pcr', 'N/A')}<br>
-        • <b>Layer 4 (Fib / OI Runway)      :</b> {breakdown.get('l4_runway', 'N/A')}<br>
+        • <b>Layer 1 (Heavyweights / Market) :</b> {breakdown.get('l1_status', 'N/A')}<br>
+        • <b>Layer 2 (Volatility Filter)    :</b> {breakdown.get('l2_status', 'N/A')}<br>
+        • <b>Layer 3 (15M Momentum)         :</b> {breakdown.get('l3_status', 'N/A')}<br>
+        • <b>Layer 4 (Fib / OI Runway)      :</b> {breakdown.get('l4_status', 'N/A')}<br>
         • <b>Layer 5 (Engine Verdict)       :</b> {breakdown.get('l5_status', 'N/A')}
     </div>
     """, unsafe_allow_html=True)
 
-# --- TRADE PERFORMANCE LOGS & ACCURACY TRACKER ---
+# --- TRADE PERFORMANCE LOGS ---
 st.divider()
 st.subheader("📊 BOT PERFORMANCE LOGS & ACCURACY TRACKER")
 
