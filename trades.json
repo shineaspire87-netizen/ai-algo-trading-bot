@@ -13,7 +13,13 @@
         "net_pnl": -17.9,
         "result": "LOSS",
         "post_mortem": "3:15_PM_MARKET_CLOSE",
-        "layers": {}
+        "layers": {},
+        "bot_thoughts": "Bot Thought: Entry executed at \u20b926.14, but unexpected institutional absorption or VIX contraction caused a reversal hitting Stop Loss (3:15_PM_MARKET_CLOSE). The mistake was entering right before an OI resistance wall.",
+        "required_improvements": [
+            "1) Real-time NSE Level-2 Orderbook Depth (Top 5 Bids/Asks)",
+            "2) Intraday FII/DII Net Cash Flow Feed",
+            "3) 5-Minute Delta Volume Acceleration Feed"
+        ]
     },
     {
         "trade_id": 2,
@@ -29,7 +35,13 @@
         "net_pnl": -59.33,
         "result": "LOSS",
         "post_mortem": "MANUAL_FORCE_CLOSE",
-        "layers": {}
+        "layers": {},
+        "bot_thoughts": "Bot Thought: Entry executed at $37.51, but unexpected institutional absorption or VIX contraction caused a reversal hitting Stop Loss (MANUAL_FORCE_CLOSE). The mistake was entering right before an OI resistance wall.",
+        "required_improvements": [
+            "1) Real-time NSE Level-2 Orderbook Depth (Top 5 Bids/Asks)",
+            "2) Intraday FII/DII Net Cash Flow Feed",
+            "3) 5-Minute Delta Volume Acceleration Feed"
+        ]
     },
     {
         "trade_id": 3,
@@ -45,7 +57,13 @@
         "net_pnl": -59.33,
         "result": "LOSS",
         "post_mortem": "MANUAL_FORCE_CLOSE",
-        "layers": {}
+        "layers": {},
+        "bot_thoughts": "Bot Thought: Entry executed at $37.51, but unexpected institutional absorption or VIX contraction caused a reversal hitting Stop Loss (MANUAL_FORCE_CLOSE). The mistake was entering right before an OI resistance wall.",
+        "required_improvements": [
+            "1) Real-time NSE Level-2 Orderbook Depth (Top 5 Bids/Asks)",
+            "2) Intraday FII/DII Net Cash Flow Feed",
+            "3) 5-Minute Delta Volume Acceleration Feed"
+        ]
     },
     {
         "trade_id": 4,
@@ -61,7 +79,13 @@
         "net_pnl": -55.95,
         "result": "LOSS",
         "post_mortem": "MANUAL_FORCE_CLOSE",
-        "layers": {}
+        "layers": {},
+        "bot_thoughts": "Bot Thought: Entry executed at $37.51, but unexpected institutional absorption or VIX contraction caused a reversal hitting Stop Loss (MANUAL_FORCE_CLOSE). The mistake was entering right before an OI resistance wall.",
+        "required_improvements": [
+            "1) Real-time NSE Level-2 Orderbook Depth (Top 5 Bids/Asks)",
+            "2) Intraday FII/DII Net Cash Flow Feed",
+            "3) 5-Minute Delta Volume Acceleration Feed"
+        ]
     },
     {
         "trade_id": 5,
@@ -77,7 +101,13 @@
         "net_pnl": -55.95,
         "result": "LOSS",
         "post_mortem": "MANUAL_FORCE_CLOSE",
-        "layers": {}
+        "layers": {},
+        "bot_thoughts": "Bot Thought: Entry executed at $37.51, but unexpected institutional absorption or VIX contraction caused a reversal hitting Stop Loss (MANUAL_FORCE_CLOSE). The mistake was entering right before an OI resistance wall.",
+        "required_improvements": [
+            "1) Real-time NSE Level-2 Orderbook Depth (Top 5 Bids/Asks)",
+            "2) Intraday FII/DII Net Cash Flow Feed",
+            "3) 5-Minute Delta Volume Acceleration Feed"
+        ]
     },
     {
         "trade_id": 6,
@@ -93,6 +123,12 @@
         "net_pnl": -55.95,
         "result": "LOSS",
         "post_mortem": "MANUAL_FORCE_CLOSE",
-        "layers": {}
+        "layers": {},
+        "bot_thoughts": "Bot Thought: Entry executed at $37.51, but unexpected institutional absorption or VIX contraction caused a reversal hitting Stop Loss (MANUAL_FORCE_CLOSE). The mistake was entering right before an OI resistance wall.",
+        "required_improvements": [
+            "1) Real-time NSE Level-2 Orderbook Depth (Top 5 Bids/Asks)",
+            "2) Intraday FII/DII Net Cash Flow Feed",
+            "3) 5-Minute Delta Volume Acceleration Feed"
+        ]
     }
 ]

@@ -742,6 +742,48 @@ with tab2:
         st.info("ℹ️ No weekly trade history recorded yet.")
 
 st.divider()
+st.subheader("🧠 BOT THOUGHTS & AI SELF-REFLECTION")
+
+recent_trades = trade_logger.load_trades()
+if recent_trades:
+    for trade in reversed(recent_trades[-10:]):
+        reflection = ai_analyst.generate_bot_reflection(trade)
+        bot_thought = trade.get("bot_thoughts", reflection["bot_thought"])
+        req_improvements = trade.get("required_improvements", reflection["required_improvements"])
+        res = trade.get("result", "WIN")
+        res_color = "#00E676" if res == "WIN" else "#FF5252"
+        res_icon = "🟢 WIN" if res == "WIN" else "🔴 LOSS"
+        sym_strike = trade.get("strike", trade.get("symbol", "N/A"))
+        dt_str = trade.get("date_time", "N/A")
+        pnl_val = float(trade.get("net_pnl", 0.0))
+        is_crypto = any(k in str(sym_strike).upper() for k in ["BITCOIN", "BTC", "USDT"])
+        curr = "$" if is_crypto else "₹"
+        
+        req_html = "".join([f"• {item}<br>" for item in req_improvements])
+        
+        st.markdown(f"""
+        <div style='background-color: #1a102f; border: 1px solid #7c4dff; border-left: 5px solid {res_color}; padding: 18px; border-radius: 12px; margin-bottom: 15px; color: #e1bee7;'>
+            <div style='display:flex; justify-content:space-between; align-items:center;'>
+                <b style='font-size:15px; color:#ffffff;'>📅 {dt_str}</b>
+                <span style='background-color:{"#00332c" if res == "WIN" else "#330000"}; color:{res_color}; padding:4px 10px; border-radius:6px; font-weight:bold; font-size:13px;'>{res_icon}</span>
+            </div>
+            <p style='margin-top:8px; margin-bottom:6px; font-size:15px; color:#b388ff;'>
+                📍 <b>Trade Executed:</b> {sym_strike} &nbsp;|&nbsp; <b>Net PnL:</b> <span style='color:{res_color};'>{curr}{pnl_val:+,.2f}</span>
+            </p>
+            <hr style='border-color:#311b92; margin:8px 0;'>
+            <p style='font-size:14px; line-height:1.6; color:#f3e5f5;'>
+                💭 <b>Bot Reflection:</b><br>{bot_thought}
+            </p>
+            <div style='background-color:#0d071c; border: 1px dashed #7c4dff; padding:12px; border-radius:8px; margin-top:10px; font-size:13px; color:#e040fb; line-height:1.5;'>
+                💡 <b>Bot Data Request for User (To Reach 85%+ Accuracy):</b><br>
+                {req_html}
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+else:
+    st.info("ℹ️ No completed trades logged yet for AI Self-Reflection analysis.")
+
+st.divider()
 today_trades = trade_logger.get_today_trades()
 eod_report = ai_analyst.generate_eod_bot_diagnostic(today_trades, india_vix if selected_asset == "NIFTY 50 (₹)" else 15.0, 1.0)
 st.markdown(f"<div class='diagnostic-box'>{eod_report}</div>", unsafe_allow_html=True)

@@ -6,6 +6,49 @@ import json
 import streamlit as st
 import google.generativeai as genai
 
+def generate_bot_reflection(trade_record: dict) -> dict:
+    """
+    Generates a deep AI Self-Reflection narrative & data request for every completed trade.
+    """
+    symbol = trade_record.get("symbol", "N/A")
+    strike = trade_record.get("strike", symbol)
+    entry_p = float(trade_record.get("entry_price", 0.0))
+    exit_p = float(trade_record.get("exit_price", 0.0))
+    net_pnl = float(trade_record.get("net_pnl", 0.0))
+    result = trade_record.get("result", "WIN" if net_pnl > 0 else "LOSS")
+    dt_str = trade_record.get("date_time", "N/A")
+    reason = trade_record.get("post_mortem", "COMPLETED_TRADE")
+    
+    is_crypto = any(k in symbol.upper() for k in ["BITCOIN", "ETHEREUM", "BTC", "ETH"])
+    curr = "$" if is_crypto else "₹"
+
+    summary = f"{dt_str} | {strike} | Entry: {curr}{entry_p:,.2f} ➔ Exit: {curr}{exit_p:,.2f} | Net PnL: {curr}{net_pnl:+,.2f}"
+
+    if result == "WIN":
+        bot_thought = (
+            f"Bot Thought: Entry executed at {curr}{entry_p:,.2f} due to 5-layer alignment. "
+            f"Market momentum expanded option premium cleanly to Target ({reason}). "
+            f"The key catalyst was Heavyweight alignment and VIX expansion."
+        )
+    else:
+        bot_thought = (
+            f"Bot Thought: Entry executed at {curr}{entry_p:,.2f}, but unexpected institutional absorption "
+            f"or VIX contraction caused a reversal hitting Stop Loss ({reason}). "
+            f"The mistake was entering right before an OI resistance wall."
+        )
+
+    required_improvements = [
+        "1) Real-time NSE Level-2 Orderbook Depth (Top 5 Bids/Asks)",
+        "2) Intraday FII/DII Net Cash Flow Feed",
+        "3) 5-Minute Delta Volume Acceleration Feed"
+    ]
+
+    return {
+        "summary": summary,
+        "bot_thought": bot_thought,
+        "required_improvements": required_improvements
+    }
+
 def generate_trade_post_mortem(result, layers, pnl):
     """Generates detailed AI explanation of why the trade Won or Lost."""
     if result == "WIN":

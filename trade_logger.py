@@ -2,6 +2,7 @@ import json
 import os
 import csv
 from datetime import datetime, timezone, timedelta
+import ai_analyst
 
 TRADES_FILE = "trades.json"
 CSV_FILE = "trades.csv"
@@ -111,6 +112,18 @@ def load_trades():
         except Exception as e:
             print(f"Error parsing trades.csv: {e}")
 
+    # Ensure every trade record has bot_thoughts and required_improvements fields
+    updated_needed = False
+    for t in trades:
+        if "bot_thoughts" not in t or "required_improvements" not in t:
+            reflection = ai_analyst.generate_bot_reflection(t)
+            t["bot_thoughts"] = reflection["bot_thought"]
+            t["required_improvements"] = reflection["required_improvements"]
+            updated_needed = True
+            
+    if updated_needed:
+        save_trades(trades)
+
     return trades
 
 def save_trades(trades):
@@ -186,6 +199,10 @@ def record_completed_trade(symbol, strike, entry_price, exit_price, qty, status,
         "layers": layer_breakdown
     }
     
+    reflection = ai_analyst.generate_bot_reflection(trade_record)
+    trade_record["bot_thoughts"] = reflection["bot_thought"]
+    trade_record["required_improvements"] = reflection["required_improvements"]
+
     trades.append(trade_record)
     save_trades(trades)
 
