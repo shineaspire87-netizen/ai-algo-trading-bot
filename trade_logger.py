@@ -3,6 +3,7 @@ import os
 from datetime import datetime, timezone, timedelta
 
 TRADES_FILE = "trades.json"
+ACTIVE_TRADE_FILE = "active_trade.json"
 
 def get_ist_now():
     utc_now = datetime.now(timezone.utc)
@@ -21,6 +22,26 @@ def save_trades(trades):
     with open(TRADES_FILE, "w") as f:
         json.dump(trades, f, indent=4)
 
+def save_active_trade(trade_dict):
+    with open(ACTIVE_TRADE_FILE, "w") as f:
+        json.dump(trade_dict, f, indent=4)
+
+def load_active_trade():
+    if not os.path.exists(ACTIVE_TRADE_FILE):
+        return None
+    try:
+        with open(ACTIVE_TRADE_FILE, "r") as f:
+            return json.load(f)
+    except Exception:
+        return None
+
+def clear_active_trade():
+    if os.path.exists(ACTIVE_TRADE_FILE):
+        try:
+            os.remove(ACTIVE_TRADE_FILE)
+        except Exception:
+            pass
+
 def delete_trade_by_id(trade_id):
     trades = load_trades()
     updated_trades = [t for t in trades if t.get("trade_id") != trade_id]
@@ -28,6 +49,7 @@ def delete_trade_by_id(trade_id):
 
 def clear_all_trades():
     save_trades([])
+    clear_active_trade()
 
 def calculate_brokerage_fees(qty, entry_price, exit_price):
     flat_brokerage = 40.0
@@ -45,7 +67,6 @@ def record_completed_trade(symbol, strike, entry_price, exit_price, qty, status,
     brokerage = calculate_brokerage_fees(qty, entry_price, exit_price)
     net_pnl = round(gross_pnl - brokerage, 2)
     
-    # CORRECT RESULT DERIVATION (Net PnL > 0 = WIN)
     actual_result = "WIN" if net_pnl > 0 else "LOSS"
     
     # DEDUPLICATION CHECK

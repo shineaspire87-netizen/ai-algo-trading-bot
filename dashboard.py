@@ -32,8 +32,6 @@ if "notified_candles" not in st.session_state:
     st.session_state.notified_candles = set()
 if "notified_completed_trades" not in st.session_state:
     st.session_state.notified_completed_trades = set()
-if "active_trade" not in st.session_state:
-    st.session_state.active_trade = None
 if "locked_candle_id" not in st.session_state:
     st.session_state.locked_candle_id = "NONE"
 if "locked_signal_state" not in st.session_state:
@@ -204,10 +202,13 @@ if selected_asset == "BITCOIN (BTC/USDT)":
     btc_tp2 = entry_zone_price * (1 + config.BTC_TARGET_2_PCT / 100.0) if signal_type == "BUY_CALL" else entry_zone_price * (1 - config.BTC_TARGET_2_PCT / 100.0)
     btc_sl = entry_zone_price * (1 - config.BTC_STOP_LOSS_PCT / 100.0) if signal_type == "BUY_CALL" else entry_zone_price * (1 + config.BTC_STOP_LOSS_PCT / 100.0)
 
-    # AUTOMATIC ACTIVE TRADE TRACKER WITH PROPER WIN/LOSS LOGGING
+    # PERSISTENT FILE-BACKED ACTIVE TRADE ENGINE (15M CANDLE EXPIRY AUTO-LOGGING)
+    active_trade = trade_logger.load_active_trade()
+    
     if signal_type in ["BUY_CALL", "BUY_PUT"]:
-        if st.session_state.active_trade is None:
-            st.session_state.active_trade = {
+        if active_trade is None:
+            active_trade = {
+                "candle_id": current_candle_id,
                 "asset": "BTC/USDT",
                 "symbol": f"BTC/USDT {signal_type}",
                 "strike": "BTCUSDT",
@@ -217,10 +218,11 @@ if selected_asset == "BITCOIN (BTC/USDT)":
                 "signal_type": signal_type,
                 "quantity": 25,
                 "breakdown": breakdown if isinstance(breakdown, dict) else {},
-                "start_time": datetime.now()
+                "start_time_iso": datetime.now().isoformat()
             }
-        
-        at = st.session_state.active_trade
+            trade_logger.save_active_trade(active_trade)
+            
+        at = active_trade
         trade_finished = False
         trade_status = "WIN"
         exit_price = spot_price
@@ -229,6 +231,7 @@ if selected_asset == "BITCOIN (BTC/USDT)":
         qty_v = at.get("quantity", 25)
         bd_v = at.get("breakdown", {})
         
+        # 1. Target / SL Check
         if at.get("signal_type") == "BUY_CALL":
             if spot_price >= at.get("tp1", spot_price * 1.01): trade_finished, trade_status, exit_price = True, "WIN", at.get("tp1", spot_price)
             elif spot_price <= at.get("sl", spot_price * 0.99): trade_finished, trade_status, exit_price = True, "LOSS", at.get("sl", spot_price)
@@ -236,26 +239,32 @@ if selected_asset == "BITCOIN (BTC/USDT)":
             if spot_price <= at.get("tp1", spot_price * 0.99): trade_finished, trade_status, exit_price = True, "WIN", at.get("tp1", spot_price)
             elif spot_price >= at.get("sl", spot_price * 1.01): trade_finished, trade_status, exit_price = True, "LOSS", at.get("sl", spot_price)
                 
+        # 2. 15M Candle Expiry Check
+        if not trade_finished and (rem_candle_sec <= 5 or at.get("candle_id") != current_candle_id):
+            trade_finished = True
+            exit_price = spot_price
+            if at.get("signal_type") == "BUY_CALL":
+                trade_status = "WIN" if exit_price > entry_v else "LOSS"
+            else:
+                trade_status = "WIN" if exit_price < entry_v else "LOSS"
+                
         if trade_finished:
-            trade_comp_key = f"COMPLETED_{at.get('symbol')}_{entry_v}_{exit_price}"
-            if trade_comp_key not in st.session_state.notified_completed_trades:
-                pnl_calc = (exit_price - entry_v) * qty_v if trade_status == "WIN" else (exit_price - entry_v) * qty_v
-                post_mortem = ai_analyst.generate_trade_post_mortem(trade_status, bd_v, pnl_calc)
-                recorded = trade_logger.record_completed_trade(
-                    symbol=at.get("symbol", "BTC/USDT"), strike=at.get("strike", "BTCUSDT"), entry_price=entry_v,
-                    exit_price=exit_price, qty=qty_v, status=trade_status,
-                    win_loss_reason=post_mortem, layer_breakdown=bd_v
-                )
-                
-                # DERIVE CORRECT WIN/LOSS TEXT
-                actual_net_pnl = recorded.get('net_pnl', 0)
-                final_header_status = "WIN" if actual_net_pnl > 0 else "LOSS"
-                
-                alert_msg = f"<b>🚨 TRADE COMPLETED: {final_header_status}</b>\n\nSymbol: <b>{at.get('symbol')}</b>\nNet PnL: <b>${actual_net_pnl:,.2f}</b>"
-                send_telegram_alert(alert_msg)
-                st.session_state.notified_completed_trades.add(trade_comp_key)
-                st.session_state.active_trade = None
-                st.rerun()
+            pnl_calc = (exit_price - entry_v) * qty_v if trade_status == "WIN" else (exit_price - entry_v) * qty_v
+            post_mortem = ai_analyst.generate_trade_post_mortem(trade_status, bd_v, pnl_calc)
+            recorded = trade_logger.record_completed_trade(
+                symbol=at.get("symbol", "BTC/USDT"), strike=at.get("strike", "BTCUSDT"), entry_price=entry_v,
+                exit_price=exit_price, qty=qty_v, status=trade_status,
+                win_loss_reason=post_mortem, layer_breakdown=bd_v
+            )
+            
+            actual_net_pnl = recorded.get('net_pnl', 0)
+            final_header_status = "WIN" if actual_net_pnl > 0 else "LOSS"
+            
+            alert_msg = f"<b>🚨 TRADE COMPLETED: {final_header_status}</b>\n\nSymbol: <b>{at.get('symbol')}</b>\nNet PnL: <b>${actual_net_pnl:,.2f}</b>"
+            send_telegram_alert(alert_msg)
+            trade_logger.clear_active_trade()
+            st.session_state.active_trade = None
+            st.rerun()
 
     telegram_dedup_key = f"BTC_{current_candle_id}_{signal_type}"
     if signal_type in ["BUY_CALL", "BUY_PUT"] and telegram_dedup_key not in st.session_state.notified_candles:
