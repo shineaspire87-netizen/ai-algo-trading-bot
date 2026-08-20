@@ -1,5 +1,5 @@
 # ================================================================================
-# ANTONY QUANT AI TERMINAL - DASHBOARD (100% PERSISTENT STATE ENGINE V21.0)
+# ANTONY QUANT AI TERMINAL - DASHBOARD (100% PERSISTENT STATE ENGINE V22.0)
 # ================================================================================
 import streamlit as st
 import pandas as pd
@@ -390,6 +390,14 @@ st.markdown("""
 st.sidebar.title("⚙️ System Control")
 selected_asset = st.sidebar.selectbox("🎯 Select Active Trading Market:", ["BITCOIN (BTC/USDT)", "NIFTY 50 (₹)"])
 
+# 🧹 FRESH START BUTTON IN SIDEBAR (AUG 20 2026 FRESH START)
+if st.sidebar.button("🧹 Start Fresh From Today (Aug 20)"):
+    trade_logger.clear_all_trades()
+    st.session_state.active_trade = None
+    st.session_state.notified_candles = set()
+    st.sidebar.success("All Old History Erased! Fresh Start Active!")
+    st.rerun()
+
 is_open, market_status_text = check_market_status(selected_asset)
 
 st.markdown(f"<div class='main-title'>🎯 ANTONY QUANT AI: {selected_asset.upper()} CO-PILOT</div>", unsafe_allow_html=True)
@@ -672,7 +680,7 @@ if selected_asset == "BITCOIN (BTC/USDT)":
     btc_tp2 = entry_zone_price * (1 + config.BTC_TARGET_2_PCT / 100.0) if signal_type == "BUY_CALL" else entry_zone_price * (1 - config.BTC_TARGET_2_PCT / 100.0)
     btc_sl = entry_zone_price * (1 - config.BTC_STOP_LOSS_PCT / 100.0) if signal_type == "BUY_CALL" else entry_zone_price * (1 + config.BTC_STOP_LOSS_PCT / 100.0)
 
-    # SAFE TRADE EVALUATION ENGINE (NO KEYERROR CRASH)
+    # SAFE TRADE EVALUATION ENGINE
     if signal_type in ["BUY_CALL", "BUY_PUT"]:
         if st.session_state.active_trade is None:
             st.session_state.active_trade = {
@@ -721,7 +729,6 @@ if selected_asset == "BITCOIN (BTC/USDT)":
             trade_logger.save_live_state({"active_trade": None})
             st.rerun()
 
-    # DEDUPLICATED TELEGRAM NOTIFICATION SET (EXACTLY ONCE PER 15M CANDLE)
     telegram_dedup_key = f"BTC_{current_candle_id}_{signal_type}"
     if signal_type in ["BUY_CALL", "BUY_PUT"]:
         alert_msg = f"<b>🚨 BITCOIN 15M CANDLE WIN SIGNAL</b>\n\nDirection: <b>{signal_type}</b>\nWin Confidence: <b>{confidence_score:.1f}%</b>\nEntry Zone (Locked): <b>${entry_zone_price:,.2f}</b>\nTP1 (+0.25%): <b>${btc_tp1:,.2f}</b>\nSL (-0.15%): <b>${btc_sl:,.2f}</b>"
@@ -841,7 +848,7 @@ else: # NIFTY 50 MODE
             }
             trade_logger.save_live_state({"active_trade": st.session_state.active_trade})
 
-    # Evaluate Active Position Target/SL Hit (STRICT CONDITIONAL EXECUTION - ZERO REFRESH DUPLICATE LOGS)
+    # Evaluate Active Position Target/SL Hit
     if isinstance(st.session_state.active_trade, dict) and st.session_state.active_trade.get("asset") == "NIFTY 50 (₹)":
         at = st.session_state.active_trade
         sig_t = str(at.get("signal_type", "BUY_CALL"))
@@ -1047,6 +1054,7 @@ with col_title:
 with col_clear:
     if st.button("🧹 Clear All Bot Thoughts"):
         trade_logger.clear_all_trades()
+        st.session_state.active_trade = None
         st.success("All Bot Thoughts Cleared!")
         st.rerun()
 

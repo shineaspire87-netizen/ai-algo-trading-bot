@@ -32,9 +32,9 @@ def delete_trade_by_id(trade_id):
     save_trades(updated_trades)
 
 def clear_all_trades():
-    """Clears all trade logs and thoughts."""
+    """Wipes all trades.json records to ensure 100% fresh start from today."""
     save_trades([])
-    save_live_state({"last_signal": {}, "active_trade": None})
+    save_live_state({"active_trade": None})
 
 def calculate_brokerage_fees(qty, entry_price, exit_price):
     flat_brokerage = 40.0
@@ -46,31 +46,25 @@ def record_completed_trade(symbol, strike, entry_price, exit_price, qty, status,
     trades = load_trades()
     ist_now = get_ist_now()
     date_time_str = ist_now.strftime("%Y-%m-%d %I:%M:%S %p IST")
+    today_str = ist_now.strftime("%Y-%m-%d")
     
     if layer_breakdown is None:
         layer_breakdown = {}
-
-    # DEDUPLICATION CHECK: Prevent recording duplicate logs on page refresh
+    
+    # DEDUPLICATION CHECK
     if trades:
         last_trade = trades[-1]
         if last_trade.get("symbol") == symbol and abs(last_trade.get("entry_price", 0) - entry_price) < 0.01 and last_trade.get("result") == status:
-            return last_trade  # Block duplicate log!
-
-    opt_type = "CALL" if "CALL" in str(strike).upper() or "CE" in str(strike).upper() else ("PUT" if "PUT" in str(strike).upper() or "PE" in str(strike).upper() else "BUY")
+            return last_trade
     
-    if opt_type == "PUT":
-        gross_pnl = round((entry_price - exit_price) * qty, 2)
-    else:
-        gross_pnl = round((exit_price - entry_price) * qty, 2)
-
+    gross_pnl = round((exit_price - entry_price) * qty if status == "WIN" else (exit_price - entry_price) * qty, 2)
     brokerage = calculate_brokerage_fees(qty, entry_price, exit_price)
     net_pnl = round(gross_pnl - brokerage, 2)
-    result_str = status.upper() if status in ["WIN", "LOSS"] else ("WIN" if net_pnl > 0 else "LOSS")
     
     trade_record = {
         "trade_id": len(trades) + 1,
         "date_time": date_time_str,
-        "date": ist_now.strftime("%Y-%m-%d"),
+        "date": today_str,
         "symbol": symbol,
         "strike": str(strike),
         "entry_price": round(entry_price, 2),
@@ -79,7 +73,7 @@ def record_completed_trade(symbol, strike, entry_price, exit_price, qty, status,
         "gross_pnl": gross_pnl,
         "brokerage_fee": brokerage,
         "net_pnl": net_pnl,
-        "result": result_str,
+        "result": "WIN" if net_pnl > 0 else "LOSS",
         "post_mortem": win_loss_reason,
         "layers": layer_breakdown
     }
