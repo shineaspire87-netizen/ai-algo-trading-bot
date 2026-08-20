@@ -20,6 +20,13 @@ st.set_page_config(
     layout="centered"
 )
 
+# 3-Second Live Auto-Refresh Loop for Live Quant Breakdown Metrics
+try:
+    from streamlit_autorefresh import st_autorefresh
+    st_autorefresh(interval=3000, limit=None, key="quant_engine_live_autorefresh")
+except Exception:
+    pass
+
 # Telegram Push Alert Function
 def send_telegram_alert(message):
     token = config.TELEGRAM_BOT_TOKEN
@@ -693,12 +700,12 @@ if current_active_trade.get("status") == "ACTIVE":
 if breakdown:
     st.markdown(f"""
     <div class='layer-box'>
-        <b>🛡️ QUANT ENGINE BREAKDOWN STATUS:</b><br>
-        • <b>Layer 1 (Body Intensity)      :</b> {breakdown.get('l1_status', 'N/A')}<br>
-        • <b>Layer 2 (Volume Acceleration)  :</b> {breakdown.get('l2_status', 'N/A')}<br>
-        • <b>Layer 3 (Momentum Delta)       :</b> {breakdown.get('l3_status', 'N/A')}<br>
-        • <b>Layer 4 (Fib Discount Guard)   :</b> {breakdown.get('l4_status', 'N/A')}<br>
-        • <b>Layer 5 (Candle Win Verdict)   :</b> {breakdown.get('l5_status', 'N/A')}
+        <b>🛡️ LIVE QUANT ENGINE BREAKDOWN STATUS (AUTO-REFRESHING 3s):</b><br>
+        • <b>Layer 1 (Candle Body Intensity %)     :</b> {breakdown.get('l1_status', 'N/A')}<br>
+        • <b>Layer 2 (Volume Acceleration x)       :</b> {breakdown.get('l2_status', 'N/A')}<br>
+        • <b>Layer 3 (15M Momentum Delta %)        :</b> {breakdown.get('l3_status', 'N/A')}<br>
+        • <b>Layer 4 (Fib Discount Guard Ratio)    :</b> {breakdown.get('l4_status', 'N/A')}<br>
+        • <b>Layer 5 (Candle Win Confidence %)     :</b> {breakdown.get('l5_status', 'N/A')}
     </div>
     """, unsafe_allow_html=True)
 
