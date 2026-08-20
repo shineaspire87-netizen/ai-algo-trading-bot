@@ -1,5 +1,5 @@
 # ================================================================================
-# ANTONY QUANT AI TERMINAL - DASHBOARD (100% PERSISTENT STATE ENGINE V15.0)
+# ANTONY QUANT AI TERMINAL - DASHBOARD (100% PERSISTENT STATE ENGINE V16.0)
 # ================================================================================
 import streamlit as st
 import pandas as pd
@@ -139,7 +139,7 @@ def get_trade_bot_reflection(trade_record: dict) -> dict:
 disk_state = trade_logger.load_live_state()
 
 if "last_notified_signal" not in st.session_state:
-    st.session_state.last_notified_signal = disk_state.get("last_notified_signal", "WAIT")
+    st.session_state.last_notified_signal = disk_state.get("last_notified_signal", "NONE")
 
 def check_market_status(asset_choice):
     if asset_choice == "BITCOIN (BTC/USDT)":
@@ -289,7 +289,6 @@ st.markdown("""
             padding-right: 0.5rem !important;
         }
 
-        /* 4-column metric grids stack cleanly on smartphones */
         div[data-testid="column"] {
             width: 100% !important;
             flex: 1 1 100% !important;
@@ -304,7 +303,6 @@ st.markdown("""
             border-radius: 8px !important;
         }
 
-        /* Full width touch buttons on Mobile */
         .stButton > button {
             width: 100% !important;
             min-height: 46px !important;
@@ -312,7 +310,6 @@ st.markdown("""
             font-weight: bold !important;
         }
 
-        /* Smooth horizontal scroll for trade log tables */
         .stDataFrame {
             width: 100% !important;
             overflow-x: auto !important;
@@ -565,7 +562,7 @@ if is_open:
 else:
     st.markdown(f"<div class='market-badge-closed'>{market_status_text} — LAST CLOSE DATA SHOWN</div>", unsafe_allow_html=True)
 
-# ENGINE EXECUTION
+# EXECUTION ENGINE
 if selected_asset == "BITCOIN (BTC/USDT)":
     df_btc = data_feed.fetch_btc_live_data("BTCUSDT", config.TIMEFRAME)
     if df_btc.empty or len(df_btc) < 5:
@@ -576,22 +573,28 @@ if selected_asset == "BITCOIN (BTC/USDT)":
     last_row = df_btc.iloc[-1]
     spot_price = float(last_row['close'])
     
+    # PERMANENTLY LOCK ENTRY ZONE TO CANDLE OPEN PRICE
+    entry_zone_price = float(last_row['open'])
+    candle_timestamp = str(last_row['time']) if 'time' in last_row else str(datetime.now().minute // 15)
+    
     st.sidebar.info(f"Symbol: {config.BTC_SYMBOL}")
     st.sidebar.info(f"Timeframe: {config.TIMEFRAME}")
     st.sidebar.metric("Bitcoin Live Spot", f"${spot_price:,.2f}")
     
     signal_type, confidence_score, reason_code, breakdown = quant_math_engine.evaluate_btc_15m_signal(df_btc)
     
-    btc_tp1 = spot_price * (1 + config.BTC_TARGET_1_PCT / 100.0) if signal_type == "BUY_CALL" else spot_price * (1 - config.BTC_TARGET_1_PCT / 100.0)
-    btc_tp2 = spot_price * (1 + config.BTC_TARGET_2_PCT / 100.0) if signal_type == "BUY_CALL" else spot_price * (1 - config.BTC_TARGET_2_PCT / 100.0)
-    btc_sl = spot_price * (1 - config.BTC_STOP_LOSS_PCT / 100.0) if signal_type == "BUY_CALL" else spot_price * (1 + config.BTC_STOP_LOSS_PCT / 100.0)
+    btc_tp1 = entry_zone_price * (1 + config.BTC_TARGET_1_PCT / 100.0) if signal_type == "BUY_CALL" else entry_zone_price * (1 - config.BTC_TARGET_1_PCT / 100.0)
+    btc_tp2 = entry_zone_price * (1 + config.BTC_TARGET_2_PCT / 100.0) if signal_type == "BUY_CALL" else entry_zone_price * (1 - config.BTC_TARGET_2_PCT / 100.0)
+    btc_sl = entry_zone_price * (1 - config.BTC_STOP_LOSS_PCT / 100.0) if signal_type == "BUY_CALL" else entry_zone_price * (1 + config.BTC_STOP_LOSS_PCT / 100.0)
 
     conf_info = get_candle_confirmation_status()
 
-    if signal_type in ["BUY_CALL", "BUY_PUT"] and st.session_state.last_notified_signal != f"BTC_{signal_type}_{spot_price}":
-        alert_msg = f"<b>🚨 BITCOIN 15M CANDLE WIN SIGNAL</b>\n\nDirection: <b>{signal_type}</b>\nWin Confidence: <b>{confidence_score:.1f}%</b>\nEntry Zone: <b>${spot_price:,.2f}</b>\nTP1 (+0.25%): <b>${btc_tp1:,.2f}</b>\nSL (-0.15%): <b>${btc_sl:,.2f}</b>"
+    # DEDUPLICATED TELEGRAM PUSH ALERT (EXACTLY ONCE PER 15M CANDLE)
+    telegram_dedup_key = f"BTC_{signal_type}_{candle_timestamp}"
+    if signal_type in ["BUY_CALL", "BUY_PUT"] and st.session_state.last_notified_signal != telegram_dedup_key:
+        alert_msg = f"<b>🚨 BITCOIN 15M CANDLE WIN SIGNAL</b>\n\nDirection: <b>{signal_type}</b>\nWin Confidence: <b>{confidence_score:.1f}%</b>\nEntry Zone (Locked): <b>${entry_zone_price:,.2f}</b>\nTP1 (+0.25%): <b>${btc_tp1:,.2f}</b>\nSL (-0.15%): <b>${btc_sl:,.2f}</b>"
         send_telegram_alert(alert_msg)
-        st.session_state.last_notified_signal = f"BTC_{signal_type}_{spot_price}"
+        st.session_state.last_notified_signal = telegram_dedup_key
 
     st.subheader("📍 LIVE BITCOIN 15M CANDLE WIN PREDICTOR")
     if signal_type == "BUY_CALL":
@@ -603,9 +606,9 @@ if selected_asset == "BITCOIN (BTC/USDT)":
                 </span>
             </div>
             <h1 style='color:#00E676; margin:0;'>🟩 PREDICTED WINNING CANDLE: GREEN (UP)</h1>
-            <p style='font-size:18px; margin-top:8px;'>Candle Win Confidence: <b>{confidence_score:.1f}%</b> | Price: <b>${spot_price:,.2f}</b></p>
+            <p style='font-size:18px; margin-top:8px;'>Candle Win Confidence: <b>{confidence_score:.1f}%</b> | Live Spot: <b>${spot_price:,.2f}</b></p>
             <hr style='border-color:#00E676;'>
-            <h2>🎯 ENTRY ZONE: <u style='color:#00E676;'>${spot_price:,.2f}</u></h2>
+            <h2>🎯 ENTRY ZONE (LOCKED TO OPEN): <u style='color:#00E676;'>${entry_zone_price:,.2f}</u></h2>
         </div>
         """, unsafe_allow_html=True)
     elif signal_type == "BUY_PUT":
@@ -617,9 +620,9 @@ if selected_asset == "BITCOIN (BTC/USDT)":
                 </span>
             </div>
             <h1 style='color:#E040FB; margin:0;'>🟪 PREDICTED WINNING CANDLE: RED (DOWN)</h1>
-            <p style='font-size:18px; margin-top:8px;'>Candle Win Confidence: <b>{confidence_score:.1f}%</b> | Price: <b>${spot_price:,.2f}</b></p>
+            <p style='font-size:18px; margin-top:8px;'>Candle Win Confidence: <b>{confidence_score:.1f}%</b> | Live Spot: <b>${spot_price:,.2f}</b></p>
             <hr style='border-color:#E040FB;'>
-            <h2>🎯 ENTRY ZONE: <u style='color:#E040FB;'>${spot_price:,.2f}</u></h2>
+            <h2>🎯 ENTRY ZONE (LOCKED TO OPEN): <u style='color:#E040FB;'>${entry_zone_price:,.2f}</u></h2>
         </div>
         """, unsafe_allow_html=True)
     else:
@@ -640,7 +643,7 @@ if selected_asset == "BITCOIN (BTC/USDT)":
         <div class='cheat-box'>
             <b>📋 BITCOIN 15M CANDLE SCALPER CHEAT SHEET ($ USD):</b><br>
             • <b>Asset Contract  :</b> BTC/USDT (Spot / Futures / Paper Trading)<br>
-            • <b>Entry Strategy   :</b> Buy Market Price @ ${spot_price:,.2f}<br>
+            • <b>Entry Strategy   :</b> Buy Market Price @ ${entry_zone_price:,.2f} (Locked Open)<br>
             • <b>Stop Loss (SL)   :</b> ${btc_sl:,.2f} (-0.15% Micro Risk)<br>
             • <b>Target 1 (TP1)   :</b> ${btc_tp1:,.2f} (+0.25% Fast Target)<br>
             • <b>Target 2 (TP2)   :</b> ${btc_tp2:,.2f} (+0.50% Trend Target)<br>
@@ -664,10 +667,12 @@ else: # NIFTY 50 MODE
 
     last_row = df.iloc[-1]
     spot_price = float(last_row['close'])
+    entry_zone_price = float(last_row['open'])
     c_high = float(last_row['high'])
     c_low = float(last_row['low'])
     c_volume = float(last_row['volume']) if 'volume' in last_row else 65000.0
     atm_strike = data_feed.calculate_atm_strike(spot_price)
+    candle_timestamp = str(datetime.now().minute // 15)
 
     st.sidebar.info(f"Symbol: {config.DEFAULT_SYMBOL}")
     st.sidebar.info(f"Timeframe: {config.TIMEFRAME}")
@@ -696,10 +701,12 @@ else: # NIFTY 50 MODE
 
     conf_info = get_candle_confirmation_status(ist_now)
 
-    if signal_type in ["BUY_CALL", "BUY_PUT"] and st.session_state.last_notified_signal != f"NIFTY_{signal_type}_{spot_price}":
-        alert_msg = f"<b>🚨 NIFTY 50 CANDLE WIN SIGNAL</b>\n\nDirection: <b>{signal_type}</b>\nStrike: <b>NIFTY {atm_strike}</b>\nSpot: <b>₹{spot_price:,.2f}</b>\nSL: <b>-8 pts</b>\nTP1: <b>+12 pts</b>"
+    # DEDUPLICATED TELEGRAM PUSH ALERT (EXACTLY ONCE PER 15M CANDLE)
+    telegram_dedup_key = f"NIFTY_{signal_type}_{candle_timestamp}"
+    if signal_type in ["BUY_CALL", "BUY_PUT"] and st.session_state.last_notified_signal != telegram_dedup_key:
+        alert_msg = f"<b>🚨 NIFTY 50 CANDLE WIN SIGNAL</b>\n\nDirection: <b>{signal_type}</b>\nStrike: <b>NIFTY {atm_strike}</b>\nSpot: <b>₹{spot_price:,.2f}</b>\nEntry Zone (Locked): <b>₹{entry_zone_price:,.2f}</b>\nSL: <b>-8 pts</b>\nTP1: <b>+12 pts</b>"
         send_telegram_alert(alert_msg)
-        st.session_state.last_notified_signal = f"NIFTY_{signal_type}_{spot_price}"
+        st.session_state.last_notified_signal = telegram_dedup_key
 
     st.subheader("📍 LIVE NIFTY 50 15M CANDLE WIN PREDICTOR")
     if signal_type == "BUY_CALL":
@@ -713,7 +720,7 @@ else: # NIFTY 50 MODE
             <h1 style='color:#00E676; margin:0;'>🟩 PREDICTED WINNING CANDLE: CALL (CE)</h1>
             <p style='font-size:18px; margin-top:8px;'>NIFTY 50 Spot: <b>₹{spot_price:,.2f}</b></p>
             <hr style='border-color:#00E676;'>
-            <h2>🎯 TARGET STRIKE: <u style='color:#00E676;'>NIFTY {atm_strike} CE</u></h2>
+            <h2>🎯 TARGET STRIKE: <u style='color:#00E676;'>NIFTY {atm_strike} CE</u> (Entry Zone: ₹{entry_zone_price:,.2f})</h2>
         </div>
         """, unsafe_allow_html=True)
     elif signal_type == "BUY_PUT":
@@ -727,7 +734,7 @@ else: # NIFTY 50 MODE
             <h1 style='color:#E040FB; margin:0;'>🟪 PREDICTED WINNING CANDLE: RED (DOWN)</h1>
             <p style='font-size:18px; margin-top:8px;'>NIFTY 50 Spot: <b>₹{spot_price:,.2f}</b></p>
             <hr style='border-color:#E040FB;'>
-            <h2>🎯 TARGET STRIKE: <u style='color:#E040FB;'>NIFTY {atm_strike} PE</u></h2>
+            <h2>🎯 TARGET STRIKE: <u style='color:#E040FB;'>NIFTY {atm_strike} PE</u> (Entry Zone: ₹{entry_zone_price:,.2f})</h2>
         </div>
         """, unsafe_allow_html=True)
     else:
@@ -748,7 +755,7 @@ else: # NIFTY 50 MODE
         <div class='cheat-box'>
             <b>📋 DHAN / TRADINGVIEW EXECUTION CHEAT SHEET:</b><br>
             • <b>Option Contract  :</b> NIFTY {atm_strike} {"CE" if signal_type == "BUY_CALL" else "PE"}<br>
-            • <b>Entry Strategy   :</b> Buy Market Price on Dhan / TradingView<br>
+            • <b>Entry Strategy   :</b> Buy Market Price on Dhan / TradingView @ ₹{entry_zone_price:,.2f}<br>
             • <b>Stop Loss (SL)   :</b> -8 Points Premium (Micro Risk: ₹200 / lot)<br>
             • <b>Target 1 (TP1)   :</b> +12 Points Premium (Fast Profit: ₹300 / lot)<br>
             • <b>Target 2 (TP2)   :</b> +25 Points Premium (Max Profit: ₹625 / lot)<br>
@@ -810,7 +817,7 @@ with tab2:
     else:
         st.info("ℹ️ No weekly trade history recorded yet.")
 
-# --- NEW SECTION: BOT THOUGHTS & AI SELF-REFLECTION WITH INDIVIDUAL DELETE BUTTONS ---
+# BOT THOUGHTS & AI SELF-REFLECTION
 st.divider()
 col_title, col_clear = st.columns([3, 1])
 with col_title:
@@ -865,9 +872,9 @@ if all_trades:
                 st.success("Thought Deleted!")
                 st.rerun()
 else:
-    st.info("ℹ️ No Bot Thoughts recorded yet. Completed trades will display AI reflections here.")
+    st.info("ℹ️ No Bot Thoughts recorded yet.")
 
-# --- END-OF-DAY AI SELF-DIAGNOSTIC REPORT ---
+# END-OF-DAY AI SELF-DIAGNOSTIC REPORT
 st.divider()
 today_trades = trade_logger.get_today_trades()
 eod_report = ai_analyst.generate_eod_bot_diagnostic(today_trades, india_vix if selected_asset == "NIFTY 50 (₹)" else 15.0, 1.0)
