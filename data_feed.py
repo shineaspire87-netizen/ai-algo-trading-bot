@@ -28,27 +28,41 @@ def fetch_nifty_live_data(symbol=config.DEFAULT_SYMBOL, timeframe=config.TIMEFRA
         return pd.DataFrame()
 
 def fetch_btc_live_data(symbol="BTCUSDT", timeframe="15m", period="5d"):
-    """Fetches 0ms real-time Bitcoin data directly from Binance Public REST API."""
+    """Fetches 0ms real-time Bitcoin Spot data directly from Binance Public REST API."""
     try:
         ticker_url = "https://api.binance.com/api/v3/ticker/price?symbol=BTCUSDT"
-        res = requests.get(ticker_url, timeout=3)
+        res = requests.get(ticker_url, timeout=5)
         live_price = float(res.json()['price']) if res.status_code == 200 else None
 
         klines_url = f"https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval={timeframe}&limit=50"
-        k_res = requests.get(klines_url, timeout=3)
+        k_res = requests.get(klines_url, timeout=5)
         if k_res.status_code == 200:
             raw_data = k_res.json()
             cols = ['time', 'open', 'high', 'low', 'close', 'volume', 'close_time', 'q_vol', 'trades', 'tb_base', 'tb_quote', 'ignore']
             df = pd.DataFrame(raw_data, columns=cols)
             for col in ['open', 'high', 'low', 'close', 'volume']:
                 df[col] = df[col].astype(float)
-            if live_price and len(df) > 0:
-                df.loc[df.index[-1], 'close'] = live_price  # 0ms Ticker Override
+            if live_price is not None and len(df) > 0:
+                df.loc[df.index[-1], 'close'] = live_price  # 0ms Binance Spot Ticker Override
             return df
     except Exception as e:
         print(f"Binance API error: {e}")
     
-    return fetch_nifty_live_data(config.BTC_SYMBOL, timeframe, period)
+    # Retry Binance Spot REST API directly to maintain exact Binance Spot price parity
+    try:
+        klines_url = f"https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval={timeframe}&limit=50"
+        k_res = requests.get(klines_url, timeout=5)
+        if k_res.status_code == 200:
+            raw_data = k_res.json()
+            cols = ['time', 'open', 'high', 'low', 'close', 'volume', 'close_time', 'q_vol', 'trades', 'tb_base', 'tb_quote', 'ignore']
+            df = pd.DataFrame(raw_data, columns=cols)
+            for col in ['open', 'high', 'low', 'close', 'volume']:
+                df[col] = df[col].astype(float)
+            return df
+    except Exception:
+        pass
+
+    return pd.DataFrame()
 
 def fetch_india_vix():
     try:
