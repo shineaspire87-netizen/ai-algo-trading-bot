@@ -39,6 +39,25 @@ def send_telegram_alert(message):
         except Exception:
             pass
 
+def send_deduped_telegram_alert(dedup_key: str, alert_msg: str):
+    """
+    Dispatches Telegram Push Alert EXACTLY ONCE per 15M candle block by persisting dedup_key to live_state.json on DISK.
+    Eliminates 3-second st_autorefresh and session reset notification spam!
+    """
+    if st.session_state.get("last_notified_signal") == dedup_key:
+        return
+
+    disk_state = trade_logger.load_live_state()
+    last_notified = disk_state.get("last_notified_signal", "")
+    
+    if last_notified == dedup_key:
+        st.session_state.last_notified_signal = dedup_key
+        return
+
+    trade_logger.save_live_state({"last_notified_signal": dedup_key})
+    st.session_state.last_notified_signal = dedup_key
+    send_telegram_alert(alert_msg)
+
 def get_candle_confirmation_status(ist_time=None):
     """Fail-Safe Confirmation Window Evaluator (Zero Streamlit Cloud AttributeError)"""
     if hasattr(quant_math_engine, "get_candle_confirmation_status"):
@@ -589,12 +608,13 @@ if selected_asset == "BITCOIN (BTC/USDT)":
 
     conf_info = get_candle_confirmation_status()
 
-    # DEDUPLICATED TELEGRAM PUSH ALERT (EXACTLY ONCE PER 15M CANDLE)
-    telegram_dedup_key = f"BTC_{signal_type}_{candle_timestamp}"
-    if signal_type in ["BUY_CALL", "BUY_PUT"] and st.session_state.last_notified_signal != telegram_dedup_key:
+    # DEDUPLICATED TELEGRAM PUSH ALERT (EXACTLY ONCE PER 15M CANDLE DISK PERSISTED)
+    ist_now_btc = data_feed.get_ist_now()
+    btc_candle_block = ist_now_btc.strftime("%Y-%m-%d_%H:") + str((ist_now_btc.minute // 15) * 15).zfill(2)
+    telegram_dedup_key = f"BTC_{signal_type}_{btc_candle_block}"
+    if signal_type in ["BUY_CALL", "BUY_PUT"]:
         alert_msg = f"<b>🚨 BITCOIN 15M CANDLE WIN SIGNAL</b>\n\nDirection: <b>{signal_type}</b>\nWin Confidence: <b>{confidence_score:.1f}%</b>\nEntry Zone (Locked): <b>${entry_zone_price:,.2f}</b>\nTP1 (+0.25%): <b>${btc_tp1:,.2f}</b>\nSL (-0.15%): <b>${btc_sl:,.2f}</b>"
-        send_telegram_alert(alert_msg)
-        st.session_state.last_notified_signal = telegram_dedup_key
+        send_deduped_telegram_alert(telegram_dedup_key, alert_msg)
 
     st.subheader("📍 LIVE BITCOIN 15M CANDLE WIN PREDICTOR")
     if signal_type == "BUY_CALL":
@@ -701,12 +721,13 @@ else: # NIFTY 50 MODE
 
     conf_info = get_candle_confirmation_status(ist_now)
 
-    # DEDUPLICATED TELEGRAM PUSH ALERT (EXACTLY ONCE PER 15M CANDLE)
-    telegram_dedup_key = f"NIFTY_{signal_type}_{candle_timestamp}"
-    if signal_type in ["BUY_CALL", "BUY_PUT"] and st.session_state.last_notified_signal != telegram_dedup_key:
+    # DEDUPLICATED TELEGRAM PUSH ALERT (EXACTLY ONCE PER 15M CANDLE DISK PERSISTED)
+    ist_now_nifty = data_feed.get_ist_now()
+    nifty_candle_block = ist_now_nifty.strftime("%Y-%m-%d_%H:") + str((ist_now_nifty.minute // 15) * 15).zfill(2)
+    telegram_dedup_key = f"NIFTY_{signal_type}_{nifty_candle_block}"
+    if signal_type in ["BUY_CALL", "BUY_PUT"]:
         alert_msg = f"<b>🚨 NIFTY 50 CANDLE WIN SIGNAL</b>\n\nDirection: <b>{signal_type}</b>\nStrike: <b>NIFTY {atm_strike}</b>\nSpot: <b>₹{spot_price:,.2f}</b>\nEntry Zone (Locked): <b>₹{entry_zone_price:,.2f}</b>\nSL: <b>-8 pts</b>\nTP1: <b>+12 pts</b>"
-        send_telegram_alert(alert_msg)
-        st.session_state.last_notified_signal = telegram_dedup_key
+        send_deduped_telegram_alert(telegram_dedup_key, alert_msg)
 
     st.subheader("📍 LIVE NIFTY 50 15M CANDLE WIN PREDICTOR")
     if signal_type == "BUY_CALL":
