@@ -8,7 +8,7 @@ def run_multi_asset_bot():
     print("🚀 MULTI-ASSET NSE ALGO SCANNER BOT STARTED 🚀")
     print("==========================================================")
     
-    broker = PaperBroker(initial_capital=100000)
+    broker = PaperBroker(initial_capital=50.0)
     
     while True:
         try:

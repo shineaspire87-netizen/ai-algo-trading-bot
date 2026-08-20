@@ -9,6 +9,7 @@ DEFAULT_SYMBOL = "^NSEI"           # NIFTY 50 Ticker
 BTC_SYMBOL = "BTC-USD"             # Bitcoin Ticker
 VIX_SYMBOL = "^INDIAVIX"           # India VIX Ticker
 TIMEFRAME = "15m"                  # 15-Minute Candle Timeframe
+INITIAL_CAPITAL = 50.0             # Default Bot Trading Capital ($50.00 USD)
 
 # --- NIFTY 15M MICRO-SCALP RISK PARAMETERS (RUPEES ₹) ---
 NIFTY_LOT_SIZE = 25

@@ -140,8 +140,21 @@ def execute_paper_trade_exit(trade_record: dict, exit_price: float, exit_reason:
     except Exception as e:
         print(f"Telegram Exit Alert Error: {e}")
     
-    return trade_record
-    
+    # Log into trade_logger permanent engine
+    try:
+        import trade_logger
+        trade_logger.record_completed_trade(
+            symbol=symbol,
+            strike=opt_t,
+            entry_price=entry_p,
+            exit_price=exit_price,
+            qty=q,
+            status="WIN" if net_pnl > 0 else "LOSS",
+            win_loss_reason=exit_reason
+        )
+    except Exception as e:
+        print(f"trade_logger recording error: {e}")
+
     return trade_record
 
 def execute_paper_exit(trade_record, exit_price, exit_reason):
@@ -209,7 +222,7 @@ def apply_multi_asset_trailing_lock(trade_record: dict, current_price: float) ->
 
 
 class PaperBroker:
-    def __init__(self, initial_capital=100000):
+    def __init__(self, initial_capital=50.0):
         self.capital = initial_capital
         self.position = None
         self.daily_trades_count = 0
@@ -253,7 +266,7 @@ class PaperBroker:
             try:
                 with open(STATE_JSON, "r", encoding="utf-8") as f:
                     state = json.load(f)
-                    self.capital = state.get("capital", 100000)
+                    self.capital = state.get("capital", 50.0)
                     self.daily_trades_count = state.get("daily_trades_count", 0)
                     self.daily_pnl = state.get("daily_pnl", 0.0)
                     self.position = state.get("position", None)

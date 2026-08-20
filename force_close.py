@@ -43,15 +43,15 @@ def force_close_active_trade():
     else:
         pnl = (exit_prem - entry_prem) * quantity * 10
 
-    # Read current capital balance (default to 100022.50 if missing)
-    prev_balance = 100022.50
+    # Read current capital balance (default to 50.00 if missing)
+    prev_balance = 50.00
     if os.path.exists(CSV_FILE) and os.path.getsize(CSV_FILE) > 0:
         with open(CSV_FILE, mode="r", encoding="utf-8") as f:
             reader = csv.DictReader(f)
             rows = list(reader)
             if rows:
                 try:
-                    prev_balance = float(rows[-1].get("Capital_Balance", 100022.50))
+                    prev_balance = float(rows[-1].get("Capital_Balance", 50.00))
                 except:
                     pass
 
@@ -84,9 +84,27 @@ def force_close_active_trade():
             f"{new_capital_balance:.2f}"
         ])
 
-    # 5. Clear active trade json so dashboard clears the active position view
+    # 5. Record trade in trade_logger & Clear active state
+    try:
+        import trade_logger
+        trade_logger.record_completed_trade(
+            symbol=symbol,
+            strike=option_type,
+            entry_price=entry_price,
+            exit_price=exit_price,
+            qty=quantity,
+            status="WIN" if pnl > 0 else "LOSS",
+            win_loss_reason=exit_reason
+        )
+        trade_logger.save_live_state({"active_trade": {"status": "NO_POSITION"}})
+    except Exception as e:
+        print(f"Error updating trade_logger on force close: {e}")
+
     if os.path.exists(ACTIVE_JSON):
-        os.remove(ACTIVE_JSON)
+        try:
+            os.remove(ACTIVE_JSON)
+        except Exception:
+            pass
     
     print(f"✅ Trade Force Closed Successfully! PnL: {pnl:.2f}, New Balance: {new_capital_balance:.2f}")
 

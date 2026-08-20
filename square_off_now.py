@@ -6,7 +6,7 @@ import pandas as pd
 from paper_broker import PaperBroker
 
 def force_close_trade():
-    broker = PaperBroker(initial_capital=100000)
+    broker = PaperBroker(initial_capital=50.0)
     
     ACTIVE_JSON = "active_trade.json"
     if os.path.exists(ACTIVE_JSON):
@@ -38,7 +38,7 @@ def force_close_trade():
             }
             
             pnl = round((exit_premium - e_price) * qty, 2)
-            broker.capital = 100000 + pnl
+            broker.capital = 50.0 + pnl
             broker._log_trade(exit_premium, "MARKET_CLOSE_SQUARE_OFF", pnl, "2026-08-14 15:15:00")
             broker._clear_active_json()
             print(f"✅ இன்றைய Reliance டிரேட் வெற்றிகரமாக க்ளோஸ் செய்யப்பட்டது! PnL: +₹{pnl:.2f}")

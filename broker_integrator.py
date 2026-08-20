@@ -98,7 +98,7 @@ def render_broker_integrator_tab():
     # 1. EXECUTION MODE RADIO SELECTOR
     mode_options = [
         "🟢 Binance Live Real Money ($5.56 USDT Spot)",
-        "🟡 Paper Trading Simulator ($100,000.00 Virtual)"
+        "🟡 Paper Trading Simulator ($50.00 Virtual)"
     ]
     
     current_mode = st.session_state.get('execution_mode', 'REAL')

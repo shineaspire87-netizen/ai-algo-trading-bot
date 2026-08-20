@@ -232,3 +232,52 @@ def master_institutional_decision_engine(
 
     breakdown["l5_status"] = "🔴 REJECTED: No Directional Momentum"
     return "WAIT", breakdown["l5_status"], 0.0, breakdown
+
+
+def get_candle_confirmation_status(ist_time=None):
+    """
+    Evaluates current 15M candle's 60-second institutional confirmation window & 4-min entry status.
+    """
+    if ist_time is None:
+        ist_now = datetime.now()
+    elif hasattr(ist_time, "minute"):
+        ist_now = ist_time
+    else:
+        ist_now = datetime.now()
+
+    minute = ist_now.minute
+    second = ist_now.second
+    elapsed_sec = (minute % 15) * 60 + second
+    rem_sec = max(0, 900 - elapsed_sec)
+    
+    # 1. 60s Confirmation Window
+    if elapsed_sec <= 60:
+        conf_remaining = max(0, 60 - elapsed_sec)
+        conf_status = "ACTIVE"
+        conf_msg = f"⏳ 60s INSTITUTIONAL CONFIRMATION WINDOW: {conf_remaining}s REMAINING..."
+    else:
+        conf_remaining = 0
+        conf_status = "PASSED"
+        conf_msg = "🟢 STRONG 60s CONFIRMATION PASSED! (SAFE ENTRY ACTIVE)"
+
+    # 2. 4-Min Safe Entry Window
+    if 60 <= elapsed_sec <= 240:
+        entry_window_status = "SAFEST_4MIN"
+        entry_window_msg = "🟢 SAFEST 4-MIN ENTRY WINDOW ACTIVE! (EXECUTE NOW ON DHAN / BINANCE)"
+    elif 240 < elapsed_sec <= 600:
+        entry_window_status = "EXTENDED"
+        entry_window_msg = "🟡 EXTENDED ENTRY WINDOW (CHECK IF PRICE IS STILL IN ENTRY ZONE)"
+    else:
+        entry_window_status = "LATE_WARNING"
+        entry_window_msg = "🔴 LATE ENTRY WARNING: TOO LATE FOR THIS CANDLE (WAIT FOR NEXT CANDLE OPEN)"
+
+    return {
+        "elapsed_seconds": elapsed_sec,
+        "remaining_seconds": rem_sec,
+        "conf_status": conf_status,
+        "conf_remaining": conf_remaining,
+        "conf_msg": conf_msg,
+        "entry_window_status": entry_window_status,
+        "entry_window_msg": entry_window_msg
+    }
+

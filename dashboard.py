@@ -81,9 +81,12 @@ if selected_asset == "BITCOIN (BTC/USDT)":
     </div>
     <script>
     function updateClockAndCandleTimer() {
+        const doc = window.parent.document || document;
         const now = new Date();
-        document.getElementById('live-date').innerText = '📅 ' + now.toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' });
-        document.getElementById('live-clock').innerText = '⏰ ' + now.toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true }) + ' IST';
+        const dateElem = doc.getElementById('live-date');
+        const clockElem = doc.getElementById('live-clock');
+        if (dateElem) dateElem.innerText = '📅 ' + now.toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' });
+        if (clockElem) clockElem.innerText = '⏰ ' + now.toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true }) + ' IST';
         
         const min = now.getMinutes();
         const sec = now.getSeconds();
@@ -95,14 +98,82 @@ if selected_asset == "BITCOIN (BTC/USDT)":
         const minStr = String(remMin).padStart(2, '0');
         const secStr = String(remS).padStart(2, '0');
         
-        const timerElem = document.getElementById('candle-timer');
-        if (remSec <= 60) {
-            timerElem.style.color = '#FF5252';
-            timerElem.innerText = '⚠️ GET READY FOR NEXT CANDLE ENTRY (' + minStr + ':' + secStr + ' REMAINING)';
-        } else {
-            timerElem.style.color = '#FFD54F';
-            timerElem.innerText = '⏳ 15M CANDLE COUNTDOWN: ' + minStr + ':' + secStr + ' REMAINING';
+        const timerElem = doc.getElementById('candle-timer');
+        if (timerElem) {
+            if (remSec <= 60) {
+                timerElem.style.color = '#FF5252';
+                timerElem.innerText = '⚠️ GET READY FOR NEXT CANDLE ENTRY (' + minStr + ':' + secStr + ' REMAINING)';
+            } else {
+                timerElem.style.color = '#FFD54F';
+                timerElem.innerText = '⏳ 15M CANDLE COUNTDOWN: ' + minStr + ':' + secStr + ' REMAINING';
+            }
         }
+
+        // 1. 60-Second Institutional Confirmation Window Timer
+        const confirmRem = 60 - elapsedSec;
+        const confirmElems = doc.querySelectorAll('.confirm-timer-text');
+        const confirmBoxes = doc.querySelectorAll('.confirm-timer-box');
+
+        confirmElems.forEach(elem => {
+            if (confirmRem >= 0) {
+                elem.innerText = '⏳ 60s INSTITUTIONAL CONFIRMATION WINDOW: ' + confirmRem + 's REMAINING...';
+                elem.style.color = '#FFD54F';
+            } else {
+                elem.innerText = '🟢 STRONG 60s CONFIRMATION PASSED! (SAFE ENTRY ACTIVE)';
+                elem.style.color = '#00E676';
+            }
+        });
+
+        confirmBoxes.forEach(box => {
+            if (confirmRem >= 0) {
+                box.style.borderColor = '#FFD54F';
+                box.style.backgroundColor = '#261c02';
+            } else {
+                box.style.borderColor = '#00E676';
+                box.style.backgroundColor = '#0d231a';
+            }
+        });
+
+        // 2. 4-Minute Safe Entry Window Indicator
+        const safeElems = doc.querySelectorAll('.safe-entry-text');
+        const safeBoxes = doc.querySelectorAll('.safe-entry-box');
+
+        let safeMsg = '';
+        let safeColor = '#00E676';
+        let safeBorder = '#00E676';
+        let safeBg = '#00332c';
+
+        if (remSec <= 840 && remSec >= 660) {
+            safeMsg = '🟢 SAFEST 4-MIN ENTRY WINDOW ACTIVE! (EXECUTE NOW ON DHAN / BINANCE)';
+            safeColor = '#00E676';
+            safeBorder = '#00E676';
+            safeBg = '#00332c';
+        } else if (remSec < 660 && remSec >= 300) {
+            safeMsg = '🟡 EXTENDED ENTRY WINDOW (CHECK IF PRICE IS STILL IN ENTRY ZONE)';
+            safeColor = '#FFD54F';
+            safeBorder = '#FFD54F';
+            safeBg = '#332b00';
+        } else if (remSec < 300) {
+            safeMsg = '🔴 LATE ENTRY WARNING: TOO LATE FOR THIS CANDLE (WAIT FOR NEXT CANDLE OPEN)';
+            safeColor = '#FF5252';
+            safeBorder = '#FF5252';
+            safeBg = '#330000';
+        } else {
+            safeMsg = '⏳ WAIT FOR 60s CONFIRMATION TO COMPLETE BEFORE ENTERING...';
+            safeColor = '#FFD54F';
+            safeBorder = '#FFD54F';
+            safeBg = '#261c02';
+        }
+
+        safeElems.forEach(elem => {
+            elem.innerText = safeMsg;
+            elem.style.color = safeColor;
+        });
+
+        safeBoxes.forEach(box => {
+            box.style.borderColor = safeBorder;
+            box.style.backgroundColor = safeBg;
+        });
     }
     setInterval(updateClockAndCandleTimer, 1000); updateClockAndCandleTimer();
 
@@ -110,7 +181,8 @@ if selected_asset == "BITCOIN (BTC/USDT)":
     ws.onmessage = (event) => {
         const data = JSON.parse(event.data);
         const price = parseFloat(data.c).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
-        document.getElementById('btc-ticker-price').innerText = '$' + price;
+        const btcElem = doc.getElementById('btc-ticker-price');
+        if (btcElem) btcElem.innerText = '$' + price;
     };
     </script>
     """, height=85)
@@ -123,9 +195,12 @@ else:
     </div>
     <script>
     function updateClockAndCandleTimer() {
+        const doc = window.parent.document || document;
         const now = new Date();
-        document.getElementById('live-date').innerText = '📅 ' + now.toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' });
-        document.getElementById('live-clock').innerText = '⏰ ' + now.toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true }) + ' IST';
+        const dateElem = doc.getElementById('live-date');
+        const clockElem = doc.getElementById('live-clock');
+        if (dateElem) dateElem.innerText = '📅 ' + now.toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' });
+        if (clockElem) clockElem.innerText = '⏰ ' + now.toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true }) + ' IST';
         
         const min = now.getMinutes();
         const sec = now.getSeconds();
@@ -137,14 +212,82 @@ else:
         const minStr = String(remMin).padStart(2, '0');
         const secStr = String(remS).padStart(2, '0');
         
-        const timerElem = document.getElementById('candle-timer');
-        if (remSec <= 60) {
-            timerElem.style.color = '#FF5252';
-            timerElem.innerText = '⚠️ GET READY FOR NEXT CANDLE ENTRY (' + minStr + ':' + secStr + ' REMAINING)';
-        } else {
-            timerElem.style.color = '#FFD54F';
-            timerElem.innerText = '⏳ 15M CANDLE COUNTDOWN: ' + minStr + ':' + secStr + ' REMAINING';
+        const timerElem = doc.getElementById('candle-timer');
+        if (timerElem) {
+            if (remSec <= 60) {
+                timerElem.style.color = '#FF5252';
+                timerElem.innerText = '⚠️ GET READY FOR NEXT CANDLE ENTRY (' + minStr + ':' + secStr + ' REMAINING)';
+            } else {
+                timerElem.style.color = '#FFD54F';
+                timerElem.innerText = '⏳ 15M CANDLE COUNTDOWN: ' + minStr + ':' + secStr + ' REMAINING';
+            }
         }
+
+        // 1. 60-Second Institutional Confirmation Window Timer
+        const confirmRem = 60 - elapsedSec;
+        const confirmElems = doc.querySelectorAll('.confirm-timer-text');
+        const confirmBoxes = doc.querySelectorAll('.confirm-timer-box');
+
+        confirmElems.forEach(elem => {
+            if (confirmRem >= 0) {
+                elem.innerText = '⏳ 60s INSTITUTIONAL CONFIRMATION WINDOW: ' + confirmRem + 's REMAINING...';
+                elem.style.color = '#FFD54F';
+            } else {
+                elem.innerText = '🟢 STRONG 60s CONFIRMATION PASSED! (SAFE ENTRY ACTIVE)';
+                elem.style.color = '#00E676';
+            }
+        });
+
+        confirmBoxes.forEach(box => {
+            if (confirmRem >= 0) {
+                box.style.borderColor = '#FFD54F';
+                box.style.backgroundColor = '#261c02';
+            } else {
+                box.style.borderColor = '#00E676';
+                box.style.backgroundColor = '#0d231a';
+            }
+        });
+
+        // 2. 4-Minute Safe Entry Window Indicator
+        const safeElems = doc.querySelectorAll('.safe-entry-text');
+        const safeBoxes = doc.querySelectorAll('.safe-entry-box');
+
+        let safeMsg = '';
+        let safeColor = '#00E676';
+        let safeBorder = '#00E676';
+        let safeBg = '#00332c';
+
+        if (remSec <= 840 && remSec >= 660) {
+            safeMsg = '🟢 SAFEST 4-MIN ENTRY WINDOW ACTIVE! (EXECUTE NOW ON DHAN / BINANCE)';
+            safeColor = '#00E676';
+            safeBorder = '#00E676';
+            safeBg = '#00332c';
+        } else if (remSec < 660 && remSec >= 300) {
+            safeMsg = '🟡 EXTENDED ENTRY WINDOW (CHECK IF PRICE IS STILL IN ENTRY ZONE)';
+            safeColor = '#FFD54F';
+            safeBorder = '#FFD54F';
+            safeBg = '#332b00';
+        } else if (remSec < 300) {
+            safeMsg = '🔴 LATE ENTRY WARNING: TOO LATE FOR THIS CANDLE (WAIT FOR NEXT CANDLE OPEN)';
+            safeColor = '#FF5252';
+            safeBorder = '#FF5252';
+            safeBg = '#330000';
+        } else {
+            safeMsg = '⏳ WAIT FOR 60s CONFIRMATION TO COMPLETE BEFORE ENTERING...';
+            safeColor = '#FFD54F';
+            safeBorder = '#FFD54F';
+            safeBg = '#261c02';
+        }
+
+        safeElems.forEach(elem => {
+            elem.innerText = safeMsg;
+            elem.style.color = safeColor;
+        });
+
+        safeBoxes.forEach(box => {
+            box.style.borderColor = safeBorder;
+            box.style.backgroundColor = safeBg;
+        });
     }
     setInterval(updateClockAndCandleTimer, 1000); updateClockAndCandleTimer();
     </script>
@@ -234,10 +377,17 @@ if selected_asset == "BITCOIN (BTC/USDT)":
         send_telegram_alert(alert_msg)
         st.session_state.last_notified_signal = signal_key
 
+    conf_info = quant_math_engine.get_candle_confirmation_status()
+
     st.subheader("📍 LIVE BITCOIN 15M CANDLE WIN PREDICTOR")
     if signal_type == "BUY_CALL":
         st.markdown(f"""
         <div class='signal-card-buy'>
+            <div class='confirm-timer-box' style='background-color:{"#261c02" if conf_info["conf_status"] == "ACTIVE" else "#0d231a"}; border:1px solid {"#FFD54F" if conf_info["conf_status"] == "ACTIVE" else "#00E676"}; padding:8px 12px; border-radius:8px; margin-bottom:12px; text-align:center;'>
+                <span class='confirm-timer-text' style='color:{"#FFD54F" if conf_info["conf_status"] == "ACTIVE" else "#00E676"}; font-size:14px; font-weight:bold; font-family:monospace;'>
+                    {conf_info["conf_msg"]}
+                </span>
+            </div>
             <h1 style='color:#00E676; margin:0;'>🟩 PREDICTED WINNING CANDLE: GREEN (UP)</h1>
             <p style='font-size:18px; margin-top:8px;'>Candle Win Confidence: <b>{conf_val:.1f}%</b> | Price: <b>${spot_val:,.2f}</b></p>
             <hr style='border-color:#00E676;'>
@@ -247,6 +397,11 @@ if selected_asset == "BITCOIN (BTC/USDT)":
     elif signal_type == "BUY_PUT":
         st.markdown(f"""
         <div class='signal-card-sell'>
+            <div class='confirm-timer-box' style='background-color:{"#261c02" if conf_info["conf_status"] == "ACTIVE" else "#0d231a"}; border:1px solid {"#FFD54F" if conf_info["conf_status"] == "ACTIVE" else "#00E676"}; padding:8px 12px; border-radius:8px; margin-bottom:12px; text-align:center;'>
+                <span class='confirm-timer-text' style='color:{"#FFD54F" if conf_info["conf_status"] == "ACTIVE" else "#00E676"}; font-size:14px; font-weight:bold; font-family:monospace;'>
+                    {conf_info["conf_msg"]}
+                </span>
+            </div>
             <h1 style='color:#E040FB; margin:0;'>🟪 PREDICTED WINNING CANDLE: RED (DOWN)</h1>
             <p style='font-size:18px; margin-top:8px;'>Candle Win Confidence: <b>{conf_val:.1f}%</b> | Price: <b>${spot_val:,.2f}</b></p>
             <hr style='border-color:#E040FB;'>
@@ -256,6 +411,11 @@ if selected_asset == "BITCOIN (BTC/USDT)":
     else:
         st.markdown(f"""
         <div class='signal-card-wait'>
+            <div class='confirm-timer-box' style='background-color:{"#261c02" if conf_info["conf_status"] == "ACTIVE" else "#0d231a"}; border:1px solid {"#FFD54F" if conf_info["conf_status"] == "ACTIVE" else "#00E676"}; padding:8px 12px; border-radius:8px; margin-bottom:12px; text-align:center;'>
+                <span class='confirm-timer-text' style='color:{"#FFD54F" if conf_info["conf_status"] == "ACTIVE" else "#00E676"}; font-size:14px; font-weight:bold; font-family:monospace;'>
+                    {conf_info["conf_msg"]}
+                </span>
+            </div>
             <h1 style='color:#B0BEC5; margin:0;'>⚪ WAIT - LOW CANDLE WIN CONFIDENCE (< 70%)</h1>
             <p style='font-size:15px; margin-top:8px;'>Reason: <b>{reason_code}</b></p>
         </div>
@@ -271,6 +431,11 @@ if selected_asset == "BITCOIN (BTC/USDT)":
             • <b>Target 1 (TP1)   :</b> ${tp1_val:,.2f} (+0.25% Fast Target)<br>
             • <b>Target 2 (TP2)   :</b> ${tp2_val:,.2f} (+0.50% Trend Target)<br>
             • <b>Candle Expiration:</b> Strict Exit @ 15M Candle Close
+            <div class='safe-entry-box' style='background-color:#00332c; border:1px solid #00E676; padding:10px; border-radius:8px; margin-top:12px; text-align:center;'>
+                <span class='safe-entry-text' style='color:#00E676; font-size:13px; font-weight:bold; font-family:monospace;'>
+                    {conf_info["entry_window_msg"]}
+                </span>
+            </div>
         </div>
         """, unsafe_allow_html=True)
 
@@ -338,10 +503,17 @@ else: # NIFTY 50 MODE
         send_telegram_alert(alert_msg)
         st.session_state.last_notified_signal = signal_key
 
+    conf_info = quant_math_engine.get_candle_confirmation_status(ist_now)
+
     st.subheader("📍 LIVE NIFTY 50 15M CANDLE WIN PREDICTOR")
     if signal_type == "BUY_CALL":
         st.markdown(f"""
         <div class='signal-card-buy'>
+            <div class='confirm-timer-box' style='background-color:{"#261c02" if conf_info["conf_status"] == "ACTIVE" else "#0d231a"}; border:1px solid {"#FFD54F" if conf_info["conf_status"] == "ACTIVE" else "#00E676"}; padding:8px 12px; border-radius:8px; margin-bottom:12px; text-align:center;'>
+                <span class='confirm-timer-text' style='color:{"#FFD54F" if conf_info["conf_status"] == "ACTIVE" else "#00E676"}; font-size:14px; font-weight:bold; font-family:monospace;'>
+                    {conf_info["conf_msg"]}
+                </span>
+            </div>
             <h1 style='color:#00E676; margin:0;'>🟩 PREDICTED WINNING CANDLE: CALL (CE)</h1>
             <p style='font-size:18px; margin-top:8px;'>NIFTY 50 Spot: <b>₹{spot_price:,.2f}</b></p>
             <hr style='border-color:#00E676;'>
@@ -351,7 +523,12 @@ else: # NIFTY 50 MODE
     elif signal_type == "BUY_PUT":
         st.markdown(f"""
         <div class='signal-card-sell'>
-            <h1 style='color:#E040FB; margin:0;'>🟪 PREDICTED WINNING CANDLE: PUT (PE)</h1>
+            <div class='confirm-timer-box' style='background-color:{"#261c02" if conf_info["conf_status"] == "ACTIVE" else "#0d231a"}; border:1px solid {"#FFD54F" if conf_info["conf_status"] == "ACTIVE" else "#00E676"}; padding:8px 12px; border-radius:8px; margin-bottom:12px; text-align:center;'>
+                <span class='confirm-timer-text' style='color:{"#FFD54F" if conf_info["conf_status"] == "ACTIVE" else "#00E676"}; font-size:14px; font-weight:bold; font-family:monospace;'>
+                    {conf_info["conf_msg"]}
+                </span>
+            </div>
+            <h1 style='color:#E040FB; margin:0;'>🟪 PREDICTED WINNING CANDLE: RED (DOWN)</h1>
             <p style='font-size:18px; margin-top:8px;'>NIFTY 50 Spot: <b>₹{spot_price:,.2f}</b></p>
             <hr style='border-color:#E040FB;'>
             <h2>🎯 TARGET STRIKE: <u style='color:#E040FB;'>NIFTY {atm_strike} PE</u></h2>
@@ -360,6 +537,11 @@ else: # NIFTY 50 MODE
     else:
         st.markdown(f"""
         <div class='signal-card-wait'>
+            <div class='confirm-timer-box' style='background-color:{"#261c02" if conf_info["conf_status"] == "ACTIVE" else "#0d231a"}; border:1px solid {"#FFD54F" if conf_info["conf_status"] == "ACTIVE" else "#00E676"}; padding:8px 12px; border-radius:8px; margin-bottom:12px; text-align:center;'>
+                <span class='confirm-timer-text' style='color:{"#FFD54F" if conf_info["conf_status"] == "ACTIVE" else "#00E676"}; font-size:14px; font-weight:bold; font-family:monospace;'>
+                    {conf_info["conf_msg"]}
+                </span>
+            </div>
             <h1 style='color:#B0BEC5; margin:0;'>⚪ WAIT - LOW CANDLE WIN CONFIDENCE (< 70%)</h1>
             <p style='font-size:15px; margin-top:8px;'>Reason: <b>{reason_code}</b></p>
         </div>
@@ -375,6 +557,11 @@ else: # NIFTY 50 MODE
             • <b>Target 1 (TP1)   :</b> +12 Points Premium (Fast Profit: ₹300 / lot)<br>
             • <b>Target 2 (TP2)   :</b> +25 Points Premium (Max Profit: ₹625 / lot)<br>
             • <b>Candle Expiration:</b> Strict Exit @ 15M Candle Close
+            <div class='safe-entry-box' style='background-color:#00332c; border:1px solid #00E676; padding:10px; border-radius:8px; margin-top:12px; text-align:center;'>
+                <span class='safe-entry-text' style='color:#00E676; font-size:13px; font-weight:bold; font-family:monospace;'>
+                    {conf_info["entry_window_msg"]}
+                </span>
+            </div>
         </div>
         """, unsafe_allow_html=True)
 
@@ -383,11 +570,30 @@ current_active_trade = trade_logger.load_live_state().get("active_trade", {})
 if current_active_trade.get("status") == "ACTIVE":
     act_asset = current_active_trade.get("asset", selected_asset)
     act_dir = current_active_trade.get("signal_type", "BUY_CALL")
-    act_entry = current_active_trade.get("entry_price", 0.0)
-    act_tp1 = current_active_trade.get("target_1", 0.0)
-    act_sl = current_active_trade.get("stop_loss", 0.0)
+    act_entry = float(current_active_trade.get("entry_price", 0.0))
+    act_tp1 = float(current_active_trade.get("target_1", 0.0))
+    act_sl = float(current_active_trade.get("stop_loss", 0.0))
     act_curr = "$" if act_asset == "BITCOIN" else "₹"
     
+    # Auto-Evaluation of TP / SL against current spot price
+    auto_exit_triggered = False
+    exit_reason = ""
+    if spot_val > 0 and act_tp1 > 0 and act_sl > 0:
+        if act_dir == "BUY_CALL":
+            if spot_val >= act_tp1:
+                auto_exit_triggered = True
+                exit_reason = "TARGET_1_HIT (+0.25% / +12 pts)"
+            elif spot_val <= act_sl:
+                auto_exit_triggered = True
+                exit_reason = "STOP_LOSS_HIT (-0.15% / -8 pts)"
+        elif act_dir == "BUY_PUT":
+            if spot_val <= act_tp1:
+                auto_exit_triggered = True
+                exit_reason = "TARGET_1_HIT (+0.25% / +12 pts)"
+            elif spot_val >= act_sl:
+                auto_exit_triggered = True
+                exit_reason = "STOP_LOSS_HIT (-0.15% / -8 pts)"
+
     st.markdown(f"""
     <div class='active-trade-box'>
         <b>⚡ LIVE ACTIVE POSITION RUNNING (PERSISTENT):</b><br>
@@ -398,6 +604,38 @@ if current_active_trade.get("status") == "ACTIVE":
         • <b>Trade Status</b>    : 🟢 ACTIVE RUNNING (State Restored on F5 Refresh)
     </div>
     """, unsafe_allow_html=True)
+    
+    col_exit1, col_exit2 = st.columns([2, 1])
+    with col_exit1:
+        st.write(f"📊 **Current Live Spot:** `{act_curr}{spot_val:,.2f}`")
+    with col_exit2:
+        if st.button("⚡ Square Off Position Now", key="btn_square_off_dashboard"):
+            auto_exit_triggered = True
+            exit_reason = "MANUAL_SQUARE_OFF"
+
+    if auto_exit_triggered:
+        qty = 15 if act_asset != "BITCOIN" else 1
+        exit_p = spot_val if spot_val > 0 else act_entry
+        is_win = False
+        if "TARGET" in exit_reason:
+            is_win = True
+        elif "STOP_LOSS" in exit_reason:
+            is_win = False
+        else:
+            is_win = (exit_p >= act_entry) if act_dir == "BUY_CALL" else (exit_p <= act_entry)
+            
+        trade_logger.record_completed_trade(
+            symbol=act_asset,
+            strike=act_dir,
+            entry_price=act_entry,
+            exit_price=exit_p,
+            qty=qty,
+            status="WIN" if is_win else "LOSS",
+            win_loss_reason=exit_reason
+        )
+        trade_logger.save_live_state({"active_trade": {"status": "NO_POSITION"}})
+        st.success(f"🎉 Active Position Closed! Reason: {exit_reason}")
+        st.rerun()
 
 if breakdown:
     st.markdown(f"""
@@ -416,6 +654,8 @@ st.subheader("📊 BOT PERFORMANCE LOGS & ACCURACY TRACKER")
 
 tab1, tab2 = st.tabs(["📅 Today's Live Log", "📊 7-Day Weekly Performance Tracker"])
 
+cols_to_show = ["date_time", "symbol", "entry_price", "exit_price", "quantity", "gross_pnl", "brokerage_fee", "net_pnl", "result"]
+
 with tab1:
     today_summary = trade_logger.get_today_summary()
     col1, col2, col3, col4 = st.columns(4)
@@ -427,7 +667,8 @@ with tab1:
     today_trades = trade_logger.get_today_trades()
     if today_trades:
         df_today = pd.DataFrame(today_trades)
-        st.dataframe(df_today[["date_time", "symbol", "entry_price", "exit_price", "quantity", "gross_pnl", "brokerage_fee", "net_pnl", "result"]], use_container_width=True)
+        available_cols = [c for c in cols_to_show if c in df_today.columns]
+        st.dataframe(df_today[available_cols], use_container_width=True)
     else:
         st.info("ℹ️ No trades recorded today yet. Bot is scanning 15M candles for high-probability setups.")
 
@@ -442,7 +683,8 @@ with tab2:
     weekly_trades = trade_logger.get_weekly_trades(days=7)
     if weekly_trades:
         df_weekly = pd.DataFrame(weekly_trades)
-        st.dataframe(df_weekly[["date_time", "symbol", "entry_price", "exit_price", "quantity", "gross_pnl", "brokerage_fee", "net_pnl", "result"]], use_container_width=True)
+        available_cols = [c for c in cols_to_show if c in df_weekly.columns]
+        st.dataframe(df_weekly[available_cols], use_container_width=True)
     else:
         st.info("ℹ️ No weekly trade history recorded yet.")
 
