@@ -14,7 +14,7 @@ def calculate_candle_body_ratio(high, low, open_p, close_p):
 
 def predict_15m_candle_winning_direction(df):
     """
-    Evaluates Bitcoin 15M Candlestick Signal with STRICT DYNAMIC 🟢 PASSED / 🔴 FAILED Badges.
+    Evaluates 15M Candlestick Signal with STRICT DYNAMIC 🟢 PASSED / 🔴 FAILED Logic.
     """
     if df.empty or len(df) < 5:
         return "WAIT", 0.0, "REJECT: Insufficient Data", {}
@@ -29,38 +29,38 @@ def predict_15m_candle_winning_direction(df):
     volume = float(last_row['volume']) if 'volume' in last_row and float(last_row['volume']) > 0 else 50000.0
     
     prev_close = float(prev_row['close'])
-    price_change_pct = ((close - prev_close) / prev_close) * 100.0 if prev_close > 0 else 0.0
+    price_change_pct = ((close - prev_close) / prev_close) * 100.0
     
-    # 1. Body Ratio
+    # 1. Body Ratio Check (Must be >= 50%)
     body_ratio = calculate_candle_body_ratio(high, low, open_p, close)
     l1_passed = body_ratio >= 50.0
     l1_str = f"🟢 PASSED (Body Intensity: {body_ratio}%)" if l1_passed else f"🔴 FAILED (Low Body Intensity: {body_ratio}% < 50%)"
     
-    # 2. Volume Acceleration
+    # 2. Volume Acceleration Check (Must be >= 1.0x)
     avg_vol = df['volume'].rolling(5).mean().iloc[-1] if 'volume' in df and df['volume'].iloc[-1] > 0 else 50000.0
     vol_ratio = (volume / avg_vol) if avg_vol > 0 else 1.0
     l2_passed = vol_ratio >= 1.0
     l2_str = f"🟢 PASSED (Volume Acceleration: {vol_ratio:.1f}x)" if l2_passed else f"🔴 FAILED (Low Volume Accel: {vol_ratio:.1f}x < 1.0x)"
     
-    # 3. Momentum Delta %
+    # 3. Momentum Delta Check (Must be >= 0.15%)
     l3_passed = abs(price_change_pct) >= 0.15
     l3_str = f"🟢 PASSED (15M Momentum: {price_change_pct:+.2f}%)" if l3_passed else f"🔴 FAILED (Weak Momentum: {price_change_pct:+.2f}% < 0.15%)"
     
-    # 4. Fib Retrace Guard
+    # 4. Fib Retrace Guard Check (Must be <= 0.886)
     swing_range = high - low
     retrace = (high - close) / swing_range if swing_range > 0 else 0.5
     l4_passed = retrace <= 0.886
     l4_str = f"🟢 PASSED (Fib Discount: {retrace:.3f})" if l4_passed else f"🔴 FAILED (Overextended Fib: {retrace:.3f} > 0.886)"
     
-    # 5. Calculate Candle Win Confidence Score (%)
+    # 5. Calculate Confidence Score
     confidence = 50.0
     if abs(price_change_pct) >= 0.25: confidence += 15.0
     if l1_passed: confidence += 12.0
     if l2_passed: confidence += 10.0
     if l4_passed: confidence += 8.0
-    confidence = float(min(95.0, confidence))
+    confidence = min(95.0, confidence)
     
-    l5_passed = confidence >= 70.0 and l1_passed and l3_passed and l4_passed
+    l5_passed = confidence >= 70.0 and l1_passed and l2_passed and l3_passed and l4_passed
     
     breakdown = {
         "l1_status": l1_str,
