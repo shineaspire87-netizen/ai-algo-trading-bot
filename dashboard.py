@@ -104,17 +104,173 @@ def check_market_status(asset_choice):
 
 st.markdown("""
 <style>
-    .main-title { font-size: 26px; font-weight: bold; text-align: center; color: #1E88E5; }
-    .sub-title { font-size: 14px; text-align: center; color: #B0BEC5; margin-bottom: 10px; }
-    .market-badge-open { background-color: #004D40; border: 1px solid #00E676; padding: 8px; border-radius: 8px; text-align: center; color: #00E676; font-weight: bold; margin-bottom: 12px; }
-    .market-badge-closed { background-color: #371B1B; border: 1px solid #FF5252; padding: 8px; border-radius: 8px; text-align: center; color: #FF5252; font-weight: bold; margin-bottom: 12px; }
-    .signal-card-buy { background-color: #00332c; border: 2px solid #00E676; padding: 22px; border-radius: 15px; text-align: center; color: white; }
-    .signal-card-sell { background-color: #311b92; border: 2px solid #E040FB; padding: 22px; border-radius: 15px; text-align: center; color: white; }
-    .signal-card-wait { background-color: #1c1c1c; border: 2px solid #757575; padding: 22px; border-radius: 15px; text-align: center; color: white; }
-    .active-trade-box { background-color: #1a2e05; border: 2px dashed #00E676; padding: 18px; border-radius: 12px; margin-top: 15px; color: white; font-size: 15px; line-height: 1.6; }
-    .layer-box { background-color: #0d1b2a; border: 1px solid #1e3a8a; padding: 15px; border-radius: 10px; color: #e2e8f0; font-size: 15px; margin-top: 15px; line-height: 1.6; }
-    .diagnostic-box { background-color: #1a102f; border: 1px solid #9c27b0; padding: 18px; border-radius: 12px; margin-top: 20px; color: #e1bee7; font-size: 15px; line-height: 1.6; }
-    .cheat-box { background-color: #0d47a1; padding: 18px; border-radius: 12px; margin-top: 15px; color: white; font-size: 16px; line-height: 1.6; }
+    /* Global Mobile-First Responsive Containers */
+    .main .block-container {
+        padding-top: 1rem !important;
+        padding-bottom: 2rem !important;
+        padding-left: 0.75rem !important;
+        padding-right: 0.75rem !important;
+        max-width: 900px !important;
+    }
+
+    .main-title { 
+        font-size: clamp(20px, 5vw, 28px); 
+        font-weight: bold; 
+        text-align: center; 
+        color: #1E88E5; 
+        line-height: 1.2; 
+        margin-bottom: 4px; 
+    }
+    
+    .sub-title { 
+        font-size: clamp(12px, 3.2vw, 15px); 
+        text-align: center; 
+        color: #B0BEC5; 
+        margin-bottom: 12px; 
+    }
+    
+    .market-badge-open { 
+        background-color: #004D40; 
+        border: 1px solid #00E676; 
+        padding: 8px 12px; 
+        border-radius: 8px; 
+        text-align: center; 
+        color: #00E676; 
+        font-weight: bold; 
+        font-size: clamp(12px, 3.5vw, 14px);
+        margin-bottom: 12px; 
+        word-wrap: break-word; 
+    }
+    
+    .market-badge-closed { 
+        background-color: #371B1B; 
+        border: 1px solid #FF5252; 
+        padding: 8px 12px; 
+        border-radius: 8px; 
+        text-align: center; 
+        color: #FF5252; 
+        font-weight: bold; 
+        font-size: clamp(12px, 3.5vw, 14px);
+        margin-bottom: 12px; 
+        word-wrap: break-word; 
+    }
+    
+    .signal-card-buy { 
+        background-color: #00332c; 
+        border: 2px solid #00E676; 
+        padding: clamp(14px, 4vw, 22px); 
+        border-radius: 15px; 
+        text-align: center; 
+        color: white; 
+        word-wrap: break-word;
+        overflow-wrap: break-word;
+    }
+    
+    .signal-card-sell { 
+        background-color: #311b92; 
+        border: 2px solid #E040FB; 
+        padding: clamp(14px, 4vw, 22px); 
+        border-radius: 15px; 
+        text-align: center; 
+        color: white; 
+        word-wrap: break-word;
+        overflow-wrap: break-word;
+    }
+    
+    .signal-card-wait { 
+        background-color: #1c1c1c; 
+        border: 2px solid #757575; 
+        padding: clamp(14px, 4vw, 22px); 
+        border-radius: 15px; 
+        text-align: center; 
+        color: white; 
+        word-wrap: break-word;
+        overflow-wrap: break-word;
+    }
+    
+    .active-trade-box { 
+        background-color: #1a2e05; 
+        border: 2px dashed #00E676; 
+        padding: clamp(12px, 3.5vw, 18px); 
+        border-radius: 12px; 
+        margin-top: 15px; 
+        color: white; 
+        font-size: clamp(13px, 3.5vw, 15px); 
+        line-height: 1.6; 
+        word-wrap: break-word;
+    }
+    
+    .layer-box { 
+        background-color: #0d1b2a; 
+        border: 1px solid #1e3a8a; 
+        padding: clamp(12px, 3.5vw, 16px); 
+        border-radius: 10px; 
+        color: #e2e8f0; 
+        font-size: clamp(13px, 3.5vw, 15px); 
+        margin-top: 15px; 
+        line-height: 1.6; 
+        word-wrap: break-word;
+    }
+    
+    .diagnostic-box { 
+        background-color: #1a102f; 
+        border: 1px solid #9c27b0; 
+        padding: clamp(14px, 4vw, 18px); 
+        border-radius: 12px; 
+        margin-top: 20px; 
+        color: #e1bee7; 
+        font-size: clamp(13px, 3.5vw, 15px); 
+        line-height: 1.6; 
+        word-wrap: break-word;
+    }
+    
+    .cheat-box { 
+        background-color: #0d47a1; 
+        padding: clamp(14px, 4vw, 18px); 
+        border-radius: 12px; 
+        margin-top: 15px; 
+        color: white; 
+        font-size: clamp(14px, 3.8vw, 16px); 
+        line-height: 1.6; 
+        word-wrap: break-word;
+    }
+
+    /* Mobile Responsive Viewport Adapters */
+    @media (max-width: 768px) {
+        .main .block-container {
+            padding-left: 0.5rem !important;
+            padding-right: 0.5rem !important;
+        }
+
+        /* 4-column metric grids stack cleanly on smartphones */
+        div[data-testid="column"] {
+            width: 100% !important;
+            flex: 1 1 100% !important;
+            min-width: 100% !important;
+            margin-bottom: 8px !important;
+        }
+
+        [data-testid="stMetric"] {
+            background-color: #111827 !important;
+            border: 1px solid #374151 !important;
+            padding: 10px 14px !important;
+            border-radius: 8px !important;
+        }
+
+        /* Full width touch buttons on Mobile */
+        .stButton > button {
+            width: 100% !important;
+            min-height: 46px !important;
+            font-size: 15px !important;
+            font-weight: bold !important;
+        }
+
+        /* Smooth horizontal scroll for trade log tables */
+        .stDataFrame {
+            width: 100% !important;
+            overflow-x: auto !important;
+        }
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -128,12 +284,14 @@ st.markdown("<div class='sub-title'>15M Candle Winning Direction Engine | Persis
 
 if selected_asset == "BITCOIN (BTC/USDT)":
     st.components.v1.html("""
-    <div style="background-color: #111827; border: 1px solid #374151; padding: 12px; border-radius: 10px; text-align: center; font-family: monospace; color: #F3F4F6;">
-        <span id="live-date" style="color: #60A5FA; font-size: 14px; font-weight: bold;"></span> &nbsp;|&nbsp; 
-        <span id="live-clock" style="color: #FBBF24; font-size: 16px; font-weight: bold;"></span><br>
-        <span id="candle-timer" style="color: #FFD54F; font-size: 16px; font-weight: bold;">⏳ 15M CANDLE: Loading...</span> &nbsp;|&nbsp;
-        <span style="color:#00E676; font-weight:bold;">⚡ BTC TICKER: </span>
-        <span id="btc-ticker-price" style="color: #00E676; font-size: 20px; font-weight: bold;">$Loading...</span>
+    <div style="background-color: #111827; border: 1px solid #374151; padding: 10px 12px; border-radius: 10px; text-align: center; font-family: monospace; color: #F3F4F6; display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 6px 10px;">
+        <span id="live-date" style="color: #60A5FA; font-size: clamp(12px, 3.2vw, 14px); font-weight: bold;"></span>
+        <span style="color: #4B5563;">|</span> 
+        <span id="live-clock" style="color: #FBBF24; font-size: clamp(13px, 3.5vw, 15px); font-weight: bold;"></span>
+        <span style="color: #4B5563;">|</span>
+        <span id="candle-timer" style="color: #FFD54F; font-size: clamp(13px, 3.5vw, 15px); font-weight: bold;">⏳ 15M CANDLE: Loading...</span>
+        <span style="color: #4B5563;">|</span>
+        <span style="color:#00E676; font-weight:bold; font-size: clamp(13px, 3.5vw, 15px);">⚡ BTC TICKER: <span id="btc-ticker-price" style="color: #00E676; font-size: clamp(15px, 4vw, 18px); font-weight: bold;">$Loading...</span></span>
     </div>
     <script>
     function updateClockAndCandleTimer() {
@@ -246,10 +404,12 @@ if selected_asset == "BITCOIN (BTC/USDT)":
     """, height=85)
 else:
     st.components.v1.html("""
-    <div style="background-color: #111827; border: 1px solid #374151; padding: 10px; border-radius: 10px; text-align: center; font-family: monospace; color: #F3F4F6;">
-        <span id="live-date" style="color: #60A5FA; font-size: 15px; font-weight: bold;"></span> &nbsp;|&nbsp; 
-        <span id="live-clock" style="color: #FBBF24; font-size: 18px; font-weight: bold;"></span><br>
-        <span id="candle-timer" style="color: #FFD54F; font-size: 16px; font-weight: bold;">⏳ 15M CANDLE: Loading...</span>
+    <div style="background-color: #111827; border: 1px solid #374151; padding: 10px 12px; border-radius: 10px; text-align: center; font-family: monospace; color: #F3F4F6; display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 6px 10px;">
+        <span id="live-date" style="color: #60A5FA; font-size: clamp(12px, 3.2vw, 14px); font-weight: bold;"></span>
+        <span style="color: #4B5563;">|</span> 
+        <span id="live-clock" style="color: #FBBF24; font-size: clamp(13px, 3.5vw, 15px); font-weight: bold;"></span>
+        <span style="color: #4B5563;">|</span>
+        <span id="candle-timer" style="color: #FFD54F; font-size: clamp(13px, 3.5vw, 15px); font-weight: bold;">⏳ 15M CANDLE: Loading...</span>
     </div>
     <script>
     function updateClockAndCandleTimer() {
