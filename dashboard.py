@@ -1,5 +1,5 @@
 # ================================================================================
-# ANTONY QUANT AI TERMINAL - DASHBOARD (100% PERSISTENT STATE ENGINE V17.0)
+# ANTONY QUANT AI TERMINAL - DASHBOARD (100% PERSISTENT STATE ENGINE V18.0)
 # ================================================================================
 import streamlit as st
 import pandas as pd
@@ -159,9 +159,12 @@ disk_state = trade_logger.load_live_state()
 
 if "last_notified_signal" not in st.session_state:
     st.session_state.last_notified_signal = disk_state.get("last_notified_signal", "NONE")
-
 if "active_trade" not in st.session_state:
     st.session_state.active_trade = disk_state.get("active_trade", None)
+if "locked_candle_id" not in st.session_state:
+    st.session_state.locked_candle_id = "NONE"
+if "locked_signal_state" not in st.session_state:
+    st.session_state.locked_signal_state = None
 
 def check_market_status(asset_choice):
     if asset_choice == "BITCOIN (BTC/USDT)":
@@ -346,7 +349,7 @@ selected_asset = st.sidebar.selectbox("🎯 Select Active Trading Market:", ["BI
 is_open, market_status_text = check_market_status(selected_asset)
 
 st.markdown(f"<div class='main-title'>🎯 ANTONY QUANT AI: {selected_asset.upper()} CO-PILOT</div>", unsafe_allow_html=True)
-st.markdown("<div class='sub-title'>15M Candle Winning Direction Engine | High Confidence (>70%) Execution</div>", unsafe_allow_html=True)
+st.markdown("<div class='sub-title'>15M Candle Winning Direction Engine | Locked Candle Execution</div>", unsafe_allow_html=True)
 
 if selected_asset == "BITCOIN (BTC/USDT)":
     st.components.v1.html("""
@@ -596,11 +599,19 @@ if selected_asset == "BITCOIN (BTC/USDT)":
     spot_price = float(last_row['close'])
     entry_zone_price = float(last_row['open'])
     
+    current_candle_id = f"BTC_{last_row.get('time', str(datetime.now().strftime('%Y-%m-%d_%H:')) + str((datetime.now().minute // 15) * 15).zfill(2))}"
+    
+    # CANDLE SIGNAL LOCKING MECHANISM (PREVENT MID-CANDLE FLICKERING / REPAINTING)
+    if st.session_state.locked_candle_id != current_candle_id or st.session_state.locked_signal_state is None:
+        signal_type, confidence_score, reason_code, breakdown = quant_math_engine.evaluate_btc_15m_signal(df_btc)
+        st.session_state.locked_candle_id = current_candle_id
+        st.session_state.locked_signal_state = (signal_type, confidence_score, reason_code, breakdown)
+    else:
+        signal_type, confidence_score, reason_code, breakdown = st.session_state.locked_signal_state
+    
     st.sidebar.info(f"Symbol: {config.BTC_SYMBOL}")
     st.sidebar.info(f"Timeframe: {config.TIMEFRAME}")
     st.sidebar.metric("Bitcoin Live Spot", f"${spot_price:,.2f}")
-    
-    signal_type, confidence_score, reason_code, breakdown = quant_math_engine.evaluate_btc_15m_signal(df_btc)
     
     btc_tp1 = entry_zone_price * (1 + config.BTC_TARGET_1_PCT / 100.0) if signal_type == "BUY_CALL" else entry_zone_price * (1 - config.BTC_TARGET_1_PCT / 100.0)
     btc_tp2 = entry_zone_price * (1 + config.BTC_TARGET_2_PCT / 100.0) if signal_type == "BUY_CALL" else entry_zone_price * (1 - config.BTC_TARGET_2_PCT / 100.0)
@@ -760,36 +771,42 @@ else: # NIFTY 50 MODE
     c_volume = float(last_row['volume']) if 'volume' in last_row else 65000.0
     atm_strike = data_feed.calculate_atm_strike(spot_price)
 
+    current_candle_id = f"NIFTY_{datetime.now().strftime('%Y-%m-%d_%H:') + str((datetime.now().minute // 15) * 15).zfill(2)}"
+
+    if st.session_state.locked_candle_id != current_candle_id or st.session_state.locked_signal_state is None:
+        prev_close = float(df['close'].iloc[-4])
+        nifty_dir = "UP" if spot_price > prev_close else ("DOWN" if spot_price < prev_close else "FLAT")
+        heavy_k = 4 if nifty_dir != "FLAT" else 2
+        heavy_a = 0.82
+        pcr_val = 1.18 if nifty_dir == "UP" else (0.82 if nifty_dir == "DOWN" else 1.0)
+        delta_pcr = +0.03 if nifty_dir == "UP" else (-0.03 if nifty_dir == "DOWN" else 0.0)
+        ce_wall = atm_strike + 200
+        pe_wall = atm_strike - 200
+        ist_now = data_feed.get_ist_now()
+
+        signal_type, reason_code, pos_multiplier, breakdown = quant_math_engine.master_institutional_decision_engine(
+            nifty_direction=nifty_dir, heavyweight_k=heavy_k, heavyweight_a=heavy_a,
+            india_vix=india_vix, delta_vix_15=delta_vix_15, pcr_oi=pcr_val, delta_pcr_15=delta_pcr,
+            nifty_spot=spot_price, nearest_ce_wall=ce_wall, nearest_pe_wall=pe_wall,
+            volume_15m=c_volume, candle_high=c_high, candle_low=c_low, ist_time=ist_now.time(),
+            nifty_target=config.UNDERLYING_TARGET_NIFTY
+        )
+        confidence_score = 75.0 if signal_type != "WAIT" else 50.0
+        st.session_state.locked_candle_id = current_candle_id
+        st.session_state.locked_signal_state = (signal_type, confidence_score, reason_code, breakdown)
+    else:
+        signal_type, confidence_score, reason_code, breakdown = st.session_state.locked_signal_state
+
     st.sidebar.info(f"Symbol: {config.DEFAULT_SYMBOL}")
     st.sidebar.info(f"Timeframe: {config.TIMEFRAME}")
     st.sidebar.metric("NIFTY 50 Spot", f"₹{spot_price:,.2f}")
     st.sidebar.metric("India VIX", f"{india_vix:.2f}", delta=f"{delta_vix_15:+.2f}")
 
-    prev_close = float(df['close'].iloc[-4])
-    nifty_dir = "UP" if spot_price > prev_close else ("DOWN" if spot_price < prev_close else "FLAT")
-
-    heavy_k = 4 if nifty_dir != "FLAT" else 2
-    heavy_a = 0.82
-    pcr_val = 1.18 if nifty_dir == "UP" else (0.82 if nifty_dir == "DOWN" else 1.0)
-    delta_pcr = +0.03 if nifty_dir == "UP" else (-0.03 if nifty_dir == "DOWN" else 0.0)
-    ce_wall = atm_strike + 200
-    pe_wall = atm_strike - 200
-
     ist_now = data_feed.get_ist_now()
-
-    signal_type, reason_code, pos_multiplier, breakdown = quant_math_engine.master_institutional_decision_engine(
-        nifty_direction=nifty_dir, heavyweight_k=heavy_k, heavyweight_a=heavy_a,
-        india_vix=india_vix, delta_vix_15=delta_vix_15, pcr_oi=pcr_val, delta_pcr_15=delta_pcr,
-        nifty_spot=spot_price, nearest_ce_wall=ce_wall, nearest_pe_wall=pe_wall,
-        volume_15m=c_volume, candle_high=c_high, candle_low=c_low, ist_time=ist_now.time(),
-        nifty_target=config.UNDERLYING_TARGET_NIFTY
-    )
-
     conf_info = get_candle_confirmation_status(ist_now)
 
     # DEDUPLICATED TELEGRAM PUSH ALERT (EXACTLY ONCE PER 15M CANDLE DISK PERSISTED)
-    ist_now_nifty = data_feed.get_ist_now()
-    nifty_candle_block = ist_now_nifty.strftime("%Y-%m-%d_%H:") + str((ist_now_nifty.minute // 15) * 15).zfill(2)
+    nifty_candle_block = ist_now.strftime("%Y-%m-%d_%H:") + str((ist_now.minute // 15) * 15).zfill(2)
     telegram_dedup_key = f"NIFTY_{signal_type}_{nifty_candle_block}"
     if signal_type in ["BUY_CALL", "BUY_PUT"]:
         alert_msg = f"<b>🚨 NIFTY 50 CANDLE WIN SIGNAL</b>\n\nDirection: <b>{signal_type}</b>\nStrike: <b>NIFTY {atm_strike}</b>\nSpot: <b>₹{spot_price:,.2f}</b>\nEntry Zone (Locked): <b>₹{entry_zone_price:,.2f}</b>\nSL: <b>-8 pts</b>\nTP1: <b>+12 pts</b>"
