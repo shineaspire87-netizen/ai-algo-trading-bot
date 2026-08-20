@@ -1,5 +1,5 @@
 # ================================================================================
-# ANTONY QUANT AI TERMINAL - DASHBOARD (100% PERSISTENT STATE ENGINE V19.0)
+# ANTONY QUANT AI TERMINAL - DASHBOARD (100% PERSISTENT STATE ENGINE V20.0)
 # ================================================================================
 import streamlit as st
 import pandas as pd
@@ -260,6 +260,45 @@ st.markdown("""
         overflow-wrap: break-word;
     }
     
+    .time-badge-safe { 
+        background-color: #004D40; 
+        border: 1px solid #00E676; 
+        padding: 10px 14px; 
+        border-radius: 8px; 
+        text-align: center; 
+        color: #00E676; 
+        font-weight: bold; 
+        font-size: clamp(12px, 3.5vw, 14px);
+        margin-bottom: 15px; 
+        word-wrap: break-word; 
+    }
+    
+    .time-badge-extended { 
+        background-color: #4A3B00; 
+        border: 1px solid #FFD54F; 
+        padding: 10px 14px; 
+        border-radius: 8px; 
+        text-align: center; 
+        color: #FFD54F; 
+        font-weight: bold; 
+        font-size: clamp(12px, 3.5vw, 14px);
+        margin-bottom: 15px; 
+        word-wrap: break-word; 
+    }
+    
+    .time-badge-late { 
+        background-color: #4A1414; 
+        border: 1px solid #FF5252; 
+        padding: 10px 14px; 
+        border-radius: 8px; 
+        text-align: center; 
+        color: #FF5252; 
+        font-weight: bold; 
+        font-size: clamp(12px, 3.5vw, 14px);
+        margin-bottom: 15px; 
+        word-wrap: break-word; 
+    }
+    
     .active-trade-box { 
         background-color: #1a2e05; 
         border: 2px dashed #00E676; 
@@ -350,6 +389,20 @@ is_open, market_status_text = check_market_status(selected_asset)
 
 st.markdown(f"<div class='main-title'>🎯 ANTONY QUANT AI: {selected_asset.upper()} CO-PILOT</div>", unsafe_allow_html=True)
 st.markdown("<div class='sub-title'>15M Candle Winning Direction Engine | Locked Candle Execution</div>", unsafe_allow_html=True)
+
+# Calculate Remaining Candle Seconds for Dynamic Badge
+ist_now_dt = data_feed.get_ist_now()
+min_val = ist_now_dt.minute
+sec_val = ist_now_dt.second
+elapsed_candle_sec = ((min_val % 15) * 60) + sec_val
+rem_candle_sec = 900 - elapsed_candle_sec
+
+if rem_candle_sec >= 660:
+    time_badge_html = "<div class='time-badge-safe'>🟢 SAFEST ENTRY WINDOW ACTIVE (MIN 0-4): EXECUTE NOW @ ENTRY ZONE</div>"
+elif 300 <= rem_candle_sec < 660:
+    time_badge_html = "<div class='time-badge-extended'>🟡 EXTENDED WINDOW (MIN 4-10): CHECK PRICE - DO NOT CHASE IF MOVED FAR FROM ENTRY ZONE</div>"
+else:
+    time_badge_html = "<div class='time-badge-late'>🔴 LATE ENTRY WARNING: TOO LATE FOR THIS CANDLE (WAIT FOR NEXT CANDLE OPEN)</div>"
 
 if selected_asset == "BITCOIN (BTC/USDT)":
     st.components.v1.html("""
@@ -680,21 +733,21 @@ if selected_asset == "BITCOIN (BTC/USDT)":
             post_mortem_eval = ai_analyst.generate_trade_post_mortem(
                 trade_status, 
                 at.get("breakdown", {}), 
-                (exit_price - at["entry_price"]) * at["quantity"]
+                (exit_price - entry_v) * qty_v
             )
             recorded = trade_logger.record_completed_trade(
-                symbol=at["symbol"],
-                strike=at["strike"],
-                entry_price=at["entry_price"],
+                symbol=at.get("symbol", "BTC/USDT"),
+                strike=at.get("strike", "BTC/USDT"),
+                entry_price=entry_v,
                 exit_price=exit_price,
-                qty=at["quantity"],
+                qty=qty_v,
                 status=trade_status,
                 win_loss_reason=post_mortem_eval,
                 layer_breakdown=at.get("breakdown", {})
             )
             pnl_val = recorded.get("net_pnl", 0.0)
             pnl_prefix = "+" if pnl_val > 0 else ""
-            alert_msg = f"<b>🚨 TRADE COMPLETED: {trade_status}</b>\n\nSymbol: <b>{at['symbol']}</b>\nEntry: <b>${at['entry_price']:,.2f}</b> ➔ Exit: <b>${exit_price:,.2f}</b>\nNet PnL: <b>${pnl_prefix}{pnl_val:,.2f}</b>"
+            alert_msg = f"<b>🚨 TRADE COMPLETED: {trade_status}</b>\n\nSymbol: <b>{at.get('symbol', 'BTC/USDT')}</b>\nEntry: <b>${entry_v:,.2f}</b> ➔ Exit: <b>${exit_price:,.2f}</b>\nNet PnL: <b>${pnl_prefix}{pnl_val:,.2f}</b>"
             send_telegram_alert(alert_msg)
             st.session_state.active_trade = None
             trade_logger.save_live_state({"active_trade": None})
@@ -704,6 +757,7 @@ if selected_asset == "BITCOIN (BTC/USDT)":
     if signal_type == "BUY_CALL":
         st.markdown(f"""
         <div class='signal-card-buy'>
+            {time_badge_html}
             <div class='confirm-timer-box' style='background-color:{"#261c02" if conf_info["conf_status"] == "ACTIVE" else "#0d231a"}; border:1px solid {"#FFD54F" if conf_info["conf_status"] == "ACTIVE" else "#00E676"}; padding:8px 12px; border-radius:8px; margin-bottom:12px; text-align:center;'>
                 <span class='confirm-timer-text' style='color:{"#FFD54F" if conf_info["conf_status"] == "ACTIVE" else "#00E676"}; font-size:14px; font-weight:bold; font-family:monospace;'>
                     {conf_info["conf_msg"]}
@@ -718,6 +772,7 @@ if selected_asset == "BITCOIN (BTC/USDT)":
     elif signal_type == "BUY_PUT":
         st.markdown(f"""
         <div class='signal-card-sell'>
+            {time_badge_html}
             <div class='confirm-timer-box' style='background-color:{"#261c02" if conf_info["conf_status"] == "ACTIVE" else "#0d231a"}; border:1px solid {"#FFD54F" if conf_info["conf_status"] == "ACTIVE" else "#00E676"}; padding:8px 12px; border-radius:8px; margin-bottom:12px; text-align:center;'>
                 <span class='confirm-timer-text' style='color:{"#FFD54F" if conf_info["conf_status"] == "ACTIVE" else "#00E676"}; font-size:14px; font-weight:bold; font-family:monospace;'>
                     {conf_info["conf_msg"]}
@@ -874,21 +929,21 @@ else: # NIFTY 50 MODE
             post_mortem_eval = ai_analyst.generate_trade_post_mortem(
                 trade_status, 
                 at.get("breakdown", {}), 
-                (exit_price - at["entry_price"]) * at["quantity"]
+                (exit_price - entry_v) * qty_v
             )
             recorded = trade_logger.record_completed_trade(
-                symbol=at["symbol"],
-                strike=at["strike"],
-                entry_price=at["entry_price"],
+                symbol=at.get("symbol", f"NIFTY {atm_strike}"),
+                strike=at.get("strike", f"NIFTY {atm_strike}"),
+                entry_price=entry_v,
                 exit_price=exit_price,
-                qty=at["quantity"],
+                qty=qty_v,
                 status=trade_status,
                 win_loss_reason=post_mortem_eval,
                 layer_breakdown=at.get("breakdown", {})
             )
             pnl_val = recorded.get("net_pnl", 0.0)
             pnl_prefix = "+" if pnl_val > 0 else ""
-            alert_msg = f"<b>🚨 TRADE COMPLETED: {trade_status}</b>\n\nSymbol: <b>{at['symbol']}</b>\nEntry: <b>₹{at['entry_price']:,.2f}</b> ➔ Exit: <b>₹{exit_price:,.2f}</b>\nNet PnL: <b>₹{pnl_prefix}{pnl_val:,.2f}</b>"
+            alert_msg = f"<b>🚨 TRADE COMPLETED: {trade_status}</b>\n\nSymbol: <b>{at.get('symbol', 'NIFTY 50')}</b>\nEntry: <b>₹{entry_v:,.2f}</b> ➔ Exit: <b>₹{exit_price:,.2f}</b>\nNet PnL: <b>₹{pnl_prefix}{pnl_val:,.2f}</b>"
             send_telegram_alert(alert_msg)
             st.session_state.active_trade = None
             trade_logger.save_live_state({"active_trade": None})
@@ -898,6 +953,7 @@ else: # NIFTY 50 MODE
     if signal_type == "BUY_CALL":
         st.markdown(f"""
         <div class='signal-card-buy'>
+            {time_badge_html}
             <div class='confirm-timer-box' style='background-color:{"#261c02" if conf_info["conf_status"] == "ACTIVE" else "#0d231a"}; border:1px solid {"#FFD54F" if conf_info["conf_status"] == "ACTIVE" else "#00E676"}; padding:8px 12px; border-radius:8px; margin-bottom:12px; text-align:center;'>
                 <span class='confirm-timer-text' style='color:{"#FFD54F" if conf_info["conf_status"] == "ACTIVE" else "#00E676"}; font-size:14px; font-weight:bold; font-family:monospace;'>
                     {conf_info["conf_msg"]}
@@ -912,6 +968,7 @@ else: # NIFTY 50 MODE
     elif signal_type == "BUY_PUT":
         st.markdown(f"""
         <div class='signal-card-sell'>
+            {time_badge_html}
             <div class='confirm-timer-box' style='background-color:{"#261c02" if conf_info["conf_status"] == "ACTIVE" else "#0d231a"}; border:1px solid {"#FFD54F" if conf_info["conf_status"] == "ACTIVE" else "#00E676"}; padding:8px 12px; border-radius:8px; margin-bottom:12px; text-align:center;'>
                 <span class='confirm-timer-text' style='color:{"#FFD54F" if conf_info["conf_status"] == "ACTIVE" else "#00E676"}; font-size:14px; font-weight:bold; font-family:monospace;'>
                     {conf_info["conf_msg"]}
