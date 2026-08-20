@@ -1,5 +1,5 @@
 # ================================================================================
-# ANTONY QUANT AI TERMINAL - DASHBOARD (100% PERSISTENT STATE ENGINE V18.0)
+# ANTONY QUANT AI TERMINAL - DASHBOARD (100% PERSISTENT STATE ENGINE V19.0)
 # ================================================================================
 import streamlit as st
 import pandas as pd
@@ -644,7 +644,7 @@ if selected_asset == "BITCOIN (BTC/USDT)":
             }
             trade_logger.save_live_state({"active_trade": st.session_state.active_trade})
 
-    # Evaluate Active Position Target/SL Hit
+    # Evaluate Active Position Target/SL Hit (STRICT CONDITIONAL EXECUTION - ZERO REFRESH DUPLICATE LOGS)
     if st.session_state.active_trade is not None and st.session_state.active_trade.get("asset") == "BITCOIN (BTC/USDT)":
         at = st.session_state.active_trade
         trade_finished = False
@@ -832,7 +832,7 @@ else: # NIFTY 50 MODE
             }
             trade_logger.save_live_state({"active_trade": st.session_state.active_trade})
 
-    # Evaluate Active Position Target/SL Hit
+    # Evaluate Active Position Target/SL Hit (STRICT CONDITIONAL EXECUTION - ZERO REFRESH DUPLICATE LOGS)
     if st.session_state.active_trade is not None and st.session_state.active_trade.get("asset") == "NIFTY 50 (₹)":
         at = st.session_state.active_trade
         trade_finished = False

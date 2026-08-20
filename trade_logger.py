@@ -3,12 +3,10 @@
 # ================================================================================
 import json
 import os
-import csv
 from datetime import datetime, timezone, timedelta
 
 TRADES_FILE = "trades.json"
 STATE_FILE = "live_state.json"
-CSV_FILE = "trades.csv"
 
 def get_ist_now():
     utc_now = datetime.now(timezone.utc)
@@ -36,7 +34,7 @@ def delete_trade_by_id(trade_id):
 def clear_all_trades():
     """Clears all trade logs and thoughts."""
     save_trades([])
-    save_live_state({"last_signal": {}, "active_trade": {"status": "NO_POSITION"}})
+    save_live_state({"last_signal": {}, "active_trade": None})
 
 def calculate_brokerage_fees(qty, entry_price, exit_price):
     flat_brokerage = 40.0
@@ -47,9 +45,16 @@ def calculate_brokerage_fees(qty, entry_price, exit_price):
 def record_completed_trade(symbol, strike, entry_price, exit_price, qty, status, win_loss_reason, layer_breakdown=None):
     trades = load_trades()
     ist_now = get_ist_now()
+    date_time_str = ist_now.strftime("%Y-%m-%d %I:%M:%S %p IST")
     
     if layer_breakdown is None:
         layer_breakdown = {}
+
+    # DEDUPLICATION CHECK: Prevent recording duplicate logs on page refresh
+    if trades:
+        last_trade = trades[-1]
+        if last_trade.get("symbol") == symbol and abs(last_trade.get("entry_price", 0) - entry_price) < 0.01 and last_trade.get("result") == status:
+            return last_trade  # Block duplicate log!
 
     opt_type = "CALL" if "CALL" in str(strike).upper() or "CE" in str(strike).upper() else ("PUT" if "PUT" in str(strike).upper() or "PE" in str(strike).upper() else "BUY")
     
@@ -64,7 +69,7 @@ def record_completed_trade(symbol, strike, entry_price, exit_price, qty, status,
     
     trade_record = {
         "trade_id": len(trades) + 1,
-        "date_time": ist_now.strftime("%Y-%m-%d %I:%M:%S %p IST"),
+        "date_time": date_time_str,
         "date": ist_now.strftime("%Y-%m-%d"),
         "symbol": symbol,
         "strike": str(strike),
