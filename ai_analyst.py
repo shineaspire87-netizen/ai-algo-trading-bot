@@ -51,10 +51,22 @@ def generate_bot_reflection(trade_record: dict) -> dict:
 
 def generate_trade_post_mortem(result, layers, pnl):
     """Generates detailed AI explanation of why the trade Won or Lost."""
+    if not isinstance(layers, dict):
+        layers = {}
+
+    l1 = layers.get('l1_heavyweights', layers.get('l1_status', 'Layer 1 Passed'))
+    l2 = layers.get('l2_vix', layers.get('l2_status', 'Layer 2 Passed'))
+    l3 = layers.get('l3_pcr', layers.get('l3_status', 'Layer 3 Passed'))
+
+    try:
+        pnl_val = abs(float(pnl))
+    except Exception:
+        pnl_val = 0.0
+
     if result == "WIN":
-        return f"🟢 **WIN POST-MORTEM:** Target (+20 pts / +₹{pnl}) Achieved! **Key Catalyst:** Heavyweights aligned ({layers['l1_heavyweights']}) with expanding VIX ({layers['l2_vix']}) and strong PCR momentum ({layers['l3_pcr']}). Clear OI runway allowed smooth option premium expansion."
+        return f"🟢 **WIN POST-MORTEM:** Target Achieved (+₹{pnl_val:,.2f})! **Key Catalyst:** 5-Layer Alignment ({l1} | {l2} | {l3}). Smooth option premium expansion."
     else:
-        return f"🔴 **LOSS POST-MORTEM:** Stop-Loss (-15 pts / -₹{abs(pnl)}) Hit! **Failure Cause:** Institutional absorption wall or unexpected 15M VIX contraction. Market reversed against heavyweight alignment. **Recommended Adjustment:** Tighten OI Runway Target Coverage Ratio from R=2.0x to R=2.5x."
+        return f"🔴 **LOSS POST-MORTEM:** Stop-Loss Hit (-₹{pnl_val:,.2f})! **Failure Cause:** Institutional absorption wall or unexpected volatility contraction. **Recommended Adjustment:** Tighten OI Runway Coverage Ratio."
 
 def generate_eod_bot_diagnostic(today_trades, current_vix, current_pcr):
     """Generates End-of-Day AI Self-Diagnostic Report (Bot Struggles & Data Needs)."""
