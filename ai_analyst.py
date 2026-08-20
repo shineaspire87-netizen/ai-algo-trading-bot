@@ -10,6 +10,9 @@ def generate_bot_reflection(trade_record: dict) -> dict:
     """
     Generates a deep AI Self-Reflection narrative & data request for every completed trade.
     """
+    if not isinstance(trade_record, dict):
+        trade_record = {}
+
     symbol = trade_record.get("symbol", "N/A")
     strike = trade_record.get("strike", symbol)
     entry_p = float(trade_record.get("entry_price", 0.0))
@@ -19,7 +22,7 @@ def generate_bot_reflection(trade_record: dict) -> dict:
     dt_str = trade_record.get("date_time", "N/A")
     reason = trade_record.get("post_mortem", "COMPLETED_TRADE")
     
-    is_crypto = any(k in symbol.upper() for k in ["BITCOIN", "ETHEREUM", "BTC", "ETH"])
+    is_crypto = any(k in str(symbol).upper() for k in ["BITCOIN", "ETHEREUM", "BTC", "ETH"])
     curr = "$" if is_crypto else "₹"
 
     summary = f"{dt_str} | {strike} | Entry: {curr}{entry_p:,.2f} ➔ Exit: {curr}{exit_p:,.2f} | Net PnL: {curr}{net_pnl:+,.2f}"
@@ -50,52 +53,52 @@ def generate_bot_reflection(trade_record: dict) -> dict:
     }
 
 def generate_trade_post_mortem(result, layers, pnl):
-    """Generates detailed AI explanation of why the trade Won or Lost."""
+    """Generates detailed AI explanation of why the trade Won or Lost without KeyError crashes."""
     if not isinstance(layers, dict):
         layers = {}
-
-    l1 = layers.get('l1_heavyweights', layers.get('l1_status', 'Layer 1 Passed'))
-    l2 = layers.get('l2_vix', layers.get('l2_status', 'Layer 2 Passed'))
-    l3 = layers.get('l3_pcr', layers.get('l3_status', 'Layer 3 Passed'))
-
+        
+    l1 = layers.get("l1_heavyweights", layers.get("l1_status", "Market Alignment OK"))
+    l2 = layers.get("l2_vix", layers.get("l2_status", "Volatility OK"))
+    l3 = layers.get("l3_pcr", layers.get("l3_status", "Momentum OK"))
+    
     try:
-        pnl_val = abs(float(pnl))
+        pnl_val = float(pnl) if pnl is not None else 0.0
     except Exception:
         pnl_val = 0.0
-
+    
     if result == "WIN":
-        return f"🟢 **WIN POST-MORTEM:** Target Achieved (+₹{pnl_val:,.2f})! **Key Catalyst:** 5-Layer Alignment ({l1} | {l2} | {l3}). Smooth option premium expansion."
+        return f"🟢 <b>WIN POST-MORTEM:</b> Target (+₹{pnl_val:,.2f}) Achieved! <b>Key Catalyst:</b> Layer 1 ({l1}) aligned with Volatility ({l2}) and Momentum ({l3}). Clear runway allowed clean expansion."
     else:
-        return f"🔴 **LOSS POST-MORTEM:** Stop-Loss Hit (-₹{pnl_val:,.2f})! **Failure Cause:** Institutional absorption wall or unexpected volatility contraction. **Recommended Adjustment:** Tighten OI Runway Coverage Ratio."
+        return f"🔴 <b>LOSS POST-MORTEM:</b> Stop-Loss (-₹{abs(pnl_val):,.2f}) Hit! <b>Failure Cause:</b> Institutional rejection or unexpected VIX contraction. Market reversed hitting Stop-Loss."
 
 def generate_eod_bot_diagnostic(today_trades, current_vix, current_pcr):
-    """Generates End-of-Day AI Self-Diagnostic Report (Bot Struggles & Data Needs)."""
+    """Generates End-of-Day AI Self-Diagnostic Report."""
     total = len(today_trades)
     if total == 0:
-        return "🤖 **EOD AI DIAGNOSTIC:** Zero trades executed today due to strict 5-Layer Risk Filters (VIX < 12 or PCR Trap). Capital was 100% protected."
+        return "🤖 <b>EOD AI DIAGNOSTIC:</b> Zero trades executed today due to strict 5-Layer Risk Filters (VIX < 12 or PCR Trap). Capital was 100% protected."
     
-    wins = len([t for t in today_trades if t["result"] == "WIN"])
-    losses = len([t for t in today_trades if t["result"] == "LOSS"])
+    wins = len([t for t in today_trades if t.get("result") == "WIN"])
+    losses = len([t for t in today_trades if t.get("result") == "LOSS"])
     
     struggles = []
     if current_vix < 12.0:
-        struggles.append("• **Low VIX Environment (< 12.0):** Option premium expansion was sluggish, leading to theta decay traps.")
+        struggles.append("• <b>Low VIX Environment (< 12.0):</b> Option premium expansion was sluggish, leading to theta decay traps.")
     if losses > 0:
-        struggles.append("• **OI Wall Reversals:** Sudden intraday Call/Put writing caused price rejections before Target 2.")
+        struggles.append("• <b>OI Wall Reversals:</b> Sudden intraday Call/Put writing caused price rejections before Target 2.")
     
     recommendations = [
-        "1. **Real-time Level 2 NSE Market Depth:** Adding top 5 bid/ask orderbook levels will eliminate absorption traps.",
-        "2. **India VIX 5M Delta Tracking:** Tracking VIX at 5-minute granularity will improve entry timing.",
-        "3. **FII / DII Intraday Net Flow Feed:** Institutional cash flow data will boost win-rate to 85%+."
+        "1. <b>Real-time Level 2 NSE Market Depth:</b> Adding top 5 bid/ask orderbook levels will eliminate absorption traps.",
+        "2. <b>India VIX 5M Delta Tracking:</b> Tracking VIX at 5-minute granularity will improve entry timing.",
+        "3. <b>FII / DII Intraday Net Flow Feed:</b> Institutional cash flow data will boost win-rate to 85%+."
     ]
     
     report = f"""
     ### 🤖 END-OF-DAY AI SELF-DIAGNOSTIC REPORT
-    * **Today's Trades:** {total} | **Wins:** {wins} | **Losses:** {losses}
-    * **Bot Struggling Points Identified Today:**
+    * <b>Today's Trades:</b> {total} | <b>Wins:</b> {wins} | <b>Losses:</b> {losses}
+    * <b>Bot Struggling Points Identified Today:</b>
     {"".join(struggles) if struggles else "• None. All 5 layers executed flawlessly."}
     
-    * **Recommended Data Add-Ons for Better Precision:**
+    * <b>Recommended Data Add-Ons for Better Precision:</b>
     {"".join([f"{r}<br>" for r in recommendations])}
     """
     return report

@@ -1,5 +1,5 @@
 # ================================================================================
-# ANTONY QUANT AI TERMINAL - DASHBOARD (100% PERSISTENT STATE ENGINE V20.0)
+# ANTONY QUANT AI TERMINAL - DASHBOARD (100% PERSISTENT STATE ENGINE V21.0)
 # ================================================================================
 import streamlit as st
 import pandas as pd
@@ -41,21 +41,22 @@ def send_telegram_alert(message):
 
 def send_deduped_telegram_alert(dedup_key: str, alert_msg: str):
     """
-    Dispatches Telegram Push Alert EXACTLY ONCE per 15M candle block by persisting dedup_key to live_state.json on DISK.
+    Dispatches Telegram Push Alert EXACTLY ONCE per 15M candle block by checking both
+    st.session_state.notified_candles set AND persisting dedup_key to live_state.json on DISK.
     Eliminates 3-second st_autorefresh and session reset notification spam!
     """
-    if st.session_state.get("last_notified_signal") == dedup_key:
+    if dedup_key in st.session_state.notified_candles:
         return
 
     disk_state = trade_logger.load_live_state()
     last_notified = disk_state.get("last_notified_signal", "")
     
     if last_notified == dedup_key:
-        st.session_state.last_notified_signal = dedup_key
+        st.session_state.notified_candles.add(dedup_key)
         return
 
     trade_logger.save_live_state({"last_notified_signal": dedup_key})
-    st.session_state.last_notified_signal = dedup_key
+    st.session_state.notified_candles.add(dedup_key)
     send_telegram_alert(alert_msg)
 
 def get_candle_confirmation_status(ist_time=None):
@@ -157,8 +158,12 @@ def get_trade_bot_reflection(trade_record: dict) -> dict:
 # Load Persistent Disk State Across Browser Refreshes (F5)
 disk_state = trade_logger.load_live_state()
 
-if "last_notified_signal" not in st.session_state:
-    st.session_state.last_notified_signal = disk_state.get("last_notified_signal", "NONE")
+if "notified_candles" not in st.session_state:
+    st.session_state.notified_candles = set()
+    last_notified = disk_state.get("last_notified_signal", "")
+    if last_notified:
+        st.session_state.notified_candles.add(last_notified)
+
 if "active_trade" not in st.session_state:
     st.session_state.active_trade = disk_state.get("active_trade", None)
 if "locked_candle_id" not in st.session_state:
@@ -390,7 +395,6 @@ is_open, market_status_text = check_market_status(selected_asset)
 st.markdown(f"<div class='main-title'>🎯 ANTONY QUANT AI: {selected_asset.upper()} CO-PILOT</div>", unsafe_allow_html=True)
 st.markdown("<div class='sub-title'>15M Candle Winning Direction Engine | Locked Candle Execution</div>", unsafe_allow_html=True)
 
-# Calculate Remaining Candle Seconds for Dynamic Badge
 ist_now_dt = data_feed.get_ist_now()
 min_val = ist_now_dt.minute
 sec_val = ist_now_dt.second
@@ -651,10 +655,8 @@ if selected_asset == "BITCOIN (BTC/USDT)":
     last_row = df_btc.iloc[-1]
     spot_price = float(last_row['close'])
     entry_zone_price = float(last_row['open'])
-    
     current_candle_id = f"BTC_{last_row.get('time', str(datetime.now().strftime('%Y-%m-%d_%H:')) + str((datetime.now().minute // 15) * 15).zfill(2))}"
     
-    # CANDLE SIGNAL LOCKING MECHANISM (PREVENT MID-CANDLE FLICKERING / REPAINTING)
     if st.session_state.locked_candle_id != current_candle_id or st.session_state.locked_signal_state is None:
         signal_type, confidence_score, reason_code, breakdown = quant_math_engine.evaluate_btc_15m_signal(df_btc)
         st.session_state.locked_candle_id = current_candle_id
@@ -670,99 +672,66 @@ if selected_asset == "BITCOIN (BTC/USDT)":
     btc_tp2 = entry_zone_price * (1 + config.BTC_TARGET_2_PCT / 100.0) if signal_type == "BUY_CALL" else entry_zone_price * (1 - config.BTC_TARGET_2_PCT / 100.0)
     btc_sl = entry_zone_price * (1 - config.BTC_STOP_LOSS_PCT / 100.0) if signal_type == "BUY_CALL" else entry_zone_price * (1 + config.BTC_STOP_LOSS_PCT / 100.0)
 
-    conf_info = get_candle_confirmation_status()
-
-    # DEDUPLICATED TELEGRAM PUSH ALERT (EXACTLY ONCE PER 15M CANDLE DISK PERSISTED)
-    ist_now_btc = data_feed.get_ist_now()
-    btc_candle_block = ist_now_btc.strftime("%Y-%m-%d_%H:") + str((ist_now_btc.minute // 15) * 15).zfill(2)
-    telegram_dedup_key = f"BTC_{signal_type}_{btc_candle_block}"
-    if signal_type in ["BUY_CALL", "BUY_PUT"]:
-        alert_msg = f"<b>🚨 BITCOIN 15M CANDLE WIN SIGNAL</b>\n\nDirection: <b>{signal_type}</b>\nWin Confidence: <b>{confidence_score:.1f}%</b>\nEntry Zone (Locked): <b>${entry_zone_price:,.2f}</b>\nTP1 (+0.25%): <b>${btc_tp1:,.2f}</b>\nSL (-0.15%): <b>${btc_sl:,.2f}</b>"
-        send_deduped_telegram_alert(telegram_dedup_key, alert_msg)
-
-    # AUTOMATIC ACTIVE TRADE TRACKER STATE MACHINE
+    # SAFE TRADE EVALUATION ENGINE (NO KEYERROR CRASH)
     if signal_type in ["BUY_CALL", "BUY_PUT"]:
         if st.session_state.active_trade is None:
             st.session_state.active_trade = {
-                "asset": "BITCOIN (BTC/USDT)",
-                "symbol": f"BITCOIN (BTC/USDT) {signal_type}",
-                "strike": "BTC/USDT",
+                "asset": "BTC/USDT",
+                "symbol": f"BTC/USDT {signal_type}",
+                "strike": "BTCUSDT",
                 "entry_price": entry_zone_price,
                 "tp1": btc_tp1,
                 "sl": btc_sl,
                 "signal_type": signal_type,
                 "quantity": 25,
-                "breakdown": breakdown,
+                "breakdown": breakdown if isinstance(breakdown, dict) else {},
                 "start_time": datetime.now().isoformat()
             }
             trade_logger.save_live_state({"active_trade": st.session_state.active_trade})
-
-    # Evaluate Active Position Target/SL Hit (STRICT CONDITIONAL EXECUTION - ZERO REFRESH DUPLICATE LOGS)
-    if isinstance(st.session_state.active_trade, dict) and st.session_state.active_trade.get("asset") == "BITCOIN (BTC/USDT)":
+        
         at = st.session_state.active_trade
-        sig_t = str(at.get("signal_type", "BUY_CALL"))
-        tp1_v = float(at.get("tp1", 0.0))
-        sl_v = float(at.get("sl", 0.0))
-        entry_v = float(at.get("entry_price", 0.0))
-        qty_v = float(at.get("quantity", 25))
-
         trade_finished = False
         trade_status = "WIN"
         exit_price = spot_price
         
-        if sig_t == "BUY_CALL":
-            if spot_price >= tp1_v and tp1_v > 0:
-                trade_finished = True
-                trade_status = "WIN"
-                exit_price = tp1_v
-            elif spot_price <= sl_v and sl_v > 0:
-                trade_finished = True
-                trade_status = "LOSS"
-                exit_price = sl_v
-        elif sig_t == "BUY_PUT":
-            if spot_price <= tp1_v and tp1_v > 0:
-                trade_finished = True
-                trade_status = "WIN"
-                exit_price = tp1_v
-            elif spot_price >= sl_v and sl_v > 0:
-                trade_finished = True
-                trade_status = "LOSS"
-                exit_price = sl_v
+        entry_v = at.get("entry_price", spot_price)
+        qty_v = at.get("quantity", 25)
+        bd_v = at.get("breakdown", {})
+        
+        if at.get("signal_type") == "BUY_CALL":
+            if spot_price >= at.get("tp1", spot_price * 1.01): trade_finished, trade_status, exit_price = True, "WIN", at.get("tp1", spot_price)
+            elif spot_price <= at.get("sl", spot_price * 0.99): trade_finished, trade_status, exit_price = True, "LOSS", at.get("sl", spot_price)
+        elif at.get("signal_type") == "BUY_PUT":
+            if spot_price <= at.get("tp1", spot_price * 0.99): trade_finished, trade_status, exit_price = True, "WIN", at.get("tp1", spot_price)
+            elif spot_price >= at.get("sl", spot_price * 1.01): trade_finished, trade_status, exit_price = True, "LOSS", at.get("sl", spot_price)
                 
         if trade_finished:
-            post_mortem_eval = ai_analyst.generate_trade_post_mortem(
-                trade_status, 
-                at.get("breakdown", {}), 
-                (exit_price - entry_v) * qty_v
-            )
+            pnl_calc = (exit_price - entry_v) * qty_v if trade_status == "WIN" else (exit_price - entry_v) * qty_v
+            post_mortem = ai_analyst.generate_trade_post_mortem(trade_status, bd_v, pnl_calc)
             recorded = trade_logger.record_completed_trade(
-                symbol=at.get("symbol", "BTC/USDT"),
-                strike=at.get("strike", "BTC/USDT"),
-                entry_price=entry_v,
-                exit_price=exit_price,
-                qty=qty_v,
-                status=trade_status,
-                win_loss_reason=post_mortem_eval,
-                layer_breakdown=at.get("breakdown", {})
+                symbol=at.get("symbol", "BTC/USDT"), strike=at.get("strike", "BTCUSDT"), entry_price=entry_v,
+                exit_price=exit_price, qty=qty_v, status=trade_status,
+                win_loss_reason=post_mortem, layer_breakdown=bd_v
             )
-            pnl_val = recorded.get("net_pnl", 0.0)
+            pnl_val = recorded.get("net_pnl", 0)
             pnl_prefix = "+" if pnl_val > 0 else ""
-            alert_msg = f"<b>🚨 TRADE COMPLETED: {trade_status}</b>\n\nSymbol: <b>{at.get('symbol', 'BTC/USDT')}</b>\nEntry: <b>${entry_v:,.2f}</b> ➔ Exit: <b>${exit_price:,.2f}</b>\nNet PnL: <b>${pnl_prefix}{pnl_val:,.2f}</b>"
+            alert_msg = f"<b>🚨 TRADE COMPLETED: {trade_status}</b>\n\nSymbol: <b>{at.get('symbol')}</b>\nNet PnL: <b>${pnl_prefix}{pnl_val:,.2f}</b>"
             send_telegram_alert(alert_msg)
             st.session_state.active_trade = None
             trade_logger.save_live_state({"active_trade": None})
             st.rerun()
+
+    # DEDUPLICATED TELEGRAM NOTIFICATION SET (EXACTLY ONCE PER 15M CANDLE)
+    telegram_dedup_key = f"BTC_{current_candle_id}_{signal_type}"
+    if signal_type in ["BUY_CALL", "BUY_PUT"]:
+        alert_msg = f"<b>🚨 BITCOIN 15M CANDLE WIN SIGNAL</b>\n\nDirection: <b>{signal_type}</b>\nWin Confidence: <b>{confidence_score:.1f}%</b>\nEntry Zone (Locked): <b>${entry_zone_price:,.2f}</b>\nTP1 (+0.25%): <b>${btc_tp1:,.2f}</b>\nSL (-0.15%): <b>${btc_sl:,.2f}</b>"
+        send_deduped_telegram_alert(telegram_dedup_key, alert_msg)
 
     st.subheader("📍 LIVE BITCOIN 15M CANDLE WIN PREDICTOR")
     if signal_type == "BUY_CALL":
         st.markdown(f"""
         <div class='signal-card-buy'>
             {time_badge_html}
-            <div class='confirm-timer-box' style='background-color:{"#261c02" if conf_info["conf_status"] == "ACTIVE" else "#0d231a"}; border:1px solid {"#FFD54F" if conf_info["conf_status"] == "ACTIVE" else "#00E676"}; padding:8px 12px; border-radius:8px; margin-bottom:12px; text-align:center;'>
-                <span class='confirm-timer-text' style='color:{"#FFD54F" if conf_info["conf_status"] == "ACTIVE" else "#00E676"}; font-size:14px; font-weight:bold; font-family:monospace;'>
-                    {conf_info["conf_msg"]}
-                </span>
-            </div>
             <h1 style='color:#00E676; margin:0;'>🟩 PREDICTED WINNING CANDLE: GREEN (UP)</h1>
             <p style='font-size:18px; margin-top:8px;'>Candle Win Confidence: <b>{confidence_score:.1f}%</b> | Live Spot: <b>${spot_price:,.2f}</b></p>
             <hr style='border-color:#00E676;'>
@@ -773,11 +742,6 @@ if selected_asset == "BITCOIN (BTC/USDT)":
         st.markdown(f"""
         <div class='signal-card-sell'>
             {time_badge_html}
-            <div class='confirm-timer-box' style='background-color:{"#261c02" if conf_info["conf_status"] == "ACTIVE" else "#0d231a"}; border:1px solid {"#FFD54F" if conf_info["conf_status"] == "ACTIVE" else "#00E676"}; padding:8px 12px; border-radius:8px; margin-bottom:12px; text-align:center;'>
-                <span class='confirm-timer-text' style='color:{"#FFD54F" if conf_info["conf_status"] == "ACTIVE" else "#00E676"}; font-size:14px; font-weight:bold; font-family:monospace;'>
-                    {conf_info["conf_msg"]}
-                </span>
-            </div>
             <h1 style='color:#E040FB; margin:0;'>🟪 PREDICTED WINNING CANDLE: RED (DOWN)</h1>
             <p style='font-size:18px; margin-top:8px;'>Candle Win Confidence: <b>{confidence_score:.1f}%</b> | Live Spot: <b>${spot_price:,.2f}</b></p>
             <hr style='border-color:#E040FB;'>
@@ -787,11 +751,6 @@ if selected_asset == "BITCOIN (BTC/USDT)":
     else:
         st.markdown(f"""
         <div class='signal-card-wait'>
-            <div class='confirm-timer-box' style='background-color:{"#261c02" if conf_info["conf_status"] == "ACTIVE" else "#0d231a"}; border:1px solid {"#FFD54F" if conf_info["conf_status"] == "ACTIVE" else "#00E676"}; padding:8px 12px; border-radius:8px; margin-bottom:12px; text-align:center;'>
-                <span class='confirm-timer-text' style='color:{"#FFD54F" if conf_info["conf_status"] == "ACTIVE" else "#00E676"}; font-size:14px; font-weight:bold; font-family:monospace;'>
-                    {conf_info["conf_msg"]}
-                </span>
-            </div>
             <h1 style='color:#B0BEC5; margin:0;'>⚪ WAIT - LOW CANDLE WIN CONFIDENCE (< 70%)</h1>
             <p style='font-size:15px; margin-top:8px;'>Reason: <b>{reason_code}</b></p>
         </div>
@@ -802,16 +761,11 @@ if selected_asset == "BITCOIN (BTC/USDT)":
         <div class='cheat-box'>
             <b>📋 BITCOIN 15M CANDLE SCALPER CHEAT SHEET ($ USD):</b><br>
             • <b>Asset Contract  :</b> BTC/USDT (Spot / Futures / Paper Trading)<br>
-            • <b>Entry Strategy   :</b> Buy Market Price @ ${entry_zone_price:,.2f} (Locked Open)<br>
+            • <b>Entry Strategy   :</b> Buy Market Price @ ${entry_zone_price:,.2f}<br>
             • <b>Stop Loss (SL)   :</b> ${btc_sl:,.2f} (-0.15% Micro Risk)<br>
             • <b>Target 1 (TP1)   :</b> ${btc_tp1:,.2f} (+0.25% Fast Target)<br>
             • <b>Target 2 (TP2)   :</b> ${btc_tp2:,.2f} (+0.50% Trend Target)<br>
             • <b>Candle Expiration:</b> Strict Exit @ 15M Candle Close
-            <div class='safe-entry-box' style='background-color:#00332c; border:1px solid #00E676; padding:10px; border-radius:8px; margin-top:12px; text-align:center;'>
-                <span class='safe-entry-text' style='color:#00E676; font-size:13px; font-weight:bold; font-family:monospace;'>
-                    {conf_info["entry_window_msg"]}
-                </span>
-            </div>
         </div>
         """, unsafe_allow_html=True)
 
@@ -831,7 +785,7 @@ else: # NIFTY 50 MODE
     c_low = float(last_row['low'])
     c_volume = float(last_row['volume']) if 'volume' in last_row else 65000.0
     atm_strike = data_feed.calculate_atm_strike(spot_price)
-
+    
     current_candle_id = f"NIFTY_{datetime.now().strftime('%Y-%m-%d_%H:') + str((datetime.now().minute // 15) * 15).zfill(2)}"
 
     if st.session_state.locked_candle_id != current_candle_id or st.session_state.locked_signal_state is None:
@@ -852,9 +806,8 @@ else: # NIFTY 50 MODE
             volume_15m=c_volume, candle_high=c_high, candle_low=c_low, ist_time=ist_now.time(),
             nifty_target=config.UNDERLYING_TARGET_NIFTY
         )
-        confidence_score = 75.0 if signal_type != "WAIT" else 50.0
         st.session_state.locked_candle_id = current_candle_id
-        st.session_state.locked_signal_state = (signal_type, confidence_score, reason_code, breakdown)
+        st.session_state.locked_signal_state = (signal_type, 75.0, reason_code, breakdown)
     else:
         signal_type, confidence_score, reason_code, breakdown = st.session_state.locked_signal_state
 
@@ -863,12 +816,7 @@ else: # NIFTY 50 MODE
     st.sidebar.metric("NIFTY 50 Spot", f"₹{spot_price:,.2f}")
     st.sidebar.metric("India VIX", f"{india_vix:.2f}", delta=f"{delta_vix_15:+.2f}")
 
-    ist_now = data_feed.get_ist_now()
-    conf_info = get_candle_confirmation_status(ist_now)
-
-    # DEDUPLICATED TELEGRAM PUSH ALERT (EXACTLY ONCE PER 15M CANDLE DISK PERSISTED)
-    nifty_candle_block = ist_now.strftime("%Y-%m-%d_%H:") + str((ist_now.minute // 15) * 15).zfill(2)
-    telegram_dedup_key = f"NIFTY_{signal_type}_{nifty_candle_block}"
+    telegram_dedup_key = f"NIFTY_{current_candle_id}_{signal_type}"
     if signal_type in ["BUY_CALL", "BUY_PUT"]:
         alert_msg = f"<b>🚨 NIFTY 50 CANDLE WIN SIGNAL</b>\n\nDirection: <b>{signal_type}</b>\nStrike: <b>NIFTY {atm_strike}</b>\nSpot: <b>₹{spot_price:,.2f}</b>\nEntry Zone (Locked): <b>₹{entry_zone_price:,.2f}</b>\nSL: <b>-8 pts</b>\nTP1: <b>+12 pts</b>"
         send_deduped_telegram_alert(telegram_dedup_key, alert_msg)
@@ -888,7 +836,7 @@ else: # NIFTY 50 MODE
                 "sl": nifty_sl,
                 "signal_type": signal_type,
                 "quantity": 25,
-                "breakdown": breakdown,
+                "breakdown": breakdown if isinstance(breakdown, dict) else {},
                 "start_time": datetime.now().isoformat()
             }
             trade_logger.save_live_state({"active_trade": st.session_state.active_trade})
@@ -901,6 +849,7 @@ else: # NIFTY 50 MODE
         sl_v = float(at.get("sl", 0.0))
         entry_v = float(at.get("entry_price", 0.0))
         qty_v = float(at.get("quantity", 25))
+        bd_v = at.get("breakdown", {})
 
         trade_finished = False
         trade_status = "WIN"
@@ -926,10 +875,11 @@ else: # NIFTY 50 MODE
                 exit_price = sl_v
                 
         if trade_finished:
+            pnl_calc = (exit_price - entry_v) * qty_v if trade_status == "WIN" else (exit_price - entry_v) * qty_v
             post_mortem_eval = ai_analyst.generate_trade_post_mortem(
                 trade_status, 
-                at.get("breakdown", {}), 
-                (exit_price - entry_v) * qty_v
+                bd_v, 
+                pnl_calc
             )
             recorded = trade_logger.record_completed_trade(
                 symbol=at.get("symbol", f"NIFTY {atm_strike}"),
@@ -939,7 +889,7 @@ else: # NIFTY 50 MODE
                 qty=qty_v,
                 status=trade_status,
                 win_loss_reason=post_mortem_eval,
-                layer_breakdown=at.get("breakdown", {})
+                layer_breakdown=bd_v
             )
             pnl_val = recorded.get("net_pnl", 0.0)
             pnl_prefix = "+" if pnl_val > 0 else ""
@@ -954,11 +904,6 @@ else: # NIFTY 50 MODE
         st.markdown(f"""
         <div class='signal-card-buy'>
             {time_badge_html}
-            <div class='confirm-timer-box' style='background-color:{"#261c02" if conf_info["conf_status"] == "ACTIVE" else "#0d231a"}; border:1px solid {"#FFD54F" if conf_info["conf_status"] == "ACTIVE" else "#00E676"}; padding:8px 12px; border-radius:8px; margin-bottom:12px; text-align:center;'>
-                <span class='confirm-timer-text' style='color:{"#FFD54F" if conf_info["conf_status"] == "ACTIVE" else "#00E676"}; font-size:14px; font-weight:bold; font-family:monospace;'>
-                    {conf_info["conf_msg"]}
-                </span>
-            </div>
             <h1 style='color:#00E676; margin:0;'>🟩 PREDICTED WINNING CANDLE: CALL (CE)</h1>
             <p style='font-size:18px; margin-top:8px;'>NIFTY 50 Spot: <b>₹{spot_price:,.2f}</b></p>
             <hr style='border-color:#00E676;'>
@@ -969,11 +914,6 @@ else: # NIFTY 50 MODE
         st.markdown(f"""
         <div class='signal-card-sell'>
             {time_badge_html}
-            <div class='confirm-timer-box' style='background-color:{"#261c02" if conf_info["conf_status"] == "ACTIVE" else "#0d231a"}; border:1px solid {"#FFD54F" if conf_info["conf_status"] == "ACTIVE" else "#00E676"}; padding:8px 12px; border-radius:8px; margin-bottom:12px; text-align:center;'>
-                <span class='confirm-timer-text' style='color:{"#FFD54F" if conf_info["conf_status"] == "ACTIVE" else "#00E676"}; font-size:14px; font-weight:bold; font-family:monospace;'>
-                    {conf_info["conf_msg"]}
-                </span>
-            </div>
             <h1 style='color:#E040FB; margin:0;'>🟪 PREDICTED WINNING CANDLE: RED (DOWN)</h1>
             <p style='font-size:18px; margin-top:8px;'>NIFTY 50 Spot: <b>₹{spot_price:,.2f}</b></p>
             <hr style='border-color:#E040FB;'>
@@ -983,11 +923,6 @@ else: # NIFTY 50 MODE
     else:
         st.markdown(f"""
         <div class='signal-card-wait'>
-            <div class='confirm-timer-box' style='background-color:{"#261c02" if conf_info["conf_status"] == "ACTIVE" else "#0d231a"}; border:1px solid {"#FFD54F" if conf_info["conf_status"] == "ACTIVE" else "#00E676"}; padding:8px 12px; border-radius:8px; margin-bottom:12px; text-align:center;'>
-                <span class='confirm-timer-text' style='color:{"#FFD54F" if conf_info["conf_status"] == "ACTIVE" else "#00E676"}; font-size:14px; font-weight:bold; font-family:monospace;'>
-                    {conf_info["conf_msg"]}
-                </span>
-            </div>
             <h1 style='color:#B0BEC5; margin:0;'>⚪ WAIT - LOW CANDLE WIN CONFIDENCE (< 70%)</h1>
             <p style='font-size:15px; margin-top:8px;'>Reason: <b>{reason_code}</b></p>
         </div>
@@ -1003,11 +938,6 @@ else: # NIFTY 50 MODE
             • <b>Target 1 (TP1)   :</b> +12 Points Premium (Fast Profit: ₹300 / lot)<br>
             • <b>Target 2 (TP2)   :</b> +25 Points Premium (Max Profit: ₹625 / lot)<br>
             • <b>Candle Expiration:</b> Strict Exit @ 15M Candle Close
-            <div class='safe-entry-box' style='background-color:#00332c; border:1px solid #00E676; padding:10px; border-radius:8px; margin-top:12px; text-align:center;'>
-                <span class='safe-entry-text' style='color:#00E676; font-size:13px; font-weight:bold; font-family:monospace;'>
-                    {conf_info["entry_window_msg"]}
-                </span>
-            </div>
         </div>
         """, unsafe_allow_html=True)
 
@@ -1159,8 +1089,8 @@ if all_trades:
             </div>
             """, unsafe_allow_html=True)
         with col_del:
-            if st.button("🗑️ Delete", key=f"del_thought_{t['trade_id']}"):
-                trade_logger.delete_trade_by_id(t['trade_id'])
+            if st.button("🗑️ Delete", key=f"del_thought_{t.get('trade_id', 1)}"):
+                trade_logger.delete_trade_by_id(t.get("trade_id", 1))
                 st.success("Thought Deleted!")
                 st.rerun()
 else:
