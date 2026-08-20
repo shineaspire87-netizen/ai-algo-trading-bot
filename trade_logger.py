@@ -1,12 +1,8 @@
-# ================================================================================
-# ANTONY QUANT AI TERMINAL - TRADE LOGGER & PERSISTENCE ENGINE
-# ================================================================================
 import json
 import os
 from datetime import datetime, timezone, timedelta
 
 TRADES_FILE = "trades.json"
-STATE_FILE = "live_state.json"
 
 def get_ist_now():
     utc_now = datetime.now(timezone.utc)
@@ -16,25 +12,22 @@ def load_trades():
     if not os.path.exists(TRADES_FILE):
         return []
     try:
-        with open(TRADES_FILE, "r", encoding="utf-8") as f:
+        with open(TRADES_FILE, "r") as f:
             return json.load(f)
     except Exception:
         return []
 
 def save_trades(trades):
-    with open(TRADES_FILE, "w", encoding="utf-8") as f:
+    with open(TRADES_FILE, "w") as f:
         json.dump(trades, f, indent=4)
 
 def delete_trade_by_id(trade_id):
-    """Deletes a specific trade record by unique trade_id."""
     trades = load_trades()
     updated_trades = [t for t in trades if t.get("trade_id") != trade_id]
     save_trades(updated_trades)
 
 def clear_all_trades():
-    """Wipes all trades.json records to ensure 100% fresh start from today."""
     save_trades([])
-    save_live_state({"active_trade": None})
 
 def calculate_brokerage_fees(qty, entry_price, exit_price):
     flat_brokerage = 40.0
@@ -42,38 +35,38 @@ def calculate_brokerage_fees(qty, entry_price, exit_price):
     stt_and_taxes = turnover * 0.0005
     return round(flat_brokerage + stt_and_taxes, 2)
 
-def record_completed_trade(symbol, strike, entry_price, exit_price, qty, status, win_loss_reason, layer_breakdown=None):
+def record_completed_trade(symbol, strike, entry_price, exit_price, qty, status, win_loss_reason, layer_breakdown):
     trades = load_trades()
     ist_now = get_ist_now()
     date_time_str = ist_now.strftime("%Y-%m-%d %I:%M:%S %p IST")
     today_str = ist_now.strftime("%Y-%m-%d")
     
-    if layer_breakdown is None:
-        layer_breakdown = {}
+    gross_pnl = round((exit_price - entry_price) * qty if status == "WIN" else (exit_price - entry_price) * qty, 2)
+    brokerage = calculate_brokerage_fees(qty, entry_price, exit_price)
+    net_pnl = round(gross_pnl - brokerage, 2)
+    
+    # CORRECT RESULT DERIVATION (Net PnL > 0 = WIN)
+    actual_result = "WIN" if net_pnl > 0 else "LOSS"
     
     # DEDUPLICATION CHECK
     if trades:
         last_trade = trades[-1]
-        if last_trade.get("symbol") == symbol and abs(last_trade.get("entry_price", 0) - entry_price) < 0.01 and last_trade.get("result") == status:
+        if last_trade.get("symbol") == symbol and abs(last_trade.get("entry_price", 0) - entry_price) < 0.01 and last_trade.get("result") == actual_result:
             return last_trade
-    
-    gross_pnl = round((exit_price - entry_price) * qty if status == "WIN" else (exit_price - entry_price) * qty, 2)
-    brokerage = calculate_brokerage_fees(qty, entry_price, exit_price)
-    net_pnl = round(gross_pnl - brokerage, 2)
     
     trade_record = {
         "trade_id": len(trades) + 1,
         "date_time": date_time_str,
         "date": today_str,
         "symbol": symbol,
-        "strike": str(strike),
-        "entry_price": round(entry_price, 2),
-        "exit_price": round(exit_price, 2),
+        "strike": strike,
+        "entry_price": entry_price,
+        "exit_price": exit_price,
         "quantity": qty,
         "gross_pnl": gross_pnl,
         "brokerage_fee": brokerage,
         "net_pnl": net_pnl,
-        "result": "WIN" if net_pnl > 0 else "LOSS",
+        "result": actual_result,
         "post_mortem": win_loss_reason,
         "layers": layer_breakdown
     }
@@ -92,8 +85,8 @@ def get_today_summary():
     total_trades = len(today_trades)
     wins = len([t for t in today_trades if t.get("result") == "WIN"])
     losses = len([t for t in today_trades if t.get("result") == "LOSS"])
-    net_pnl = sum([t.get("net_pnl", 0.0) for t in today_trades])
-    win_rate = (wins / total_trades * 100.0) if total_trades > 0 else 0.0
+    net_pnl = sum([t.get("net_pnl", 0) for t in today_trades])
+    win_rate = (wins / total_trades * 100) if total_trades > 0 else 0.0
     
     return {
         "total_trades": total_trades,
@@ -117,8 +110,8 @@ def get_weekly_summary(days=7):
     total_trades = len(weekly_trades)
     wins = len([t for t in weekly_trades if t.get("result") == "WIN"])
     losses = len([t for t in weekly_trades if t.get("result") == "LOSS"])
-    net_pnl = sum([t.get("net_pnl", 0.0) for t in weekly_trades])
-    win_rate = (wins / total_trades * 100.0) if total_trades > 0 else 0.0
+    net_pnl = sum([t.get("net_pnl", 0) for t in weekly_trades])
+    win_rate = (wins / total_trades * 100) if total_trades > 0 else 0.0
     
     return {
         "total_trades": total_trades,
@@ -127,21 +120,3 @@ def get_weekly_summary(days=7):
         "win_rate": round(win_rate, 1),
         "net_pnl": round(net_pnl, 2)
     }
-
-def load_live_state():
-    if not os.path.exists(STATE_FILE):
-        return {}
-    try:
-        with open(STATE_FILE, "r", encoding="utf-8") as f:
-            return json.load(f)
-    except Exception:
-        return {}
-
-def save_live_state(state_data):
-    try:
-        existing = load_live_state()
-        existing.update(state_data)
-        with open(STATE_FILE, "w", encoding="utf-8") as f:
-            json.dump(existing, f, indent=4)
-    except Exception as e:
-        print(f"Error saving live state: {e}")

@@ -1,6 +1,3 @@
-# ================================================================================
-# ANTONY QUANT AI TERMINAL - DASHBOARD (100% PERSISTENT STATE ENGINE V22.0)
-# ================================================================================
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -20,14 +17,6 @@ st.set_page_config(
     layout="centered"
 )
 
-# 3-Second Live Auto-Refresh Loop for Live Quant Breakdown Metrics
-try:
-    from streamlit_autorefresh import st_autorefresh
-    st_autorefresh(interval=3000, limit=None, key="quant_engine_live_autorefresh")
-except Exception:
-    pass
-
-# Telegram Push Alert Function
 def send_telegram_alert(message):
     token = config.TELEGRAM_BOT_TOKEN
     chat_id = config.TELEGRAM_CHAT_ID
@@ -39,133 +28,12 @@ def send_telegram_alert(message):
         except Exception:
             pass
 
-def send_deduped_telegram_alert(dedup_key: str, alert_msg: str):
-    """
-    Dispatches Telegram Push Alert EXACTLY ONCE per 15M candle block by checking both
-    st.session_state.notified_candles set AND persisting dedup_key to live_state.json on DISK.
-    Eliminates 3-second st_autorefresh and session reset notification spam!
-    """
-    if dedup_key in st.session_state.notified_candles:
-        return
-
-    disk_state = trade_logger.load_live_state()
-    last_notified = disk_state.get("last_notified_signal", "")
-    
-    if last_notified == dedup_key:
-        st.session_state.notified_candles.add(dedup_key)
-        return
-
-    trade_logger.save_live_state({"last_notified_signal": dedup_key})
-    st.session_state.notified_candles.add(dedup_key)
-    send_telegram_alert(alert_msg)
-
-def get_candle_confirmation_status(ist_time=None):
-    """Fail-Safe Confirmation Window Evaluator (Zero Streamlit Cloud AttributeError)"""
-    if hasattr(quant_math_engine, "get_candle_confirmation_status"):
-        try:
-            return quant_math_engine.get_candle_confirmation_status(ist_time)
-        except Exception:
-            pass
-
-    if ist_time is None:
-        ist_now = datetime.now()
-    elif hasattr(ist_time, "minute"):
-        ist_now = ist_time
-    else:
-        ist_now = datetime.now()
-
-    minute = ist_now.minute
-    second = ist_now.second
-    elapsed_sec = (minute % 15) * 60 + second
-    rem_sec = max(0, 900 - elapsed_sec)
-    
-    if elapsed_sec <= 60:
-        conf_remaining = max(0, 60 - elapsed_sec)
-        conf_status = "ACTIVE"
-        conf_msg = f"⏳ 60s INSTITUTIONAL CONFIRMATION WINDOW: {conf_remaining}s REMAINING..."
-    else:
-        conf_remaining = 0
-        conf_status = "PASSED"
-        conf_msg = "🟢 STRONG 60s CONFIRMATION PASSED! (SAFE ENTRY ACTIVE)"
-
-    if 60 <= elapsed_sec <= 240:
-        entry_window_status = "SAFEST_4MIN"
-        entry_window_msg = "🟢 SAFEST 4-MIN ENTRY WINDOW ACTIVE! (EXECUTE NOW ON DHAN / BINANCE)"
-    elif 240 < elapsed_sec <= 600:
-        entry_window_status = "EXTENDED"
-        entry_window_msg = "🟡 EXTENDED ENTRY WINDOW (CHECK IF PRICE IS STILL IN ENTRY ZONE)"
-    else:
-        entry_window_status = "LATE_WARNING"
-        entry_window_msg = "🔴 LATE ENTRY WARNING: TOO LATE FOR THIS CANDLE (WAIT FOR NEXT CANDLE OPEN)"
-
-    return {
-        "elapsed_seconds": elapsed_sec,
-        "remaining_seconds": rem_sec,
-        "conf_status": conf_status,
-        "conf_remaining": conf_remaining,
-        "conf_msg": conf_msg,
-        "entry_window_status": entry_window_status,
-        "entry_window_msg": entry_window_msg
-    }
-
-def get_trade_bot_reflection(trade_record: dict) -> dict:
-    """Fail-Safe Bot Reflection Evaluator (Zero Streamlit Cloud AttributeError)"""
-    if hasattr(ai_analyst, "generate_bot_reflection"):
-        try:
-            return ai_analyst.generate_bot_reflection(trade_record)
-        except Exception:
-            pass
-
-    symbol = trade_record.get("symbol", "N/A")
-    strike = trade_record.get("strike", symbol)
-    entry_p = float(trade_record.get("entry_price", 0.0))
-    exit_p = float(trade_record.get("exit_price", 0.0))
-    net_pnl = float(trade_record.get("net_pnl", 0.0))
-    result = trade_record.get("result", "WIN" if net_pnl > 0 else "LOSS")
-    dt_str = trade_record.get("date_time", "N/A")
-    reason = trade_record.get("post_mortem", "COMPLETED_TRADE")
-    
-    is_crypto = any(k in str(symbol).upper() for k in ["BITCOIN", "ETHEREUM", "BTC", "ETH"])
-    curr = "$" if is_crypto else "₹"
-
-    summary = f"{dt_str} | {strike} | Entry: {curr}{entry_p:,.2f} ➔ Exit: {curr}{exit_p:,.2f} | Net PnL: {curr}{net_pnl:+,.2f}"
-
-    if result == "WIN":
-        bot_thought = (
-            f"Bot Thought: Entry executed at {curr}{entry_p:,.2f} due to 5-layer alignment. "
-            f"Market momentum expanded option premium cleanly to Target ({reason}). "
-            f"The key catalyst was Heavyweight alignment and VIX expansion."
-        )
-    else:
-        bot_thought = (
-            f"Bot Thought: Entry executed at {curr}{entry_p:,.2f}, but unexpected institutional absorption "
-            f"or VIX contraction caused a reversal hitting Stop Loss ({reason}). "
-            f"The mistake was entering right before an OI resistance wall."
-        )
-
-    required_improvements = [
-        "1) Real-time NSE Level-2 Orderbook Depth (Top 5 Bids/Asks)",
-        "2) Intraday FII/DII Net Cash Flow Feed",
-        "3) 5-Minute Delta Volume Acceleration Feed"
-    ]
-
-    return {
-        "summary": summary,
-        "bot_thought": bot_thought,
-        "required_improvements": required_improvements
-    }
-
-# Load Persistent Disk State Across Browser Refreshes (F5)
-disk_state = trade_logger.load_live_state()
-
 if "notified_candles" not in st.session_state:
     st.session_state.notified_candles = set()
-    last_notified = disk_state.get("last_notified_signal", "")
-    if last_notified:
-        st.session_state.notified_candles.add(last_notified)
-
+if "notified_completed_trades" not in st.session_state:
+    st.session_state.notified_completed_trades = set()
 if "active_trade" not in st.session_state:
-    st.session_state.active_trade = disk_state.get("active_trade", None)
+    st.session_state.active_trade = None
 if "locked_candle_id" not in st.session_state:
     st.session_state.locked_candle_id = "NONE"
 if "locked_signal_state" not in st.session_state:
@@ -181,221 +49,28 @@ def check_market_status(asset_choice):
 
 st.markdown("""
 <style>
-    /* Global Mobile-First Responsive Containers */
-    .main .block-container {
-        padding-top: 1rem !important;
-        padding-bottom: 2rem !important;
-        padding-left: 0.75rem !important;
-        padding-right: 0.75rem !important;
-        max-width: 900px !important;
-    }
-
-    .main-title { 
-        font-size: clamp(20px, 5vw, 28px); 
-        font-weight: bold; 
-        text-align: center; 
-        color: #1E88E5; 
-        line-height: 1.2; 
-        margin-bottom: 4px; 
-    }
-    
-    .sub-title { 
-        font-size: clamp(12px, 3.2vw, 15px); 
-        text-align: center; 
-        color: #B0BEC5; 
-        margin-bottom: 12px; 
-    }
-    
-    .market-badge-open { 
-        background-color: #004D40; 
-        border: 1px solid #00E676; 
-        padding: 8px 12px; 
-        border-radius: 8px; 
-        text-align: center; 
-        color: #00E676; 
-        font-weight: bold; 
-        font-size: clamp(12px, 3.5vw, 14px);
-        margin-bottom: 12px; 
-        word-wrap: break-word; 
-    }
-    
-    .market-badge-closed { 
-        background-color: #371B1B; 
-        border: 1px solid #FF5252; 
-        padding: 8px 12px; 
-        border-radius: 8px; 
-        text-align: center; 
-        color: #FF5252; 
-        font-weight: bold; 
-        font-size: clamp(12px, 3.5vw, 14px);
-        margin-bottom: 12px; 
-        word-wrap: break-word; 
-    }
-    
-    .signal-card-buy { 
-        background-color: #00332c; 
-        border: 2px solid #00E676; 
-        padding: clamp(14px, 4vw, 22px); 
-        border-radius: 15px; 
-        text-align: center; 
-        color: white; 
-        word-wrap: break-word;
-        overflow-wrap: break-word;
-    }
-    
-    .signal-card-sell { 
-        background-color: #311b92; 
-        border: 2px solid #E040FB; 
-        padding: clamp(14px, 4vw, 22px); 
-        border-radius: 15px; 
-        text-align: center; 
-        color: white; 
-        word-wrap: break-word;
-        overflow-wrap: break-word;
-    }
-    
-    .signal-card-wait { 
-        background-color: #1c1c1c; 
-        border: 2px solid #757575; 
-        padding: clamp(14px, 4vw, 22px); 
-        border-radius: 15px; 
-        text-align: center; 
-        color: white; 
-        word-wrap: break-word;
-        overflow-wrap: break-word;
-    }
-    
-    .time-badge-safe { 
-        background-color: #004D40; 
-        border: 1px solid #00E676; 
-        padding: 10px 14px; 
-        border-radius: 8px; 
-        text-align: center; 
-        color: #00E676; 
-        font-weight: bold; 
-        font-size: clamp(12px, 3.5vw, 14px);
-        margin-bottom: 15px; 
-        word-wrap: break-word; 
-    }
-    
-    .time-badge-extended { 
-        background-color: #4A3B00; 
-        border: 1px solid #FFD54F; 
-        padding: 10px 14px; 
-        border-radius: 8px; 
-        text-align: center; 
-        color: #FFD54F; 
-        font-weight: bold; 
-        font-size: clamp(12px, 3.5vw, 14px);
-        margin-bottom: 15px; 
-        word-wrap: break-word; 
-    }
-    
-    .time-badge-late { 
-        background-color: #4A1414; 
-        border: 1px solid #FF5252; 
-        padding: 10px 14px; 
-        border-radius: 8px; 
-        text-align: center; 
-        color: #FF5252; 
-        font-weight: bold; 
-        font-size: clamp(12px, 3.5vw, 14px);
-        margin-bottom: 15px; 
-        word-wrap: break-word; 
-    }
-    
-    .active-trade-box { 
-        background-color: #1a2e05; 
-        border: 2px dashed #00E676; 
-        padding: clamp(12px, 3.5vw, 18px); 
-        border-radius: 12px; 
-        margin-top: 15px; 
-        color: white; 
-        font-size: clamp(13px, 3.5vw, 15px); 
-        line-height: 1.6; 
-        word-wrap: break-word;
-    }
-    
-    .layer-box { 
-        background-color: #0d1b2a; 
-        border: 1px solid #1e3a8a; 
-        padding: clamp(12px, 3.5vw, 16px); 
-        border-radius: 10px; 
-        color: #e2e8f0; 
-        font-size: clamp(13px, 3.5vw, 15px); 
-        margin-top: 15px; 
-        line-height: 1.6; 
-        word-wrap: break-word;
-    }
-    
-    .diagnostic-box { 
-        background-color: #1a102f; 
-        border: 1px solid #9c27b0; 
-        padding: clamp(14px, 4vw, 18px); 
-        border-radius: 12px; 
-        margin-top: 10px; 
-        color: #e1bee7; 
-        font-size: clamp(13px, 3.5vw, 15px); 
-        line-height: 1.6; 
-        word-wrap: break-word;
-    }
-    
-    .cheat-box { 
-        background-color: #0d47a1; 
-        padding: clamp(14px, 4vw, 18px); 
-        border-radius: 12px; 
-        margin-top: 15px; 
-        color: white; 
-        font-size: clamp(14px, 3.8vw, 16px); 
-        line-height: 1.6; 
-        word-wrap: break-word;
-    }
-
-    /* Mobile Responsive Viewport Adapters */
-    @media (max-width: 768px) {
-        .main .block-container {
-            padding-left: 0.5rem !important;
-            padding-right: 0.5rem !important;
-        }
-
-        div[data-testid="column"] {
-            width: 100% !important;
-            flex: 1 1 100% !important;
-            min-width: 100% !important;
-            margin-bottom: 8px !important;
-        }
-
-        [data-testid="stMetric"] {
-            background-color: #111827 !important;
-            border: 1px solid #374151 !important;
-            padding: 10px 14px !important;
-            border-radius: 8px !important;
-        }
-
-        .stButton > button {
-            width: 100% !important;
-            min-height: 46px !important;
-            font-size: 15px !important;
-            font-weight: bold !important;
-        }
-
-        .stDataFrame {
-            width: 100% !important;
-            overflow-x: auto !important;
-        }
-    }
+    .main-title { font-size: 26px; font-weight: bold; text-align: center; color: #1E88E5; }
+    .sub-title { font-size: 14px; text-align: center; color: #B0BEC5; margin-bottom: 10px; }
+    .market-badge-open { background-color: #004D40; border: 1px solid #00E676; padding: 8px; border-radius: 8px; text-align: center; color: #00E676; font-weight: bold; margin-bottom: 12px; }
+    .market-badge-closed { background-color: #371B1B; border: 1px solid #FF5252; padding: 8px; border-radius: 8px; text-align: center; color: #FF5252; font-weight: bold; margin-bottom: 12px; }
+    .signal-card-buy { background-color: #00332c; border: 2px solid #00E676; padding: 22px; border-radius: 15px; text-align: center; color: white; }
+    .signal-card-sell { background-color: #311b92; border: 2px solid #E040FB; padding: 22px; border-radius: 15px; text-align: center; color: white; }
+    .signal-card-wait { background-color: #1c1c1c; border: 2px solid #757575; padding: 22px; border-radius: 15px; text-align: center; color: white; }
+    .time-badge-safe { background-color: #004D40; border: 1px solid #00E676; padding: 10px; border-radius: 8px; text-align: center; color: #00E676; font-weight: bold; margin-bottom: 15px; }
+    .time-badge-extended { background-color: #4A3B00; border: 1px solid #FFD54F; padding: 10px; border-radius: 8px; text-align: center; color: #FFD54F; font-weight: bold; margin-bottom: 15px; }
+    .time-badge-late { background-color: #4A1414; border: 1px solid #FF5252; padding: 10px; border-radius: 8px; text-align: center; color: #FF5252; font-weight: bold; margin-bottom: 15px; }
+    .layer-box { background-color: #0d1b2a; border: 1px solid #1e3a8a; padding: 15px; border-radius: 10px; color: #e2e8f0; font-size: 15px; margin-top: 15px; line-height: 1.6; }
+    .diagnostic-box { background-color: #1a102f; border: 1px solid #9c27b0; padding: 18px; border-radius: 12px; margin-top: 10px; color: #e1bee7; font-size: 15px; line-height: 1.6; }
+    .cheat-box { background-color: #0d47a1; padding: 18px; border-radius: 12px; margin-top: 15px; color: white; font-size: 16px; line-height: 1.6; }
 </style>
 """, unsafe_allow_html=True)
 
 st.sidebar.title("⚙️ System Control")
 selected_asset = st.sidebar.selectbox("🎯 Select Active Trading Market:", ["BITCOIN (BTC/USDT)", "NIFTY 50 (₹)"])
 
-# 🧹 FRESH START BUTTON IN SIDEBAR (AUG 20 2026 FRESH START)
 if st.sidebar.button("🧹 Start Fresh From Today (Aug 20)"):
     trade_logger.clear_all_trades()
-    st.session_state.active_trade = None
-    st.session_state.notified_candles = set()
-    st.sidebar.success("All Old History Erased! Fresh Start Active!")
+    st.sidebar.success("All Old Mock History Erased! Fresh Start Activated!")
     st.rerun()
 
 is_open, market_status_text = check_market_status(selected_asset)
@@ -418,25 +93,18 @@ else:
 
 if selected_asset == "BITCOIN (BTC/USDT)":
     st.components.v1.html("""
-    <div style="background-color: #111827; border: 1px solid #374151; padding: 10px 12px; border-radius: 10px; text-align: center; font-family: monospace; color: #F3F4F6; display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 6px 10px;">
-        <span id="live-date" style="color: #60A5FA; font-size: clamp(12px, 3.2vw, 14px); font-weight: bold;"></span>
-        <span style="color: #4B5563;">|</span> 
-        <span id="live-clock" style="color: #FBBF24; font-size: clamp(13px, 3.5vw, 15px); font-weight: bold;"></span>
-        <span style="color: #4B5563;">|</span>
-        <span id="candle-timer" style="color: #FFD54F; font-size: clamp(13px, 3.5vw, 15px); font-weight: bold;">⏳ 15M CANDLE: Loading...</span>
-        <span style="color: #4B5563;">|</span>
-        <span style="color:#00E676; font-weight:bold; font-size: clamp(13px, 3.5vw, 15px);">⚡ BTC TICKER: <span id="btc-ticker-price" style="color: #00E676; font-size: clamp(15px, 4vw, 18px); font-weight: bold;">$Loading...</span></span>
+    <div style="background-color: #111827; border: 1px solid #374151; padding: 12px; border-radius: 10px; text-align: center; font-family: monospace; color: #F3F4F6;">
+        <span id="live-date" style="color: #60A5FA; font-size: 14px; font-weight: bold;"></span> &nbsp;|&nbsp; 
+        <span id="live-clock" style="color: #FBBF24; font-size: 16px; font-weight: bold;"></span><br>
+        <span id="candle-timer" style="color: #FFD54F; font-size: 16px; font-weight: bold;">⏳ 15M CANDLE: Loading...</span> &nbsp;|&nbsp;
+        <span style="color:#00E676; font-weight:bold;">⚡ BTC TICKER: </span>
+        <span id="btc-ticker-price" style="color: #00E676; font-size: 20px; font-weight: bold;">$Loading...</span>
     </div>
     <script>
     function updateClockAndCandleTimer() {
-        const localDoc = document;
-        const parentDoc = window.parent.document || document;
         const now = new Date();
-        
-        const dateElem = localDoc.getElementById('live-date');
-        const clockElem = localDoc.getElementById('live-clock');
-        if (dateElem) dateElem.innerText = '📅 ' + now.toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' });
-        if (clockElem) clockElem.innerText = '⏰ ' + now.toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true }) + ' IST';
+        document.getElementById('live-date').innerText = '📅 ' + now.toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' });
+        document.getElementById('live-clock').innerText = '⏰ ' + now.toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true }) + ' IST';
         
         const min = now.getMinutes();
         const sec = now.getSeconds();
@@ -448,82 +116,14 @@ if selected_asset == "BITCOIN (BTC/USDT)":
         const minStr = String(remMin).padStart(2, '0');
         const secStr = String(remS).padStart(2, '0');
         
-        const timerElem = localDoc.getElementById('candle-timer');
-        if (timerElem) {
-            if (remSec <= 60) {
-                timerElem.style.color = '#FF5252';
-                timerElem.innerText = '⚠️ GET READY FOR NEXT CANDLE ENTRY (' + minStr + ':' + secStr + ' REMAINING)';
-            } else {
-                timerElem.style.color = '#FFD54F';
-                timerElem.innerText = '⏳ 15M CANDLE COUNTDOWN: ' + minStr + ':' + secStr + ' REMAINING';
-            }
-        }
-
-        // 1. 60-Second Institutional Confirmation Window Timer (Outer Streamlit Page)
-        const confirmRem = 60 - elapsedSec;
-        const confirmElems = parentDoc.querySelectorAll('.confirm-timer-text');
-        const confirmBoxes = parentDoc.querySelectorAll('.confirm-timer-box');
-
-        confirmElems.forEach(elem => {
-            if (confirmRem >= 0) {
-                elem.innerText = '⏳ 60s INSTITUTIONAL CONFIRMATION WINDOW: ' + confirmRem + 's REMAINING...';
-                elem.style.color = '#FFD54F';
-            } else {
-                elem.innerText = '🟢 STRONG 60s CONFIRMATION PASSED! (SAFE ENTRY ACTIVE)';
-                elem.style.color = '#00E676';
-            }
-        });
-
-        confirmBoxes.forEach(box => {
-            if (confirmRem >= 0) {
-                box.style.borderColor = '#FFD54F';
-                box.style.backgroundColor = '#261c02';
-            } else {
-                box.style.borderColor = '#00E676';
-                box.style.backgroundColor = '#0d231a';
-            }
-        });
-
-        // 2. 4-Minute Safe Entry Window Indicator (Outer Streamlit Page)
-        const safeElems = parentDoc.querySelectorAll('.safe-entry-text');
-        const safeBoxes = parentDoc.querySelectorAll('.safe-entry-box');
-
-        let safeMsg = '';
-        let safeColor = '#00E676';
-        let safeBorder = '#00E676';
-        let safeBg = '#00332c';
-
-        if (remSec <= 840 && remSec >= 660) {
-            safeMsg = '🟢 SAFEST 4-MIN ENTRY WINDOW ACTIVE! (EXECUTE NOW ON DHAN / BINANCE)';
-            safeColor = '#00E676';
-            safeBorder = '#00E676';
-            safeBg = '#00332c';
-        } else if (remSec < 660 && remSec >= 300) {
-            safeMsg = '🟡 EXTENDED ENTRY WINDOW (CHECK IF PRICE IS STILL IN ENTRY ZONE)';
-            safeColor = '#FFD54F';
-            safeBorder = '#FFD54F';
-            safeBg = '#332b00';
-        } else if (remSec < 300) {
-            safeMsg = '🔴 LATE ENTRY WARNING: TOO LATE FOR THIS CANDLE (WAIT FOR NEXT CANDLE OPEN)';
-            safeColor = '#FF5252';
-            safeBorder = '#FF5252';
-            safeBg = '#330000';
+        const timerElem = document.getElementById('candle-timer');
+        if (remSec <= 60) {
+            timerElem.style.color = '#FF5252';
+            timerElem.innerText = '⚠️ GET READY FOR NEXT CANDLE ENTRY (' + minStr + ':' + secStr + ' REMAINING)';
         } else {
-            safeMsg = '⏳ WAIT FOR 60s CONFIRMATION TO COMPLETE BEFORE ENTERING...';
-            safeColor = '#FFD54F';
-            safeBorder = '#FFD54F';
-            safeBg = '#261c02';
+            timerElem.style.color = '#FFD54F';
+            timerElem.innerText = '⏳ 15M CANDLE COUNTDOWN: ' + minStr + ':' + secStr + ' REMAINING';
         }
-
-        safeElems.forEach(elem => {
-            elem.innerText = safeMsg;
-            elem.style.color = safeColor;
-        });
-
-        safeBoxes.forEach(box => {
-            box.style.borderColor = safeBorder;
-            box.style.backgroundColor = safeBg;
-        });
     }
     setInterval(updateClockAndCandleTimer, 1000); updateClockAndCandleTimer();
 
@@ -531,30 +131,22 @@ if selected_asset == "BITCOIN (BTC/USDT)":
     ws.onmessage = (event) => {
         const data = JSON.parse(event.data);
         const price = parseFloat(data.c).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
-        const btcElem = document.getElementById('btc-ticker-price');
-        if (btcElem) btcElem.innerText = '$' + price;
+        document.getElementById('btc-ticker-price').innerText = '$' + price;
     };
     </script>
     """, height=85)
 else:
     st.components.v1.html("""
-    <div style="background-color: #111827; border: 1px solid #374151; padding: 10px 12px; border-radius: 10px; text-align: center; font-family: monospace; color: #F3F4F6; display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 6px 10px;">
-        <span id="live-date" style="color: #60A5FA; font-size: clamp(12px, 3.2vw, 14px); font-weight: bold;"></span>
-        <span style="color: #4B5563;">|</span> 
-        <span id="live-clock" style="color: #FBBF24; font-size: clamp(13px, 3.5vw, 15px); font-weight: bold;"></span>
-        <span style="color: #4B5563;">|</span>
-        <span id="candle-timer" style="color: #FFD54F; font-size: clamp(13px, 3.5vw, 15px); font-weight: bold;">⏳ 15M CANDLE: Loading...</span>
+    <div style="background-color: #111827; border: 1px solid #374151; padding: 10px; border-radius: 10px; text-align: center; font-family: monospace; color: #F3F4F6;">
+        <span id="live-date" style="color: #60A5FA; font-size: 14px; font-weight: bold;"></span> &nbsp;|&nbsp; 
+        <span id="live-clock" style="color: #FBBF24; font-size: 16px; font-weight: bold;"></span><br>
+        <span id="candle-timer" style="color: #FFD54F; font-size: 16px; font-weight: bold;">⏳ 15M CANDLE: Loading...</span>
     </div>
     <script>
     function updateClockAndCandleTimer() {
-        const localDoc = document;
-        const parentDoc = window.parent.document || document;
         const now = new Date();
-        
-        const dateElem = localDoc.getElementById('live-date');
-        const clockElem = localDoc.getElementById('live-clock');
-        if (dateElem) dateElem.innerText = '📅 ' + now.toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' });
-        if (clockElem) clockElem.innerText = '⏰ ' + now.toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true }) + ' IST';
+        document.getElementById('live-date').innerText = '📅 ' + now.toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' });
+        document.getElementById('live-clock').innerText = '⏰ ' + now.toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true }) + ' IST';
         
         const min = now.getMinutes();
         const sec = now.getSeconds();
@@ -566,82 +158,14 @@ else:
         const minStr = String(remMin).padStart(2, '0');
         const secStr = String(remS).padStart(2, '0');
         
-        const timerElem = localDoc.getElementById('candle-timer');
-        if (timerElem) {
-            if (remSec <= 60) {
-                timerElem.style.color = '#FF5252';
-                timerElem.innerText = '⚠️ GET READY FOR NEXT CANDLE ENTRY (' + minStr + ':' + secStr + ' REMAINING)';
-            } else {
-                timerElem.style.color = '#FFD54F';
-                timerElem.innerText = '⏳ 15M CANDLE COUNTDOWN: ' + minStr + ':' + secStr + ' REMAINING';
-            }
-        }
-
-        // 1. 60-Second Institutional Confirmation Window Timer (Outer Streamlit Page)
-        const confirmRem = 60 - elapsedSec;
-        const confirmElems = parentDoc.querySelectorAll('.confirm-timer-text');
-        const confirmBoxes = parentDoc.querySelectorAll('.confirm-timer-box');
-
-        confirmElems.forEach(elem => {
-            if (confirmRem >= 0) {
-                elem.innerText = '⏳ 60s INSTITUTIONAL CONFIRMATION WINDOW: ' + confirmRem + 's REMAINING...';
-                elem.style.color = '#FFD54F';
-            } else {
-                elem.innerText = '🟢 STRONG 60s CONFIRMATION PASSED! (SAFE ENTRY ACTIVE)';
-                elem.style.color = '#00E676';
-            }
-        });
-
-        confirmBoxes.forEach(box => {
-            if (confirmRem >= 0) {
-                box.style.borderColor = '#FFD54F';
-                box.style.backgroundColor = '#261c02';
-            } else {
-                box.style.borderColor = '#00E676';
-                box.style.backgroundColor = '#0d231a';
-            }
-        });
-
-        // 2. 4-Minute Safe Entry Window Indicator (Outer Streamlit Page)
-        const safeElems = parentDoc.querySelectorAll('.safe-entry-text');
-        const safeBoxes = parentDoc.querySelectorAll('.safe-entry-box');
-
-        let safeMsg = '';
-        let safeColor = '#00E676';
-        let safeBorder = '#00E676';
-        let safeBg = '#00332c';
-
-        if (remSec <= 840 && remSec >= 660) {
-            safeMsg = '🟢 SAFEST 4-MIN ENTRY WINDOW ACTIVE! (EXECUTE NOW ON DHAN / BINANCE)';
-            safeColor = '#00E676';
-            safeBorder = '#00E676';
-            safeBg = '#00332c';
-        } else if (remSec < 660 && remSec >= 300) {
-            safeMsg = '🟡 EXTENDED ENTRY WINDOW (CHECK IF PRICE IS STILL IN ENTRY ZONE)';
-            safeColor = '#FFD54F';
-            safeBorder = '#FFD54F';
-            safeBg = '#332b00';
-        } else if (remSec < 300) {
-            safeMsg = '🔴 LATE ENTRY WARNING: TOO LATE FOR THIS CANDLE (WAIT FOR NEXT CANDLE OPEN)';
-            safeColor = '#FF5252';
-            safeBorder = '#FF5252';
-            safeBg = '#330000';
+        const timerElem = document.getElementById('candle-timer');
+        if (remSec <= 60) {
+            timerElem.style.color = '#FF5252';
+            timerElem.innerText = '⚠️ GET READY FOR NEXT CANDLE ENTRY (' + minStr + ':' + secStr + ' REMAINING)';
         } else {
-            safeMsg = '⏳ WAIT FOR 60s CONFIRMATION TO COMPLETE BEFORE ENTERING...';
-            safeColor = '#FFD54F';
-            safeBorder = '#FFD54F';
-            safeBg = '#261c02';
+            timerElem.style.color = '#FFD54F';
+            timerElem.innerText = '⏳ 15M CANDLE COUNTDOWN: ' + minStr + ':' + secStr + ' REMAINING';
         }
-
-        safeElems.forEach(elem => {
-            elem.innerText = safeMsg;
-            elem.style.color = safeColor;
-        });
-
-        safeBoxes.forEach(box => {
-            box.style.borderColor = safeBorder;
-            box.style.backgroundColor = safeBg;
-        });
     }
     setInterval(updateClockAndCandleTimer, 1000); updateClockAndCandleTimer();
     </script>
@@ -663,7 +187,7 @@ if selected_asset == "BITCOIN (BTC/USDT)":
     last_row = df_btc.iloc[-1]
     spot_price = float(last_row['close'])
     entry_zone_price = float(last_row['open'])
-    current_candle_id = f"BTC_{last_row.get('time', str(datetime.now().strftime('%Y-%m-%d_%H:')) + str((datetime.now().minute // 15) * 15).zfill(2))}"
+    current_candle_id = f"BTC_{last_row.get('time', str(datetime.now().minute // 15))}"
     
     if st.session_state.locked_candle_id != current_candle_id or st.session_state.locked_signal_state is None:
         signal_type, confidence_score, reason_code, breakdown = quant_math_engine.evaluate_btc_15m_signal(df_btc)
@@ -680,7 +204,7 @@ if selected_asset == "BITCOIN (BTC/USDT)":
     btc_tp2 = entry_zone_price * (1 + config.BTC_TARGET_2_PCT / 100.0) if signal_type == "BUY_CALL" else entry_zone_price * (1 - config.BTC_TARGET_2_PCT / 100.0)
     btc_sl = entry_zone_price * (1 - config.BTC_STOP_LOSS_PCT / 100.0) if signal_type == "BUY_CALL" else entry_zone_price * (1 + config.BTC_STOP_LOSS_PCT / 100.0)
 
-    # SAFE TRADE EVALUATION ENGINE
+    # AUTOMATIC ACTIVE TRADE TRACKER WITH PROPER WIN/LOSS LOGGING
     if signal_type in ["BUY_CALL", "BUY_PUT"]:
         if st.session_state.active_trade is None:
             st.session_state.active_trade = {
@@ -693,9 +217,8 @@ if selected_asset == "BITCOIN (BTC/USDT)":
                 "signal_type": signal_type,
                 "quantity": 25,
                 "breakdown": breakdown if isinstance(breakdown, dict) else {},
-                "start_time": datetime.now().isoformat()
+                "start_time": datetime.now()
             }
-            trade_logger.save_live_state({"active_trade": st.session_state.active_trade})
         
         at = st.session_state.active_trade
         trade_finished = False
@@ -714,25 +237,31 @@ if selected_asset == "BITCOIN (BTC/USDT)":
             elif spot_price >= at.get("sl", spot_price * 1.01): trade_finished, trade_status, exit_price = True, "LOSS", at.get("sl", spot_price)
                 
         if trade_finished:
-            pnl_calc = (exit_price - entry_v) * qty_v if trade_status == "WIN" else (exit_price - entry_v) * qty_v
-            post_mortem = ai_analyst.generate_trade_post_mortem(trade_status, bd_v, pnl_calc)
-            recorded = trade_logger.record_completed_trade(
-                symbol=at.get("symbol", "BTC/USDT"), strike=at.get("strike", "BTCUSDT"), entry_price=entry_v,
-                exit_price=exit_price, qty=qty_v, status=trade_status,
-                win_loss_reason=post_mortem, layer_breakdown=bd_v
-            )
-            pnl_val = recorded.get("net_pnl", 0)
-            pnl_prefix = "+" if pnl_val > 0 else ""
-            alert_msg = f"<b>🚨 TRADE COMPLETED: {trade_status}</b>\n\nSymbol: <b>{at.get('symbol')}</b>\nNet PnL: <b>${pnl_prefix}{pnl_val:,.2f}</b>"
-            send_telegram_alert(alert_msg)
-            st.session_state.active_trade = None
-            trade_logger.save_live_state({"active_trade": None})
-            st.rerun()
+            trade_comp_key = f"COMPLETED_{at.get('symbol')}_{entry_v}_{exit_price}"
+            if trade_comp_key not in st.session_state.notified_completed_trades:
+                pnl_calc = (exit_price - entry_v) * qty_v if trade_status == "WIN" else (exit_price - entry_v) * qty_v
+                post_mortem = ai_analyst.generate_trade_post_mortem(trade_status, bd_v, pnl_calc)
+                recorded = trade_logger.record_completed_trade(
+                    symbol=at.get("symbol", "BTC/USDT"), strike=at.get("strike", "BTCUSDT"), entry_price=entry_v,
+                    exit_price=exit_price, qty=qty_v, status=trade_status,
+                    win_loss_reason=post_mortem, layer_breakdown=bd_v
+                )
+                
+                # DERIVE CORRECT WIN/LOSS TEXT
+                actual_net_pnl = recorded.get('net_pnl', 0)
+                final_header_status = "WIN" if actual_net_pnl > 0 else "LOSS"
+                
+                alert_msg = f"<b>🚨 TRADE COMPLETED: {final_header_status}</b>\n\nSymbol: <b>{at.get('symbol')}</b>\nNet PnL: <b>${actual_net_pnl:,.2f}</b>"
+                send_telegram_alert(alert_msg)
+                st.session_state.notified_completed_trades.add(trade_comp_key)
+                st.session_state.active_trade = None
+                st.rerun()
 
     telegram_dedup_key = f"BTC_{current_candle_id}_{signal_type}"
-    if signal_type in ["BUY_CALL", "BUY_PUT"]:
+    if signal_type in ["BUY_CALL", "BUY_PUT"] and telegram_dedup_key not in st.session_state.notified_candles:
         alert_msg = f"<b>🚨 BITCOIN 15M CANDLE WIN SIGNAL</b>\n\nDirection: <b>{signal_type}</b>\nWin Confidence: <b>{confidence_score:.1f}%</b>\nEntry Zone (Locked): <b>${entry_zone_price:,.2f}</b>\nTP1 (+0.25%): <b>${btc_tp1:,.2f}</b>\nSL (-0.15%): <b>${btc_sl:,.2f}</b>"
-        send_deduped_telegram_alert(telegram_dedup_key, alert_msg)
+        send_telegram_alert(alert_msg)
+        st.session_state.notified_candles.add(telegram_dedup_key)
 
     st.subheader("📍 LIVE BITCOIN 15M CANDLE WIN PREDICTOR")
     if signal_type == "BUY_CALL":
@@ -793,7 +322,7 @@ else: # NIFTY 50 MODE
     c_volume = float(last_row['volume']) if 'volume' in last_row else 65000.0
     atm_strike = data_feed.calculate_atm_strike(spot_price)
     
-    current_candle_id = f"NIFTY_{datetime.now().strftime('%Y-%m-%d_%H:') + str((datetime.now().minute // 15) * 15).zfill(2)}"
+    current_candle_id = f"NIFTY_{datetime.now().minute // 15}"
 
     if st.session_state.locked_candle_id != current_candle_id or st.session_state.locked_signal_state is None:
         prev_close = float(df['close'].iloc[-4])
@@ -824,87 +353,10 @@ else: # NIFTY 50 MODE
     st.sidebar.metric("India VIX", f"{india_vix:.2f}", delta=f"{delta_vix_15:+.2f}")
 
     telegram_dedup_key = f"NIFTY_{current_candle_id}_{signal_type}"
-    if signal_type in ["BUY_CALL", "BUY_PUT"]:
-        alert_msg = f"<b>🚨 NIFTY 50 CANDLE WIN SIGNAL</b>\n\nDirection: <b>{signal_type}</b>\nStrike: <b>NIFTY {atm_strike}</b>\nSpot: <b>₹{spot_price:,.2f}</b>\nEntry Zone (Locked): <b>₹{entry_zone_price:,.2f}</b>\nSL: <b>-8 pts</b>\nTP1: <b>+12 pts</b>"
-        send_deduped_telegram_alert(telegram_dedup_key, alert_msg)
-
-    # AUTOMATIC ACTIVE TRADE TRACKER STATE MACHINE
-    nifty_tp1 = (spot_price + 12.0) if signal_type == "BUY_CALL" else (spot_price - 12.0)
-    nifty_sl = (spot_price - 8.0) if signal_type == "BUY_CALL" else (spot_price + 8.0)
-
-    if signal_type in ["BUY_CALL", "BUY_PUT"]:
-        if st.session_state.active_trade is None:
-            st.session_state.active_trade = {
-                "asset": "NIFTY 50 (₹)",
-                "symbol": f"NIFTY {atm_strike} {'CE' if signal_type=='BUY_CALL' else 'PE'}",
-                "strike": f"NIFTY {atm_strike}",
-                "entry_price": entry_zone_price,
-                "tp1": nifty_tp1,
-                "sl": nifty_sl,
-                "signal_type": signal_type,
-                "quantity": 25,
-                "breakdown": breakdown if isinstance(breakdown, dict) else {},
-                "start_time": datetime.now().isoformat()
-            }
-            trade_logger.save_live_state({"active_trade": st.session_state.active_trade})
-
-    # Evaluate Active Position Target/SL Hit
-    if isinstance(st.session_state.active_trade, dict) and st.session_state.active_trade.get("asset") == "NIFTY 50 (₹)":
-        at = st.session_state.active_trade
-        sig_t = str(at.get("signal_type", "BUY_CALL"))
-        tp1_v = float(at.get("tp1", 0.0))
-        sl_v = float(at.get("sl", 0.0))
-        entry_v = float(at.get("entry_price", 0.0))
-        qty_v = float(at.get("quantity", 25))
-        bd_v = at.get("breakdown", {})
-
-        trade_finished = False
-        trade_status = "WIN"
-        exit_price = spot_price
-        
-        if sig_t == "BUY_CALL":
-            if spot_price >= tp1_v and tp1_v > 0:
-                trade_finished = True
-                trade_status = "WIN"
-                exit_price = tp1_v
-            elif spot_price <= sl_v and sl_v > 0:
-                trade_finished = True
-                trade_status = "LOSS"
-                exit_price = sl_v
-        elif sig_t == "BUY_PUT":
-            if spot_price <= tp1_v and tp1_v > 0:
-                trade_finished = True
-                trade_status = "WIN"
-                exit_price = tp1_v
-            elif spot_price >= sl_v and sl_v > 0:
-                trade_finished = True
-                trade_status = "LOSS"
-                exit_price = sl_v
-                
-        if trade_finished:
-            pnl_calc = (exit_price - entry_v) * qty_v if trade_status == "WIN" else (exit_price - entry_v) * qty_v
-            post_mortem_eval = ai_analyst.generate_trade_post_mortem(
-                trade_status, 
-                bd_v, 
-                pnl_calc
-            )
-            recorded = trade_logger.record_completed_trade(
-                symbol=at.get("symbol", f"NIFTY {atm_strike}"),
-                strike=at.get("strike", f"NIFTY {atm_strike}"),
-                entry_price=entry_v,
-                exit_price=exit_price,
-                qty=qty_v,
-                status=trade_status,
-                win_loss_reason=post_mortem_eval,
-                layer_breakdown=bd_v
-            )
-            pnl_val = recorded.get("net_pnl", 0.0)
-            pnl_prefix = "+" if pnl_val > 0 else ""
-            alert_msg = f"<b>🚨 TRADE COMPLETED: {trade_status}</b>\n\nSymbol: <b>{at.get('symbol', 'NIFTY 50')}</b>\nEntry: <b>₹{entry_v:,.2f}</b> ➔ Exit: <b>₹{exit_price:,.2f}</b>\nNet PnL: <b>₹{pnl_prefix}{pnl_val:,.2f}</b>"
-            send_telegram_alert(alert_msg)
-            st.session_state.active_trade = None
-            trade_logger.save_live_state({"active_trade": None})
-            st.rerun()
+    if signal_type in ["BUY_CALL", "BUY_PUT"] and telegram_dedup_key not in st.session_state.notified_candles:
+        alert_msg = f"<b>🚨 NIFTY 50 CANDLE WIN SIGNAL</b>\n\nDirection: <b>{signal_type}</b>\nStrike: <b>NIFTY {atm_strike}</b>\nSpot: <b>₹{spot_price:,.2f}</b>\nSL: <b>-8 pts</b>\nTP1: <b>+12 pts</b>"
+        send_telegram_alert(alert_msg)
+        st.session_state.notified_candles.add(telegram_dedup_key)
 
     st.subheader("📍 LIVE NIFTY 50 15M CANDLE WIN PREDICTOR")
     if signal_type == "BUY_CALL":
@@ -914,17 +366,17 @@ else: # NIFTY 50 MODE
             <h1 style='color:#00E676; margin:0;'>🟩 PREDICTED WINNING CANDLE: CALL (CE)</h1>
             <p style='font-size:18px; margin-top:8px;'>NIFTY 50 Spot: <b>₹{spot_price:,.2f}</b></p>
             <hr style='border-color:#00E676;'>
-            <h2>🎯 TARGET STRIKE: <u style='color:#00E676;'>NIFTY {atm_strike} CE</u> (Entry Zone: ₹{entry_zone_price:,.2f})</h2>
+            <h2>🎯 TARGET STRIKE: <u style='color:#00E676;'>NIFTY {atm_strike} CE</u></h2>
         </div>
         """, unsafe_allow_html=True)
     elif signal_type == "BUY_PUT":
         st.markdown(f"""
         <div class='signal-card-sell'>
             {time_badge_html}
-            <h1 style='color:#E040FB; margin:0;'>🟪 PREDICTED WINNING CANDLE: RED (DOWN)</h1>
+            <h1 style='color:#E040FB; margin:0;'>🟪 PREDICTED WINNING CANDLE: PUT (PE)</h1>
             <p style='font-size:18px; margin-top:8px;'>NIFTY 50 Spot: <b>₹{spot_price:,.2f}</b></p>
             <hr style='border-color:#E040FB;'>
-            <h2>🎯 TARGET STRIKE: <u style='color:#E040FB;'>NIFTY {atm_strike} PE</u> (Entry Zone: ₹{entry_zone_price:,.2f})</h2>
+            <h2>🎯 TARGET STRIKE: <u style='color:#E040FB;'>NIFTY {atm_strike} PE</u></h2>
         </div>
         """, unsafe_allow_html=True)
     else:
@@ -940,7 +392,7 @@ else: # NIFTY 50 MODE
         <div class='cheat-box'>
             <b>📋 DHAN / TRADINGVIEW EXECUTION CHEAT SHEET:</b><br>
             • <b>Option Contract  :</b> NIFTY {atm_strike} {"CE" if signal_type == "BUY_CALL" else "PE"}<br>
-            • <b>Entry Strategy   :</b> Buy Market Price on Dhan / TradingView @ ₹{entry_zone_price:,.2f}<br>
+            • <b>Entry Strategy   :</b> Buy Market Price on Dhan / TradingView<br>
             • <b>Stop Loss (SL)   :</b> -8 Points Premium (Micro Risk: ₹200 / lot)<br>
             • <b>Target 1 (TP1)   :</b> +12 Points Premium (Fast Profit: ₹300 / lot)<br>
             • <b>Target 2 (TP2)   :</b> +25 Points Premium (Max Profit: ₹625 / lot)<br>
@@ -948,64 +400,15 @@ else: # NIFTY 50 MODE
         </div>
         """, unsafe_allow_html=True)
 
-# Render Active Trade Position Banner if Position Open
-if isinstance(st.session_state.active_trade, dict):
-    at = st.session_state.active_trade
-    entry_p = float(at.get("entry_price", at.get("entry_zone_price", at.get("price", 0.0))))
-    qty = float(at.get("quantity", at.get("qty", 25)))
-    sig_t = str(at.get("signal_type", "BUY_CALL"))
-    tp1_val = float(at.get("tp1", 0.0))
-    sl_val = float(at.get("sl", 0.0))
-    strike_str = str(at.get("strike", at.get("symbol", "ACTIVE")))
-    sym_str = str(at.get("symbol", strike_str))
-
-    if entry_p > 0 and 'spot_price' in locals():
-        curr_pnl = (spot_price - entry_p) * qty if sig_t == "BUY_CALL" else (entry_p - spot_price) * qty
-        pnl_color = "#00E676" if curr_pnl >= 0 else "#FF5252"
-        curr_sym = "$" if "BTC" in sym_str or "BTC" in strike_str else "₹"
-        
-        st.markdown(f"""
-        <div class='active-trade-box'>
-            <b>⚡ ACTIVE POSITION RUNNING IN REAL-TIME:</b><br>
-            • <b>Contract       :</b> {strike_str} ({sig_t})<br>
-            • <b>Entry Price    :</b> {curr_sym}{entry_p:,.2f}<br>
-            • <b>Live Price     :</b> {curr_sym}{spot_price:,.2f}<br>
-            • <b>Target 1 (TP1) :</b> {curr_sym}{tp1_val:,.2f} | <b>Stop Loss (SL):</b> {curr_sym}{sl_val:,.2f}<br>
-            • <b>Unrealized PnL :</b> <b style='color:{pnl_color};'>{curr_sym}{curr_pnl:+,.2f}</b>
-        </div>
-        """, unsafe_allow_html=True)
-        
-        if st.button("⚡ Square Off Position Now"):
-            recorded = trade_logger.record_completed_trade(
-                symbol=sym_str,
-                strike=strike_str,
-                entry_price=entry_p,
-                exit_price=spot_price,
-                qty=qty,
-                status="WIN" if curr_pnl >= 0 else "LOSS",
-                win_loss_reason="MANUAL_SQUARE_OFF",
-                layer_breakdown=at.get("breakdown", {})
-            )
-            st.session_state.active_trade = None
-            trade_logger.save_live_state({"active_trade": None})
-            st.success("Position Squared Off & Logged!")
-            st.rerun()
-    elif entry_p <= 0:
-        st.session_state.active_trade = None
-        trade_logger.save_live_state({"active_trade": None})
-elif st.session_state.active_trade is not None:
-    st.session_state.active_trade = None
-    trade_logger.save_live_state({"active_trade": None})
-
 if breakdown:
     st.markdown(f"""
     <div class='layer-box'>
-        <b>🛡️ LIVE QUANT ENGINE BREAKDOWN STATUS (AUTO-REFRESHING 3s):</b><br>
-        • <b>Layer 1 (Candle Body Intensity %)     :</b> {breakdown.get('l1_status', 'N/A')}<br>
-        • <b>Layer 2 (Volume Acceleration x)       :</b> {breakdown.get('l2_status', 'N/A')}<br>
-        • <b>Layer 3 (15M Momentum Delta %)        :</b> {breakdown.get('l3_status', 'N/A')}<br>
-        • <b>Layer 4 (Fib Discount Guard Ratio)    :</b> {breakdown.get('l4_status', 'N/A')}<br>
-        • <b>Layer 5 (Candle Win Confidence %)     :</b> {breakdown.get('l5_status', 'N/A')}
+        <b>🛡️ QUANT ENGINE BREAKDOWN STATUS:</b><br>
+        • <b>Layer 1 (Body Intensity)      :</b> {breakdown.get('l1_status', 'N/A')}<br>
+        • <b>Layer 2 (Volume Acceleration)  :</b> {breakdown.get('l2_status', 'N/A')}<br>
+        • <b>Layer 3 (Momentum Delta)       :</b> {breakdown.get('l3_status', 'N/A')}<br>
+        • <b>Layer 4 (Fib Discount Guard)   :</b> {breakdown.get('l4_status', 'N/A')}<br>
+        • <b>Layer 5 (Candle Win Verdict)   :</b> {breakdown.get('l5_status', 'N/A')}
     </div>
     """, unsafe_allow_html=True)
 
@@ -1025,8 +428,7 @@ with tab1:
     today_trades = trade_logger.get_today_trades()
     if today_trades:
         df_today = pd.DataFrame(today_trades)
-        available_cols = [c for c in ["date_time", "symbol", "entry_price", "exit_price", "quantity", "gross_pnl", "brokerage_fee", "net_pnl", "result"] if c in df_today.columns]
-        st.dataframe(df_today[available_cols], use_container_width=True)
+        st.dataframe(df_today[["date_time", "symbol", "entry_price", "exit_price", "quantity", "gross_pnl", "brokerage_fee", "net_pnl", "result"]], use_container_width=True)
     else:
         st.info("ℹ️ No trades recorded today yet. Bot is scanning 15M candles for high-probability setups.")
 
@@ -1041,8 +443,7 @@ with tab2:
     weekly_trades = trade_logger.get_weekly_trades(days=7)
     if weekly_trades:
         df_weekly = pd.DataFrame(weekly_trades)
-        available_cols = [c for c in ["date_time", "symbol", "entry_price", "exit_price", "quantity", "gross_pnl", "brokerage_fee", "net_pnl", "result"] if c in df_weekly.columns]
-        st.dataframe(df_weekly[available_cols], use_container_width=True)
+        st.dataframe(df_weekly[["date_time", "symbol", "entry_price", "exit_price", "quantity", "gross_pnl", "brokerage_fee", "net_pnl", "result"]], use_container_width=True)
     else:
         st.info("ℹ️ No weekly trade history recorded yet.")
 
@@ -1054,46 +455,20 @@ with col_title:
 with col_clear:
     if st.button("🧹 Clear All Bot Thoughts"):
         trade_logger.clear_all_trades()
-        st.session_state.active_trade = None
         st.success("All Bot Thoughts Cleared!")
         st.rerun()
 
 all_trades = trade_logger.load_trades()
 if all_trades:
     for t in reversed(all_trades[-10:]):
-        reflection = get_trade_bot_reflection(t)
-        bot_thought = t.get("bot_thoughts", reflection["bot_thought"])
-        req_improvements = t.get("required_improvements", reflection["required_improvements"])
-        res = t.get("result", "WIN")
-        res_color = "#00E676" if res == "WIN" else "#FF5252"
-        res_icon = "🟢 WIN" if res == "WIN" else "🔴 LOSS"
-        sym_strike = t.get("strike", t.get("symbol", "N/A"))
-        dt_str = t.get("date_time", "N/A")
-        pnl_val = float(t.get("net_pnl", 0.0))
-        is_crypto = any(k in str(sym_strike).upper() for k in ["BITCOIN", "BTC", "USDT"])
-        curr = "$" if is_crypto else "₹"
-        
-        req_html = "".join([f"• {item}<br>" for item in req_improvements])
-
         col_card, col_del = st.columns([5, 1])
         with col_card:
+            post_mortem_text = ai_analyst.generate_trade_post_mortem(t.get("result", "WIN"), t.get("layers", {}), t.get("net_pnl", 0))
             st.markdown(f"""
-            <div style='background-color: #1a102f; border: 1px solid #7c4dff; border-left: 5px solid {res_color}; padding: 18px; border-radius: 12px; margin-bottom: 15px; color: #e1bee7;'>
-                <div style='display:flex; justify-content:space-between; align-items:center;'>
-                    <b style='font-size:15px; color:#ffffff;'>📅 {dt_str}</b>
-                    <span style='background-color:{"#00332c" if res == "WIN" else "#330000"}; color:{res_color}; padding:4px 10px; border-radius:6px; font-weight:bold; font-size:13px;'>{res_icon}</span>
-                </div>
-                <p style='margin-top:8px; margin-bottom:6px; font-size:15px; color:#b388ff;'>
-                    📍 <b>Trade Executed:</b> {sym_strike} &nbsp;|&nbsp; <b>Net PnL:</b> <span style='color:{res_color};'>{curr}{pnl_val:+,.2f}</span>
-                </p>
-                <hr style='border-color:#311b92; margin:8px 0;'>
-                <p style='font-size:14px; line-height:1.6; color:#f3e5f5;'>
-                    💭 <b>Bot Reflection:</b><br>{bot_thought}
-                </p>
-                <div style='background-color:#0d071c; border: 1px dashed #7c4dff; padding:12px; border-radius:8px; margin-top:10px; font-size:13px; color:#e040fb; line-height:1.5;'>
-                    💡 <b>Bot Data Request for User (To Reach 85%+ Accuracy):</b><br>
-                    {req_html}
-                </div>
+            <div class='diagnostic-box'>
+                📅 <b>{t.get('date_time', 'N/A')}</b> | <span style='color:{"#FF5252" if t.get("result")=="LOSS" else "#00E676"}'>{t.get("result", "WIN")}</span><br>
+                📍 <b>Trade:</b> {t.get('symbol', 'N/A')} | Net PnL: ₹{t.get('net_pnl', 0)}<br><br>
+                💭 <b>Bot Reflection:</b><br>{t.get('post_mortem', post_mortem_text)}
             </div>
             """, unsafe_allow_html=True)
         with col_del:
