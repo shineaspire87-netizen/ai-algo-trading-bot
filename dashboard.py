@@ -5,10 +5,12 @@ import time as time_lib
 from datetime import datetime, time, timezone, timedelta
 import requests
 
+import importlib
 import config
 import data_feed
 import quant_math_engine
 import trade_logger
+importlib.reload(trade_logger)
 import ai_analyst
 
 st.set_page_config(
@@ -203,7 +205,10 @@ if selected_asset == "BITCOIN (BTC/USDT)":
     btc_sl = entry_zone_price * (1 - config.BTC_STOP_LOSS_PCT / 100.0) if signal_type == "BUY_CALL" else entry_zone_price * (1 + config.BTC_STOP_LOSS_PCT / 100.0)
 
     # PERSISTENT FILE-BACKED ACTIVE TRADE ENGINE (15M CANDLE EXPIRY AUTO-LOGGING)
-    active_trade = trade_logger.load_active_trade()
+    if hasattr(trade_logger, "load_active_trade"):
+        active_trade = trade_logger.load_active_trade()
+    else:
+        active_trade = st.session_state.get("active_trade", None)
     
     if signal_type in ["BUY_CALL", "BUY_PUT"]:
         if active_trade is None:
@@ -220,7 +225,9 @@ if selected_asset == "BITCOIN (BTC/USDT)":
                 "breakdown": breakdown if isinstance(breakdown, dict) else {},
                 "start_time_iso": datetime.now().isoformat()
             }
-            trade_logger.save_active_trade(active_trade)
+            if hasattr(trade_logger, "save_active_trade"):
+                trade_logger.save_active_trade(active_trade)
+            st.session_state.active_trade = active_trade
             
         at = active_trade
         trade_finished = False
@@ -262,7 +269,8 @@ if selected_asset == "BITCOIN (BTC/USDT)":
             
             alert_msg = f"<b>🚨 TRADE COMPLETED: {final_header_status}</b>\n\nSymbol: <b>{at.get('symbol')}</b>\nNet PnL: <b>${actual_net_pnl:,.2f}</b>"
             send_telegram_alert(alert_msg)
-            trade_logger.clear_active_trade()
+            if hasattr(trade_logger, "clear_active_trade"):
+                trade_logger.clear_active_trade()
             st.session_state.active_trade = None
             st.rerun()
 
