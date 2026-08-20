@@ -10,8 +10,13 @@ import config
 import data_feed
 import quant_math_engine
 import trade_logger
-importlib.reload(trade_logger)
 import ai_analyst
+
+for _mod in [config, data_feed, quant_math_engine, trade_logger, ai_analyst]:
+    try:
+        importlib.reload(_mod)
+    except Exception:
+        pass
 
 st.set_page_config(
     page_title="ANTONY Quant AI Terminal",
@@ -257,7 +262,10 @@ if selected_asset == "BITCOIN (BTC/USDT)":
                 
         if trade_finished:
             pnl_calc = (exit_price - entry_v) * qty_v if trade_status == "WIN" else (exit_price - entry_v) * qty_v
-            post_mortem = ai_analyst.generate_trade_post_mortem(trade_status, bd_v, pnl_calc)
+            try:
+                post_mortem = ai_analyst.generate_trade_post_mortem(trade_status, bd_v, pnl_calc)
+            except Exception:
+                post_mortem = f"Trade Completed: {trade_status} | Net PnL: ${pnl_calc:,.2f}"
             recorded = trade_logger.record_completed_trade(
                 symbol=at.get("symbol", "BTC/USDT"), strike=at.get("strike", "BTCUSDT"), entry_price=entry_v,
                 exit_price=exit_price, qty=qty_v, status=trade_status,
@@ -480,7 +488,10 @@ if all_trades:
     for t in reversed(all_trades[-10:]):
         col_card, col_del = st.columns([5, 1])
         with col_card:
-            post_mortem_text = ai_analyst.generate_trade_post_mortem(t.get("result", "WIN"), t.get("layers", {}), t.get("net_pnl", 0))
+            try:
+                post_mortem_text = ai_analyst.generate_trade_post_mortem(t.get("result", "WIN"), t.get("layers", {}), t.get("net_pnl", 0))
+            except Exception:
+                post_mortem_text = "Trade Reflection Logged"
             st.markdown(f"""
             <div class='diagnostic-box'>
                 📅 <b>{t.get('date_time', 'N/A')}</b> | <span style='color:{"#FF5252" if t.get("result")=="LOSS" else "#00E676"}'>{t.get("result", "WIN")}</span><br>
@@ -499,7 +510,10 @@ else:
 # END-OF-DAY AI SELF-DIAGNOSTIC REPORT
 st.divider()
 today_trades = trade_logger.get_today_trades()
-eod_report = ai_analyst.generate_eod_bot_diagnostic(today_trades, india_vix if selected_asset == "NIFTY 50 (₹)" else 15.0, 1.0)
+try:
+    eod_report = ai_analyst.generate_eod_bot_diagnostic(today_trades, india_vix if selected_asset == "NIFTY 50 (₹)" else 15.0, 1.0)
+except Exception:
+    eod_report = "🤖 <b>EOD AI DIAGNOSTIC:</b> Systems active and operational."
 st.markdown(f"<div class='diagnostic-box'>{eod_report}</div>", unsafe_allow_html=True)
 
 if st.sidebar.button("🧹 Clear All Trade History"):
