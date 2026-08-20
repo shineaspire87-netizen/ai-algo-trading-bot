@@ -645,30 +645,36 @@ if selected_asset == "BITCOIN (BTC/USDT)":
             trade_logger.save_live_state({"active_trade": st.session_state.active_trade})
 
     # Evaluate Active Position Target/SL Hit (STRICT CONDITIONAL EXECUTION - ZERO REFRESH DUPLICATE LOGS)
-    if st.session_state.active_trade is not None and st.session_state.active_trade.get("asset") == "BITCOIN (BTC/USDT)":
+    if isinstance(st.session_state.active_trade, dict) and st.session_state.active_trade.get("asset") == "BITCOIN (BTC/USDT)":
         at = st.session_state.active_trade
+        sig_t = str(at.get("signal_type", "BUY_CALL"))
+        tp1_v = float(at.get("tp1", 0.0))
+        sl_v = float(at.get("sl", 0.0))
+        entry_v = float(at.get("entry_price", 0.0))
+        qty_v = float(at.get("quantity", 25))
+
         trade_finished = False
         trade_status = "WIN"
         exit_price = spot_price
         
-        if at["signal_type"] == "BUY_CALL":
-            if spot_price >= at["tp1"]:
+        if sig_t == "BUY_CALL":
+            if spot_price >= tp1_v and tp1_v > 0:
                 trade_finished = True
                 trade_status = "WIN"
-                exit_price = at["tp1"]
-            elif spot_price <= at["sl"]:
+                exit_price = tp1_v
+            elif spot_price <= sl_v and sl_v > 0:
                 trade_finished = True
                 trade_status = "LOSS"
-                exit_price = at["sl"]
-        elif at["signal_type"] == "BUY_PUT":
-            if spot_price <= at["tp1"]:
+                exit_price = sl_v
+        elif sig_t == "BUY_PUT":
+            if spot_price <= tp1_v and tp1_v > 0:
                 trade_finished = True
                 trade_status = "WIN"
-                exit_price = at["tp1"]
-            elif spot_price >= at["sl"]:
+                exit_price = tp1_v
+            elif spot_price >= sl_v and sl_v > 0:
                 trade_finished = True
                 trade_status = "LOSS"
-                exit_price = at["sl"]
+                exit_price = sl_v
                 
         if trade_finished:
             post_mortem_eval = ai_analyst.generate_trade_post_mortem(
@@ -833,30 +839,36 @@ else: # NIFTY 50 MODE
             trade_logger.save_live_state({"active_trade": st.session_state.active_trade})
 
     # Evaluate Active Position Target/SL Hit (STRICT CONDITIONAL EXECUTION - ZERO REFRESH DUPLICATE LOGS)
-    if st.session_state.active_trade is not None and st.session_state.active_trade.get("asset") == "NIFTY 50 (₹)":
+    if isinstance(st.session_state.active_trade, dict) and st.session_state.active_trade.get("asset") == "NIFTY 50 (₹)":
         at = st.session_state.active_trade
+        sig_t = str(at.get("signal_type", "BUY_CALL"))
+        tp1_v = float(at.get("tp1", 0.0))
+        sl_v = float(at.get("sl", 0.0))
+        entry_v = float(at.get("entry_price", 0.0))
+        qty_v = float(at.get("quantity", 25))
+
         trade_finished = False
         trade_status = "WIN"
         exit_price = spot_price
         
-        if at["signal_type"] == "BUY_CALL":
-            if spot_price >= at["tp1"]:
+        if sig_t == "BUY_CALL":
+            if spot_price >= tp1_v and tp1_v > 0:
                 trade_finished = True
                 trade_status = "WIN"
-                exit_price = at["tp1"]
-            elif spot_price <= at["sl"]:
+                exit_price = tp1_v
+            elif spot_price <= sl_v and sl_v > 0:
                 trade_finished = True
                 trade_status = "LOSS"
-                exit_price = at["sl"]
-        elif at["signal_type"] == "BUY_PUT":
-            if spot_price <= at["tp1"]:
+                exit_price = sl_v
+        elif sig_t == "BUY_PUT":
+            if spot_price <= tp1_v and tp1_v > 0:
                 trade_finished = True
                 trade_status = "WIN"
-                exit_price = at["tp1"]
-            elif spot_price >= at["sl"]:
+                exit_price = tp1_v
+            elif spot_price >= sl_v and sl_v > 0:
                 trade_finished = True
                 trade_status = "LOSS"
-                exit_price = at["sl"]
+                exit_price = sl_v
                 
         if trade_finished:
             post_mortem_eval = ai_analyst.generate_trade_post_mortem(
@@ -943,38 +955,53 @@ else: # NIFTY 50 MODE
         """, unsafe_allow_html=True)
 
 # Render Active Trade Position Banner if Position Open
-if st.session_state.active_trade is not None:
+if isinstance(st.session_state.active_trade, dict):
     at = st.session_state.active_trade
-    curr_pnl = (spot_price - at["entry_price"]) * at["quantity"] if at["signal_type"] == "BUY_CALL" else (at["entry_price"] - spot_price) * at["quantity"]
-    pnl_color = "#00E676" if curr_pnl >= 0 else "#FF5252"
-    curr_sym = "$" if "BTC" in str(at["symbol"]) else "₹"
-    
-    st.markdown(f"""
-    <div class='active-trade-box'>
-        <b>⚡ ACTIVE POSITION RUNNING IN REAL-TIME:</b><br>
-        • <b>Contract       :</b> {at['strike']} ({at['signal_type']})<br>
-        • <b>Entry Price    :</b> {curr_sym}{at['entry_price']:,.2f}<br>
-        • <b>Live Price     :</b> {curr_sym}{spot_price:,.2f}<br>
-        • <b>Target 1 (TP1) :</b> {curr_sym}{at['tp1']:,.2f} | <b>Stop Loss (SL):</b> {curr_sym}{at['sl']:,.2f}<br>
-        • <b>Unrealized PnL :</b> <b style='color:{pnl_color};'>{curr_sym}{curr_pnl:+,.2f}</b>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    if st.button("⚡ Square Off Position Now"):
-        recorded = trade_logger.record_completed_trade(
-            symbol=at["symbol"],
-            strike=at["strike"],
-            entry_price=at["entry_price"],
-            exit_price=spot_price,
-            qty=at["quantity"],
-            status="WIN" if curr_pnl >= 0 else "LOSS",
-            win_loss_reason="MANUAL_SQUARE_OFF",
-            layer_breakdown=at.get("breakdown", {})
-        )
+    entry_p = float(at.get("entry_price", at.get("entry_zone_price", at.get("price", 0.0))))
+    qty = float(at.get("quantity", at.get("qty", 25)))
+    sig_t = str(at.get("signal_type", "BUY_CALL"))
+    tp1_val = float(at.get("tp1", 0.0))
+    sl_val = float(at.get("sl", 0.0))
+    strike_str = str(at.get("strike", at.get("symbol", "ACTIVE")))
+    sym_str = str(at.get("symbol", strike_str))
+
+    if entry_p > 0 and 'spot_price' in locals():
+        curr_pnl = (spot_price - entry_p) * qty if sig_t == "BUY_CALL" else (entry_p - spot_price) * qty
+        pnl_color = "#00E676" if curr_pnl >= 0 else "#FF5252"
+        curr_sym = "$" if "BTC" in sym_str or "BTC" in strike_str else "₹"
+        
+        st.markdown(f"""
+        <div class='active-trade-box'>
+            <b>⚡ ACTIVE POSITION RUNNING IN REAL-TIME:</b><br>
+            • <b>Contract       :</b> {strike_str} ({sig_t})<br>
+            • <b>Entry Price    :</b> {curr_sym}{entry_p:,.2f}<br>
+            • <b>Live Price     :</b> {curr_sym}{spot_price:,.2f}<br>
+            • <b>Target 1 (TP1) :</b> {curr_sym}{tp1_val:,.2f} | <b>Stop Loss (SL):</b> {curr_sym}{sl_val:,.2f}<br>
+            • <b>Unrealized PnL :</b> <b style='color:{pnl_color};'>{curr_sym}{curr_pnl:+,.2f}</b>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        if st.button("⚡ Square Off Position Now"):
+            recorded = trade_logger.record_completed_trade(
+                symbol=sym_str,
+                strike=strike_str,
+                entry_price=entry_p,
+                exit_price=spot_price,
+                qty=qty,
+                status="WIN" if curr_pnl >= 0 else "LOSS",
+                win_loss_reason="MANUAL_SQUARE_OFF",
+                layer_breakdown=at.get("breakdown", {})
+            )
+            st.session_state.active_trade = None
+            trade_logger.save_live_state({"active_trade": None})
+            st.success("Position Squared Off & Logged!")
+            st.rerun()
+    elif entry_p <= 0:
         st.session_state.active_trade = None
         trade_logger.save_live_state({"active_trade": None})
-        st.success("Position Squared Off & Logged!")
-        st.rerun()
+elif st.session_state.active_trade is not None:
+    st.session_state.active_trade = None
+    trade_logger.save_live_state({"active_trade": None})
 
 if breakdown:
     st.markdown(f"""
