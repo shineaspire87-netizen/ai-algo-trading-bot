@@ -130,10 +130,12 @@ if selected_asset == "BITCOIN (BTC/USDT)":
     </div>
     <script>
     function updateClockAndCandleTimer() {
-        const doc = window.parent.document || document;
+        const localDoc = document;
+        const parentDoc = window.parent.document || document;
         const now = new Date();
-        const dateElem = doc.getElementById('live-date');
-        const clockElem = doc.getElementById('live-clock');
+        
+        const dateElem = localDoc.getElementById('live-date');
+        const clockElem = localDoc.getElementById('live-clock');
         if (dateElem) dateElem.innerText = '📅 ' + now.toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' });
         if (clockElem) clockElem.innerText = '⏰ ' + now.toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true }) + ' IST';
         
@@ -147,7 +149,7 @@ if selected_asset == "BITCOIN (BTC/USDT)":
         const minStr = String(remMin).padStart(2, '0');
         const secStr = String(remS).padStart(2, '0');
         
-        const timerElem = doc.getElementById('candle-timer');
+        const timerElem = localDoc.getElementById('candle-timer');
         if (timerElem) {
             if (remSec <= 60) {
                 timerElem.style.color = '#FF5252';
@@ -158,10 +160,10 @@ if selected_asset == "BITCOIN (BTC/USDT)":
             }
         }
 
-        // 1. 60-Second Institutional Confirmation Window Timer
+        // 1. 60-Second Institutional Confirmation Window Timer (Outer Streamlit Page)
         const confirmRem = 60 - elapsedSec;
-        const confirmElems = doc.querySelectorAll('.confirm-timer-text');
-        const confirmBoxes = doc.querySelectorAll('.confirm-timer-box');
+        const confirmElems = parentDoc.querySelectorAll('.confirm-timer-text');
+        const confirmBoxes = parentDoc.querySelectorAll('.confirm-timer-box');
 
         confirmElems.forEach(elem => {
             if (confirmRem >= 0) {
@@ -183,9 +185,9 @@ if selected_asset == "BITCOIN (BTC/USDT)":
             }
         });
 
-        // 2. 4-Minute Safe Entry Window Indicator
-        const safeElems = doc.querySelectorAll('.safe-entry-text');
-        const safeBoxes = doc.querySelectorAll('.safe-entry-box');
+        // 2. 4-Minute Safe Entry Window Indicator (Outer Streamlit Page)
+        const safeElems = parentDoc.querySelectorAll('.safe-entry-text');
+        const safeBoxes = parentDoc.querySelectorAll('.safe-entry-box');
 
         let safeMsg = '';
         let safeColor = '#00E676';
@@ -230,7 +232,7 @@ if selected_asset == "BITCOIN (BTC/USDT)":
     ws.onmessage = (event) => {
         const data = JSON.parse(event.data);
         const price = parseFloat(data.c).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
-        const btcElem = doc.getElementById('btc-ticker-price');
+        const btcElem = document.getElementById('btc-ticker-price');
         if (btcElem) btcElem.innerText = '$' + price;
     };
     </script>
@@ -244,10 +246,12 @@ else:
     </div>
     <script>
     function updateClockAndCandleTimer() {
-        const doc = window.parent.document || document;
+        const localDoc = document;
+        const parentDoc = window.parent.document || document;
         const now = new Date();
-        const dateElem = doc.getElementById('live-date');
-        const clockElem = doc.getElementById('live-clock');
+        
+        const dateElem = localDoc.getElementById('live-date');
+        const clockElem = localDoc.getElementById('live-clock');
         if (dateElem) dateElem.innerText = '📅 ' + now.toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' });
         if (clockElem) clockElem.innerText = '⏰ ' + now.toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true }) + ' IST';
         
@@ -261,7 +265,7 @@ else:
         const minStr = String(remMin).padStart(2, '0');
         const secStr = String(remS).padStart(2, '0');
         
-        const timerElem = doc.getElementById('candle-timer');
+        const timerElem = localDoc.getElementById('candle-timer');
         if (timerElem) {
             if (remSec <= 60) {
                 timerElem.style.color = '#FF5252';
@@ -272,10 +276,10 @@ else:
             }
         }
 
-        // 1. 60-Second Institutional Confirmation Window Timer
+        // 1. 60-Second Institutional Confirmation Window Timer (Outer Streamlit Page)
         const confirmRem = 60 - elapsedSec;
-        const confirmElems = doc.querySelectorAll('.confirm-timer-text');
-        const confirmBoxes = doc.querySelectorAll('.confirm-timer-box');
+        const confirmElems = parentDoc.querySelectorAll('.confirm-timer-text');
+        const confirmBoxes = parentDoc.querySelectorAll('.confirm-timer-box');
 
         confirmElems.forEach(elem => {
             if (confirmRem >= 0) {
@@ -297,9 +301,9 @@ else:
             }
         });
 
-        // 2. 4-Minute Safe Entry Window Indicator
-        const safeElems = doc.querySelectorAll('.safe-entry-text');
-        const safeBoxes = doc.querySelectorAll('.safe-entry-box');
+        // 2. 4-Minute Safe Entry Window Indicator (Outer Streamlit Page)
+        const safeElems = parentDoc.querySelectorAll('.safe-entry-text');
+        const safeBoxes = parentDoc.querySelectorAll('.safe-entry-box');
 
         let safeMsg = '';
         let safeColor = '#00E676';
