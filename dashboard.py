@@ -32,6 +32,55 @@ def send_telegram_alert(message):
         except Exception:
             pass
 
+def get_candle_confirmation_status(ist_time=None):
+    """Fail-Safe Confirmation Window Evaluator (Zero Streamlit Cloud AttributeError)"""
+    if hasattr(quant_math_engine, "get_candle_confirmation_status"):
+        try:
+            return quant_math_engine.get_candle_confirmation_status(ist_time)
+        except Exception:
+            pass
+
+    if ist_time is None:
+        ist_now = datetime.now()
+    elif hasattr(ist_time, "minute"):
+        ist_now = ist_time
+    else:
+        ist_now = datetime.now()
+
+    minute = ist_now.minute
+    second = ist_now.second
+    elapsed_sec = (minute % 15) * 60 + second
+    rem_sec = max(0, 900 - elapsed_sec)
+    
+    if elapsed_sec <= 60:
+        conf_remaining = max(0, 60 - elapsed_sec)
+        conf_status = "ACTIVE"
+        conf_msg = f"⏳ 60s INSTITUTIONAL CONFIRMATION WINDOW: {conf_remaining}s REMAINING..."
+    else:
+        conf_remaining = 0
+        conf_status = "PASSED"
+        conf_msg = "🟢 STRONG 60s CONFIRMATION PASSED! (SAFE ENTRY ACTIVE)"
+
+    if 60 <= elapsed_sec <= 240:
+        entry_window_status = "SAFEST_4MIN"
+        entry_window_msg = "🟢 SAFEST 4-MIN ENTRY WINDOW ACTIVE! (EXECUTE NOW ON DHAN / BINANCE)"
+    elif 240 < elapsed_sec <= 600:
+        entry_window_status = "EXTENDED"
+        entry_window_msg = "🟡 EXTENDED ENTRY WINDOW (CHECK IF PRICE IS STILL IN ENTRY ZONE)"
+    else:
+        entry_window_status = "LATE_WARNING"
+        entry_window_msg = "🔴 LATE ENTRY WARNING: TOO LATE FOR THIS CANDLE (WAIT FOR NEXT CANDLE OPEN)"
+
+    return {
+        "elapsed_seconds": elapsed_sec,
+        "remaining_seconds": rem_sec,
+        "conf_status": conf_status,
+        "conf_remaining": conf_remaining,
+        "conf_msg": conf_msg,
+        "entry_window_status": entry_window_status,
+        "entry_window_msg": entry_window_msg
+    }
+
 # Load Persistent Disk State Across Browser Refreshes (F5)
 disk_state = trade_logger.load_live_state()
 
@@ -377,7 +426,7 @@ if selected_asset == "BITCOIN (BTC/USDT)":
         send_telegram_alert(alert_msg)
         st.session_state.last_notified_signal = signal_key
 
-    conf_info = quant_math_engine.get_candle_confirmation_status()
+    conf_info = get_candle_confirmation_status()
 
     st.subheader("📍 LIVE BITCOIN 15M CANDLE WIN PREDICTOR")
     if signal_type == "BUY_CALL":
@@ -503,7 +552,7 @@ else: # NIFTY 50 MODE
         send_telegram_alert(alert_msg)
         st.session_state.last_notified_signal = signal_key
 
-    conf_info = quant_math_engine.get_candle_confirmation_status(ist_now)
+    conf_info = get_candle_confirmation_status(ist_now)
 
     st.subheader("📍 LIVE NIFTY 50 15M CANDLE WIN PREDICTOR")
     if signal_type == "BUY_CALL":
