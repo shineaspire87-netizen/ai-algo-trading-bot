@@ -67,7 +67,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 st.sidebar.title("⚙️ System Control")
-selected_asset = st.sidebar.selectbox("🎯 Select Active Trading Market:", ["NIFTY 50 (₹)", "BITCOIN (BTC/USDT)", "FOREX (EUR/USD $)"])
+selected_asset = st.sidebar.selectbox("🎯 Select Active Trading Market:", ["FOREX (EUR/USD $)", "BITCOIN (BTC/USDT)", "NIFTY 50 (₹)"])
 
 if selected_asset == "BITCOIN (BTC/USDT)":
     asset_key = "BTC"
@@ -100,6 +100,7 @@ st.markdown("<div class='sub-title'>Triple-Asset Multi-Engine | NIFTY 50, Bitcoi
 cap_summary = trade_logger.get_account_capital_summary(asset_key, custom_start_cap=user_cap_input)
 
 st.subheader(f"💵 ACCOUNT CAPITAL & RISK BUDGET ({currency_sym})")
+
 if asset_key == "BTC":
     btc_cap = getattr(config, "BTC_START_CAPITAL_USD", 20.00)
     btc_sl = getattr(config, "BTC_STOP_LOSS_PCT", 0.15)
@@ -160,6 +161,7 @@ elif 300 <= rem_candle_sec < 660:
 else:
     time_badge_html = "<div class='time-badge-late'>🔴 LATE ENTRY WARNING: TOO LATE FOR THIS CANDLE (WAIT FOR NEXT CANDLE OPEN)</div>"
 
+# DYNAMIC TICKER COMPONENTS (BITCOIN WEBSOCKET, FOREX 0MS TICKER & NIFTY TICKER)
 if selected_asset == "BITCOIN (BTC/USDT)":
     st.components.v1.html("""
     <div style="background-color: #111827; border: 1px solid #374151; padding: 12px; border-radius: 10px; text-align: center; font-family: monospace; color: #F3F4F6;">
@@ -206,13 +208,13 @@ if selected_asset == "BITCOIN (BTC/USDT)":
     """, height=85)
 elif selected_asset == "FOREX (EUR/USD $)":
     df_forex_init = data_feed.fetch_forex_live_data(config.FOREX_SYMBOL, config.TIMEFRAME)
-    forex_spot_init = float(df_forex_init.iloc[-1]['close']) if not df_forex_init.empty else 1.0850
+    forex_spot_init = float(df_forex_init.iloc[-1]['close']) if not df_forex_init.empty else 1.16926
     st.components.v1.html(f"""
     <div style="background-color: #111827; border: 1px solid #374151; padding: 12px; border-radius: 10px; text-align: center; font-family: monospace; color: #F3F4F6;">
         <span id="live-date" style="color: #60A5FA; font-size: 14px; font-weight: bold;"></span> &nbsp;|&nbsp; 
         <span id="live-clock" style="color: #FBBF24; font-size: 16px; font-weight: bold;"></span><br>
         <span id="candle-timer" style="color: #FFD54F; font-size: 16px; font-weight: bold;">⏳ 15M CANDLE: Loading...</span> &nbsp;|&nbsp;
-        <span style="color:#00E676; font-weight:bold;">⚡ FOREX TICKER: </span>
+        <span style="color:#00E676; font-weight:bold;">⚡ FOREX LIVE TICKER: </span>
         <span id="forex-ticker-price" style="color: #00E676; font-size: 20px; font-weight: bold;">${forex_spot_init:.5f}</span>
     </div>
     <script>
@@ -264,9 +266,7 @@ elif selected_asset == "FOREX (EUR/USD $)":
             try {{
                 const data = JSON.parse(event.data);
                 const price = parseFloat(data.c);
-                if (price && price > 0) {{
-                    updateForexPriceUI(price);
-                }}
+                if (price && price > 0) updateForexPriceUI(price);
             }} catch(e) {{}}
         }};
     }} catch(e) {{}}
@@ -284,7 +284,6 @@ elif selected_asset == "FOREX (EUR/USD $)":
                     let price = 0;
                     if (data.price) price = parseFloat(data.price);
                     else if (data.data && data.data.amount) price = parseFloat(data.data.amount);
-                    
                     if (price && price > 0) {{
                         updateForexPriceUI(price);
                         return;
@@ -297,7 +296,7 @@ elif selected_asset == "FOREX (EUR/USD $)":
     fetchRealForexLiveTicker();
     </script>
     """, height=85)
-else: # NIFTY 50 MODE
+else:
     df_nifty_init = data_feed.fetch_nifty_live_data(config.DEFAULT_SYMBOL, config.TIMEFRAME)
     nifty_spot_init = float(df_nifty_init.iloc[-1]['close']) if not df_nifty_init.empty else 24290.0
     st.components.v1.html(f"""
@@ -337,7 +336,7 @@ else: # NIFTY 50 MODE
 
     let lastNiftyPrice = {nifty_spot_init};
     async function fetchRealNiftyLiveTicker() {{
-        const targetUrl = 'https://query1.finance.yahoo.com/v8/finance/chart/%5ENSEI?interval=1m';
+        const targetUrl = 'https://query1.finance.yahoo.com/v8/finance/chart/%5NSEI?interval=1m';
         const proxies = [
             'https://api.allorigins.win/get?url=' + encodeURIComponent(targetUrl),
             'https://api.codetabs.com/v1/proxy?quest=' + encodeURIComponent(targetUrl),
@@ -383,7 +382,7 @@ if is_open:
 else:
     st.markdown(f"<div class='market-badge-closed'>{market_status_text} — LAST CLOSE DATA SHOWN</div>", unsafe_allow_html=True)
 
-# FOREX EXECUTION ENGINE
+# EXECUTION ENGINE
 if selected_asset == "FOREX (EUR/USD $)":
     df_forex = data_feed.fetch_forex_live_data(config.FOREX_SYMBOL, config.TIMEFRAME)
     if df_forex.empty or len(df_forex) < 5:
@@ -581,6 +580,7 @@ else: # NIFTY 50 MODE
     elif signal_type == "BUY_PUT":
         st.markdown(f"""
         <div class='signal-card-sell'>
+            {time_badge_html}
             <h1 style='color:#E040FB; margin:0;'>🟪 PREDICTED WINNING CANDLE: PUT (PE)</h1>
             <p style='font-size:18px; margin-top:8px;'>NIFTY 50 Spot: <b>₹{spot_price:,.2f}</b></p>
             <hr style='border-color:#E040FB;'>

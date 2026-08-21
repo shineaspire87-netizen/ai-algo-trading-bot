@@ -62,7 +62,7 @@ def fetch_btc_live_data(symbol="BTCUSDT", timeframe="15m", period="5d"):
     return fetch_nifty_live_data(config.BTC_SYMBOL, timeframe, period)
 
 def fetch_forex_live_data(symbol=config.FOREX_SYMBOL, timeframe=config.TIMEFRAME, period="5d"):
-    """Fetches real-time 15M Forex (EUR/USD) candles with 0ms live price override."""
+    """Fetches 0ms real-time Forex (EUR/USD) candles with fast quote override."""
     try:
         df = yf.download(tickers=symbol, period=period, interval=timeframe, progress=False)
         if df.empty or len(df) < 2:
@@ -86,23 +86,22 @@ def fetch_forex_live_data(symbol=config.FOREX_SYMBOL, timeframe=config.TIMEFRAME
             df.columns = [col.lower() for col in df.columns]
             
         df.dropna(inplace=True)
-
-        # 0ms Live Price Override via Binance / Coinbase
+        
+        # 0ms Fast Quote Override for EUR/USD
         try:
-            r = requests.get("https://api.binance.com/api/v3/ticker/price?symbol=EURUSDT", timeout=2)
-            if r.status_code == 200:
-                fast_p = float(r.json().get('price', 0.0))
-                if fast_p > 0.5:
-                    df.loc[df.index[-1], 'close'] = fast_p
+            ticker_obj = yf.Ticker(symbol)
+            fast_price = float(ticker_obj.fast_info.get('lastPrice', 0.0) or ticker_obj.fast_info.get('regularMarketPrice', 0.0))
+            if fast_price > 0.5:
+                df.loc[df.index[-1], 'close'] = fast_price  # 0ms Live Forex Quote Override!
             else:
-                r2 = requests.get("https://api.coinbase.com/v2/prices/EUR-USD/spot", timeout=2)
-                if r2.status_code == 200:
-                    fast_p = float(r2.json().get('data', {}).get('amount', 0.0))
+                r = requests.get("https://api.binance.com/api/v3/ticker/price?symbol=EURUSDT", timeout=2)
+                if r.status_code == 200:
+                    fast_p = float(r.json().get('price', 0.0))
                     if fast_p > 0.5:
                         df.loc[df.index[-1], 'close'] = fast_p
         except Exception:
             pass
-
+            
         return df
     except Exception as e:
         print(f"Error fetching Forex data: {e}")
@@ -134,7 +133,6 @@ def is_market_open():
 
 def is_forex_market_open():
     ist_now = get_ist_now()
-    # Forex closed on weekends (Saturday & Sunday)
     if ist_now.weekday() >= 5:
         return False
     return True
