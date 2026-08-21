@@ -10,9 +10,9 @@ def calculate_candle_body_ratio(high, low, open_p, close_p):
 
 def evaluate_forex_15m_signal(df):
     """
-    Evaluates Forex 15M (EUR/USD) Candlestick Signal.
+    Evaluates Forex 15M (EUR/USD) Candlestick Signal with dynamic 0ms momentum scaling.
     """
-    if df.empty or len(df) < 5:
+    if df.empty or len(df) < 3:
         return "WAIT", 0.0, "REJECT: Insufficient Forex Data", {}
     
     last_row = df.iloc[-1]
@@ -25,47 +25,51 @@ def evaluate_forex_15m_signal(df):
     prev_close = float(prev_row['close'])
     
     price_change_pips = (close - prev_close) * 10000.0  # Pips
-    price_change_pct = ((close - prev_close) / prev_close) * 100.0
+    candle_pips = (close - open_p) * 10000.0            # Intra-candle pips
     
     body_ratio = calculate_candle_body_ratio(high, low, open_p, close)
-    
     swing_range = high - low
     retrace = (high - close) / swing_range if swing_range > 0 else 0.5
     
-    l1_passed = body_ratio >= 45.0
-    l3_passed = abs(price_change_pips) >= 5.0  # Min 5 Pips movement
-    l4_passed = retrace <= 0.886
+    l1_passed = body_ratio >= 35.0
+    l3_passed = abs(price_change_pips) >= 1.5 or abs(candle_pips) >= 1.5  # Min 1.5 Pips momentum
+    l4_passed = retrace <= 0.92
     
     confidence = 50.0
-    if abs(price_change_pips) >= 10.0: confidence += 20.0
-    if l1_passed: confidence += 15.0
-    if l4_passed: confidence += 10.0
+    abs_pips = max(abs(price_change_pips), abs(candle_pips))
+    if abs_pips >= 5.0: confidence += 25.0
+    elif abs_pips >= 2.5: confidence += 18.0
+    elif abs_pips >= 1.5: confidence += 12.0
+    
+    if l1_passed: confidence += 12.0
+    if l4_passed: confidence += 8.0
     confidence = min(95.0, confidence)
     
     breakdown = {
         "l1_status": f"🟢 PASSED (Forex Body: {body_ratio}%)" if l1_passed else f"🔴 FAILED (Flat Forex Body: {body_ratio}%)",
         "l2_status": "🟢 PASSED (Global Liquidity: $7.5 Trillion)",
-        "l3_status": f"🟢 PASSED (15M Pips Momentum: {price_change_pips:+.1f} Pips)" if l3_passed else f"🔴 FAILED (Weak Pips: {price_change_pips:+.1f} Pips)",
+        "l3_status": f"🟢 PASSED (15M Pips Momentum: {abs_pips:+.1f} Pips)" if l3_passed else f"🔴 FAILED (Weak Pips: {abs_pips:+.1f} Pips)",
         "l4_status": f"🟢 PASSED (Fib Discount: {retrace:.3f})" if l4_passed else f"🔴 FAILED (Overextended Fib: {retrace:.3f})",
         "l5_status": f"CANDLE WIN PROBABILITY: {confidence:.1f}%"
     }
     
-    if confidence < 65.0:
-        breakdown["l5_status"] = f"🔴 REJECTED: Low Forex Win Confidence ({confidence:.1f}% < 65%)"
+    if confidence < 55.0 or not l3_passed:
+        breakdown["l5_status"] = f"🔴 REJECTED: Low Forex Win Confidence ({confidence:.1f}% < 55% or < 1.5 pips)"
         return "WAIT", confidence, breakdown["l5_status"], breakdown
     
-    if price_change_pips > +3.0:
-        breakdown["l5_status"] = f"🟢 CONFIRMED: EUR/USD Bullish Momentum ({price_change_pips:+.1f} Pips)"
+    eff_pips = price_change_pips if abs(price_change_pips) >= abs(candle_pips) else candle_pips
+    if eff_pips >= +1.5:
+        breakdown["l5_status"] = f"🟢 CONFIRMED: EUR/USD Bullish Momentum ({eff_pips:+.1f} Pips)"
         return "BUY_CALL", confidence, breakdown["l5_status"], breakdown
-    elif price_change_pips < -3.0:
-        breakdown["l5_status"] = f"🟢 CONFIRMED: EUR/USD Bearish Momentum ({price_change_pips:+.1f} Pips)"
+    elif eff_pips <= -1.5:
+        breakdown["l5_status"] = f"🟢 CONFIRMED: EUR/USD Bearish Momentum ({eff_pips:+.1f} Pips)"
         return "BUY_PUT", confidence, breakdown["l5_status"], breakdown
     else:
-        breakdown["l5_status"] = f"🔴 REJECTED: Sideways Forex Range ({price_change_pips:+.1f} Pips)"
+        breakdown["l5_status"] = f"🔴 REJECTED: Sideways Forex Range ({eff_pips:+.1f} Pips)"
         return "WAIT", confidence, breakdown["l5_status"], breakdown
 
 def predict_15m_candle_winning_direction(df):
-    if df.empty or len(df) < 5:
+    if df.empty or len(df) < 3:
         return "WAIT", 0.0, "REJECT: Insufficient Data", {}
     
     last_row = df.iloc[-1]
@@ -79,44 +83,48 @@ def predict_15m_candle_winning_direction(df):
     
     prev_close = float(prev_row['close'])
     price_change_pct = ((close - prev_close) / prev_close) * 100.0
+    candle_change_pct = ((close - open_p) / open_p) * 100.0
+    eff_pct = price_change_pct if abs(price_change_pct) >= abs(candle_change_pct) else candle_change_pct
     
     body_ratio = calculate_candle_body_ratio(high, low, open_p, close)
-    l1_passed = body_ratio >= 50.0
-    l1_str = f"🟢 PASSED (Body Intensity: {body_ratio}%)" if l1_passed else f"🔴 FAILED (Low Body Intensity: {body_ratio}% < 50%)"
+    l1_passed = body_ratio >= 30.0
+    l1_str = f"🟢 PASSED (Body Intensity: {body_ratio}%)" if l1_passed else f"🔴 FAILED (Low Body Intensity: {body_ratio}% < 30%)"
     
     avg_vol = df['volume'].rolling(5).mean().iloc[-1] if 'volume' in df and df['volume'].iloc[-1] > 0 else 50000.0
     vol_ratio = (volume / avg_vol) if avg_vol > 0 else 1.0
-    l2_passed = vol_ratio >= 1.0
-    l2_str = f"🟢 PASSED (Volume Acceleration: {vol_ratio:.1f}x)" if l2_passed else f"🔴 FAILED (Low Volume Accel: {vol_ratio:.1f}x < 1.0x)"
+    l2_passed = vol_ratio >= 0.70
+    l2_str = f"🟢 PASSED (Volume Acceleration: {vol_ratio:.1f}x)" if l2_passed else f"🔴 FAILED (Low Volume Accel: {vol_ratio:.1f}x < 0.7x)"
     
-    l3_passed = abs(price_change_pct) >= 0.15
-    l3_str = f"🟢 PASSED (15M Momentum: {price_change_pct:+.2f}%)" if l3_passed else f"🔴 FAILED (Weak Momentum: {price_change_pct:+.2f}% < 0.15%)"
+    l3_passed = abs(eff_pct) >= 0.05
+    l3_str = f"🟢 PASSED (15M Momentum: {eff_pct:+.2f}%)" if l3_passed else f"🔴 FAILED (Weak Momentum: {eff_pct:+.2f}% < 0.05%)"
     
     swing_range = high - low
     retrace = (high - close) / swing_range if swing_range > 0 else 0.5
-    l4_passed = retrace <= 0.886
-    l4_str = f"🟢 PASSED (Fib Discount: {retrace:.3f})" if l4_passed else f"🔴 FAILED (Overextended Fib: {retrace:.3f} > 0.886)"
+    l4_passed = retrace <= 0.92
+    l4_str = f"🟢 PASSED (Fib Discount: {retrace:.3f})" if l4_passed else f"🔴 FAILED (Overextended Fib: {retrace:.3f} > 0.92)"
     
     confidence = 50.0
-    if abs(price_change_pct) >= 0.25: confidence += 15.0
-    if l1_passed: confidence += 12.0
-    if l2_passed: confidence += 10.0
-    if l4_passed: confidence += 8.0
+    if abs(eff_pct) >= 0.15: confidence += 20.0
+    elif abs(eff_pct) >= 0.08: confidence += 12.0
+    
+    if l1_passed: confidence += 10.0
+    if l2_passed: confidence += 8.0
+    if l4_passed: confidence += 7.0
     confidence = min(95.0, confidence)
     
-    l5_passed = confidence >= 65.0 and l1_passed and l2_passed and l3_passed and l4_passed
+    l5_passed = confidence >= 55.0 and l3_passed and l4_passed
     
     breakdown = {
         "l1_status": l1_str,
         "l2_status": l2_str,
         "l3_status": l3_str,
         "l4_status": l4_str,
-        "l5_status": f"🟢 CONFIRMED CANDLE WIN (Confidence: {confidence:.1f}%)" if l5_passed else f"🔴 REJECTED: Low Win Confidence ({confidence:.1f}% < 65%)"
+        "l5_status": f"🟢 CONFIRMED CANDLE WIN (Confidence: {confidence:.1f}%)" if l5_passed else f"🔴 REJECTED: Low Win Confidence ({confidence:.1f}% < 55%)"
     }
     
-    if l5_passed and price_change_pct > 0:
+    if l5_passed and eff_pct > 0:
         return "BUY_CALL", confidence, breakdown["l5_status"], breakdown
-    elif l5_passed and price_change_pct < 0:
+    elif l5_passed and eff_pct < 0:
         return "BUY_PUT", confidence, breakdown["l5_status"], breakdown
     else:
         return "WAIT", confidence, breakdown["l5_status"], breakdown
@@ -206,10 +214,6 @@ def master_institutional_decision_engine(
     breakdown["l2_status"] = vix_regime
     if vix_regime.startswith("🔴"):
         breakdown["l5_status"] = f"🔴 REJECTED: {vix_regime}"
-        return "WAIT", breakdown["l5_status"], 0.0, breakdown
-    if not vix_expanding:
-        breakdown["l2_status"] = "🔴 FAILED: Falling VIX (Weak Premium Expansion)"
-        breakdown["l5_status"] = "🔴 REJECTED: Falling VIX"
         return "WAIT", breakdown["l5_status"], 0.0, breakdown
     
     pcr_status, call_pcr_ok, put_pcr_ok = evaluate_pcr_layer(pcr_oi, delta_pcr_15)

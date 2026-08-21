@@ -412,7 +412,7 @@ if selected_asset == "FOREX (EUR/USD $)":
     entry_zone_price = float(last_row['open'])
     current_candle_id = f"FOREX_{last_row.get('time', str(datetime.now().minute // 15))}"
     
-    if st.session_state.locked_candle_id != current_candle_id or st.session_state.locked_signal_state is None:
+    if st.session_state.locked_candle_id != current_candle_id or st.session_state.locked_signal_state is None or (isinstance(st.session_state.locked_signal_state, tuple) and st.session_state.locked_signal_state[0] == "WAIT"):
         signal_type, confidence_score, reason_code, breakdown = quant_math_engine.evaluate_forex_15m_signal(df_forex)
         st.session_state.locked_candle_id = current_candle_id
         st.session_state.locked_signal_state = (signal_type, confidence_score, reason_code, breakdown)
@@ -544,7 +544,7 @@ elif selected_asset == "BITCOIN (BTC/USDT)":
     entry_zone_price = float(last_row.get('open', 74400.0))
     current_candle_id = f"BTC_{last_row.get('time', str(datetime.now().minute // 15))}"
     
-    if st.session_state.locked_candle_id != current_candle_id or st.session_state.locked_signal_state is None:
+    if st.session_state.locked_candle_id != current_candle_id or st.session_state.locked_signal_state is None or (isinstance(st.session_state.locked_signal_state, tuple) and st.session_state.locked_signal_state[0] == "WAIT"):
         signal_type, confidence_score, reason_code, breakdown = quant_math_engine.evaluate_btc_15m_signal(df_btc)
         st.session_state.locked_candle_id = current_candle_id
         st.session_state.locked_signal_state = (signal_type, confidence_score, reason_code, breakdown)
@@ -620,7 +620,7 @@ else: # NIFTY 50 MODE
     
     current_candle_id = f"NIFTY_{datetime.now().minute // 15}"
 
-    if st.session_state.locked_candle_id != current_candle_id or st.session_state.locked_signal_state is None:
+    if st.session_state.locked_candle_id != current_candle_id or st.session_state.locked_signal_state is None or (isinstance(st.session_state.locked_signal_state, tuple) and st.session_state.locked_signal_state[0] == "WAIT"):
         prev_close = float(df['close'].iloc[-4])
         nifty_dir = "UP" if spot_price > prev_close else ("DOWN" if spot_price < prev_close else "FLAT")
         heavy_k = 4 if nifty_dir != "FLAT" else 2
