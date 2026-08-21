@@ -100,27 +100,50 @@ st.markdown("<div class='sub-title'>Triple-Asset Multi-Engine | NIFTY 50, Bitcoi
 cap_summary = trade_logger.get_account_capital_summary(asset_key, custom_start_cap=user_cap_input)
 
 st.subheader(f"💵 ACCOUNT CAPITAL & RISK BUDGET ({currency_sym})")
-col_c1, col_c2, col_c3, col_c4 = st.columns(4)
-col_c1.metric("Starting Capital", f"{currency_sym}{cap_summary['starting_capital']:,.2f}")
-col_c2.metric("Current Equity", f"{currency_sym}{cap_summary['current_equity']:,.2f}")
-
 if asset_key == "BTC":
     btc_cap = getattr(config, "BTC_START_CAPITAL_USD", 20.00)
     btc_sl = getattr(config, "BTC_STOP_LOSS_PCT", 0.15)
     btc_tp1 = getattr(config, "BTC_TARGET_1_PCT", 0.25)
-    col_c3.metric("Max Risk / Trade", f"-${btc_cap * (btc_sl/100):.2f} (-{btc_sl:.2f}%)")
-    col_c4.metric("Target 1 Profit", f"+${btc_cap * (btc_tp1/100):.2f} (+{btc_tp1:.2f}%)")
+    max_risk_val = f"{btc_cap * (btc_sl/100):.2f}"
+    max_risk_sub = f"-{btc_sl:.2f}%"
+    target1_val = f"{btc_cap * (btc_tp1/100):.2f}"
+    target1_sub = f"+{btc_tp1:.2f}%"
 elif asset_key == "FOREX":
     fx_sl_pips = getattr(config, "FOREX_STOP_LOSS_PIPS", 10.0)
     fx_tp1_pips = getattr(config, "FOREX_TARGET_1_PIPS", 15.0)
-    col_c3.metric("Max Risk / Trade", f"-${fx_sl_pips * 0.10:.2f} (-{fx_sl_pips:.0f} Pips)")
-    col_c4.metric("Target 1 Profit", f"+${fx_tp1_pips * 0.10:.2f} (+{fx_tp1_pips:.0f} Pips)")
+    max_risk_val = f"{fx_sl_pips * 0.10:.2f}"
+    max_risk_sub = f"-{fx_sl_pips:.0f} Pips"
+    target1_val = f"{fx_tp1_pips * 0.10:.2f}"
+    target1_sub = f"+{fx_tp1_pips:.0f} Pips"
 else:
     nifty_sl_pts = getattr(config, "STOP_LOSS_POINTS", 8.0)
     nifty_tp1_pts = getattr(config, "TARGET_1_POINTS", 12.0)
     nifty_lot = getattr(config, "NIFTY_LOT_SIZE", 25)
-    col_c3.metric("Max Risk / Trade", f"-₹{nifty_sl_pts * nifty_lot:,.0f} (-{nifty_sl_pts:.0f} pts)")
-    col_c4.metric("Target 1 Profit", f"+₹{nifty_tp1_pts * nifty_lot:,.0f} (+{nifty_tp1_pts:.0f} pts)")
+    max_risk_val = f"{nifty_sl_pts * nifty_lot:,.0f}"
+    max_risk_sub = f"-{nifty_sl_pts:.0f} pts"
+    target1_val = f"{nifty_tp1_pts * nifty_lot:,.0f}"
+    target1_sub = f"+{nifty_tp1_pts:.0f} pts"
+
+st.markdown(f"""
+<div style="display: flex; flex-wrap: wrap; gap: 10px; justify-content: space-between; margin-bottom: 20px; background-color: #111827; border: 1px solid #374151; padding: 15px; border-radius: 12px;">
+    <div style="flex: 1; min-width: 120px; text-align: center; border-right: 1px solid #374151;">
+        <span style="color: #9CA3AF; font-size: 13px; font-weight: 500;">Starting Capital</span><br>
+        <span style="color: #F3F4F6; font-size: 20px; font-weight: bold;">{currency_sym}{cap_summary['starting_capital']:,.2f}</span>
+    </div>
+    <div style="flex: 1; min-width: 120px; text-align: center; border-right: 1px solid #374151;">
+        <span style="color: #9CA3AF; font-size: 13px; font-weight: 500;">Current Equity</span><br>
+        <span style="color: #60A5FA; font-size: 20px; font-weight: bold;">{currency_sym}{cap_summary['current_equity']:,.2f}</span>
+    </div>
+    <div style="flex: 1; min-width: 130px; text-align: center; border-right: 1px solid #374151;">
+        <span style="color: #9CA3AF; font-size: 13px; font-weight: 500;">Max Risk / Trade</span><br>
+        <span style="color: #FF5252; font-size: 18px; font-weight: bold;">-{currency_sym}{max_risk_val} <span style="font-size: 12px; color: #FF8A8A;">({max_risk_sub})</span></span>
+    </div>
+    <div style="flex: 1; min-width: 130px; text-align: center;">
+        <span style="color: #9CA3AF; font-size: 13px; font-weight: 500;">Target 1 Profit</span><br>
+        <span style="color: #00E676; font-size: 18px; font-weight: bold;">+{currency_sym}{target1_val} <span style="font-size: 12px; color: #B9F6CA;">({target1_sub})</span></span>
+    </div>
+</div>
+""", unsafe_allow_html=True)
 
 st.divider()
 
