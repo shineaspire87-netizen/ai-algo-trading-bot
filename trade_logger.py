@@ -78,25 +78,48 @@ def record_completed_trade(symbol, strike, entry_price, exit_price, qty, status,
     ist_now = get_ist_now()
     date_time_str = ist_now.strftime("%Y-%m-%d %I:%M:%S %p IST")
     today_str = ist_now.strftime("%Y-%m-%d")
+    now_ts = datetime.now().timestamp()
     
-    is_crypto = "BTC" in symbol.upper()
-    gross_pnl = round((exit_price - entry_price) * qty if status == "WIN" else (exit_price - entry_price) * qty, 2)
-    brokerage = calculate_brokerage_fees(qty, entry_price, exit_price, is_crypto=is_crypto)
+    sym_upper = symbol.upper()
+    is_crypto = "BTC" in sym_upper
+    is_forex = "FOREX" in sym_upper or "EUR" in sym_upper
+    
+    if is_crypto:
+        asset_type = "BTC"
+        curr_sym = "$"
+        gross_pnl = round((exit_price - entry_price) * qty if status == "WIN" else (exit_price - entry_price) * qty, 2)
+        brokerage = calculate_brokerage_fees(qty, entry_price, exit_price, is_crypto=True)
+    elif is_forex:
+        asset_type = "FOREX"
+        curr_sym = "$"
+        # For Forex: 10 pips SL = -$1.00 per 0.01 lot, 15 pips TP1 = +$1.50 per 0.01 lot
+        pip_diff = (exit_price - entry_price) * 10000.0
+        gross_pnl = round(pip_diff * 0.10, 2) if status == "WIN" else round(pip_diff * 0.10, 2)
+        brokerage = 0.0  # Zero commission for forex demo/micro lot
+    else:
+        asset_type = "NIFTY"
+        curr_sym = "₹"
+        gross_pnl = round((exit_price - entry_price) * qty if status == "WIN" else (exit_price - entry_price) * qty, 2)
+        brokerage = calculate_brokerage_fees(qty, entry_price, exit_price, is_crypto=False)
+        
     net_pnl = round(gross_pnl - brokerage, 2)
     actual_result = "WIN" if net_pnl > 0 else "LOSS"
     
+    # 5-second deduplication guard
     if trades:
         last_trade = trades[-1]
-        if last_trade.get("symbol") == symbol and abs(last_trade.get("entry_price", 0) - entry_price) < 0.01 and last_trade.get("result") == actual_result:
+        last_ts = last_trade.get("timestamp_epoch", 0)
+        if (now_ts - last_ts) < 5.0 and last_trade.get("symbol") == symbol and abs(last_trade.get("entry_price", 0) - entry_price) < 0.0001:
             return last_trade
     
     trade_record = {
         "trade_id": len(trades) + 1,
+        "timestamp_epoch": now_ts,
         "date_time": date_time_str,
         "date": today_str,
         "symbol": symbol,
-        "asset_type": "BTC" if is_crypto else "NIFTY",
-        "currency": "$" if is_crypto else "₹",
+        "asset_type": asset_type,
+        "currency": curr_sym,
         "strike": strike,
         "entry_price": entry_price,
         "exit_price": exit_price,
@@ -116,8 +139,14 @@ def record_completed_trade(symbol, strike, entry_price, exit_price, qty, status,
 def filter_trades_by_asset(trades, asset_filter=None):
     if not asset_filter:
         return trades
-    target_key = "BTC" if "BTC" in asset_filter.upper() else "NIFTY"
-    return [t for t in trades if t.get("asset_type", "NIFTY") == target_key or target_key in t.get("symbol", "").upper()]
+    asset_str = str(asset_filter).upper()
+    if "BTC" in asset_str:
+        target_key = "BTC"
+    elif "FOREX" in asset_str:
+        target_key = "FOREX"
+    else:
+        target_key = "NIFTY"
+    return [t for t in trades if t.get("asset_type") == target_key or target_key in t.get("symbol", "").upper()]
 
 def get_today_trades(asset_filter=None):
     trades = load_trades()

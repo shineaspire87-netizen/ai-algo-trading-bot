@@ -50,8 +50,8 @@ def evaluate_forex_15m_signal(df):
         "l5_status": f"CANDLE WIN PROBABILITY: {confidence:.1f}%"
     }
     
-    if confidence < 70.0:
-        breakdown["l5_status"] = f"🔴 REJECTED: Low Forex Win Confidence ({confidence:.1f}% < 70%)"
+    if confidence < 65.0:
+        breakdown["l5_status"] = f"🔴 REJECTED: Low Forex Win Confidence ({confidence:.1f}% < 65%)"
         return "WAIT", confidence, breakdown["l5_status"], breakdown
     
     if price_change_pips > +3.0:
@@ -104,14 +104,14 @@ def predict_15m_candle_winning_direction(df):
     if l4_passed: confidence += 8.0
     confidence = min(95.0, confidence)
     
-    l5_passed = confidence >= 70.0 and l1_passed and l2_passed and l3_passed and l4_passed
+    l5_passed = confidence >= 65.0 and l1_passed and l2_passed and l3_passed and l4_passed
     
     breakdown = {
         "l1_status": l1_str,
         "l2_status": l2_str,
         "l3_status": l3_str,
         "l4_status": l4_str,
-        "l5_status": f"🟢 CONFIRMED CANDLE WIN (Confidence: {confidence:.1f}%)" if l5_passed else f"🔴 REJECTED: Low Win Confidence ({confidence:.1f}% < 70%)"
+        "l5_status": f"🟢 CONFIRMED CANDLE WIN (Confidence: {confidence:.1f}%)" if l5_passed else f"🔴 REJECTED: Low Win Confidence ({confidence:.1f}% < 65%)"
     }
     
     if l5_passed and price_change_pct > 0:

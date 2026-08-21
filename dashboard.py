@@ -92,6 +92,23 @@ if st.sidebar.button(f"🧹 Clear {asset_key} History"):
     st.sidebar.success(f"{asset_key} History Cleared!")
     st.rerun()
 
+with st.sidebar.expander("🛠️ Active Trade Debug Status", expanded=True):
+    cur_active_trade = trade_logger.load_active_trade(asset_key.lower())
+    if cur_active_trade:
+        st.write(f"**Asset:** {cur_active_trade.get('asset_key', asset_key)}")
+        st.write(f"**Symbol:** {cur_active_trade.get('symbol', 'N/A')}")
+        if asset_key in ["FOREX"]:
+            st.write(f"**Entry Price:** ${cur_active_trade.get('entry_price', 0.0):.5f}")
+            st.write(f"**TP1 Target:** ${cur_active_trade.get('tp1', 0.0):.5f}")
+            st.write(f"**Stop Loss:** ${cur_active_trade.get('sl', 0.0):.5f}")
+        else:
+            st.write(f"**Entry Price:** {currency_sym}{cur_active_trade.get('entry_price', 0.0):,.2f}")
+            st.write(f"**TP1 Target:** {currency_sym}{cur_active_trade.get('tp1', 0.0):,.2f}")
+            st.write(f"**Stop Loss:** {currency_sym}{cur_active_trade.get('sl', 0.0):,.2f}")
+        st.write(f"**Candle ID:** {cur_active_trade.get('candle_id', 'N/A')}")
+    else:
+        st.info(f"ℹ️ No Active {asset_key} Trade currently running.")
+
 is_open, market_status_text = check_market_status(selected_asset)
 
 st.markdown(f"<div class='main-title'>🎯 ANTONY QUANT AI: {selected_asset.upper()} CO-PILOT</div>", unsafe_allow_html=True)
@@ -410,6 +427,71 @@ if selected_asset == "FOREX (EUR/USD $)":
     forex_tp2 = entry_zone_price + (config.FOREX_TARGET_2_PIPS / 10000.0) if signal_type == "BUY_CALL" else entry_zone_price - (config.FOREX_TARGET_2_PIPS / 10000.0)
     forex_sl = entry_zone_price - (config.FOREX_STOP_LOSS_PIPS / 10000.0) if signal_type == "BUY_CALL" else entry_zone_price + (config.FOREX_STOP_LOSS_PIPS / 10000.0)
 
+    active_trade_forex = trade_logger.load_active_trade("forex")
+
+    if signal_type in ["BUY_CALL", "BUY_PUT"]:
+        if active_trade_forex is None:
+            active_trade_forex = {
+                "candle_id": current_candle_id,
+                "asset_key": "FOREX",
+                "symbol": f"EUR/USD {signal_type}",
+                "strike": "EURUSD",
+                "entry_price": entry_zone_price,
+                "tp1": forex_tp1,
+                "sl": forex_sl,
+                "signal_type": signal_type,
+                "quantity": 100,
+                "breakdown": breakdown if isinstance(breakdown, dict) else {},
+                "start_time_iso": datetime.now().isoformat()
+            }
+            trade_logger.save_active_trade(active_trade_forex, "forex")
+            
+        at = active_trade_forex
+        trade_finished = False
+        trade_status = "WIN"
+        exit_price = spot_price
+        
+        entry_v = at.get("entry_price", spot_price)
+        qty_v = at.get("quantity", 100)
+        bd_v = at.get("breakdown", {})
+        
+        if at.get("signal_type") == "BUY_CALL":
+            if spot_price >= at.get("tp1", spot_price + 0.0015): trade_finished, trade_status, exit_price = True, "WIN", at.get("tp1", spot_price)
+            elif spot_price <= at.get("sl", spot_price - 0.0010): trade_finished, trade_status, exit_price = True, "LOSS", at.get("sl", spot_price)
+        elif at.get("signal_type") == "BUY_PUT":
+            if spot_price <= at.get("tp1", spot_price - 0.0015): trade_finished, trade_status, exit_price = True, "WIN", at.get("tp1", spot_price)
+            elif spot_price >= at.get("sl", spot_price + 0.0010): trade_finished, trade_status, exit_price = True, "LOSS", at.get("sl", spot_price)
+                
+        if not trade_finished and (rem_candle_sec <= 5 or at.get("candle_id") != current_candle_id):
+            trade_finished = True
+            exit_price = spot_price
+            if at.get("signal_type") == "BUY_CALL":
+                trade_status = "WIN" if exit_price > entry_v else "LOSS"
+            else:
+                trade_status = "WIN" if exit_price < entry_v else "LOSS"
+                
+        if trade_finished:
+            post_mortem = ai_analyst.generate_trade_post_mortem(trade_status, bd_v, 1.50 if trade_status=="WIN" else -1.00)
+            recorded = trade_logger.record_completed_trade(
+                symbol=at.get("symbol", "EUR/USD BUY_CALL"), strike=at.get("strike", "EURUSD"), entry_price=entry_v,
+                exit_price=exit_price, qty=qty_v, status=trade_status,
+                win_loss_reason=post_mortem, layer_breakdown=bd_v
+            )
+            
+            actual_net_pnl = recorded.get('net_pnl', 0)
+            final_header_status = "WIN" if actual_net_pnl > 0 else "LOSS"
+            
+            alert_msg = f"<b>🚨 FOREX EUR/USD TRADE COMPLETED: {final_header_status}</b>\n\nSymbol: <b>{at.get('symbol')}</b>\nNet PnL: <b>${actual_net_pnl:,.2f}</b>"
+            send_telegram_alert(alert_msg)
+            trade_logger.clear_active_trade("forex")
+            st.rerun()
+
+    telegram_dedup_key = f"FOREX_{current_candle_id}_{signal_type}"
+    if signal_type in ["BUY_CALL", "BUY_PUT"] and telegram_dedup_key not in st.session_state.notified_candles:
+        alert_msg = f"<b>🚨 FOREX EUR/USD 15M CANDLE WIN SIGNAL</b>\n\nDirection: <b>{signal_type}</b>\nWin Confidence: <b>{confidence_score:.1f}%</b>\nEntry Zone (Locked): <b>${entry_zone_price:.5f}</b>\nTP1 (+15 Pips): <b>${forex_tp1:.5f}</b>\nSL (-10 Pips): <b>${forex_sl:.5f}</b>"
+        send_telegram_alert(alert_msg)
+        st.session_state.notified_candles.add(telegram_dedup_key)
+
     st.subheader("📍 LIVE FOREX (EUR/USD) 15M CANDLE WIN PREDICTOR")
     if signal_type == "BUY_CALL":
         st.markdown(f"""
@@ -434,7 +516,7 @@ if selected_asset == "FOREX (EUR/USD $)":
     else:
         st.markdown(f"""
         <div class='signal-card-wait'>
-            <h1 style='color:#B0BEC5; margin:0;'>⚪ WAIT - LOW FOREX WIN CONFIDENCE (< 70%)</h1>
+            <h1 style='color:#B0BEC5; margin:0;'>⚪ WAIT - LOW FOREX WIN CONFIDENCE (< 65%)</h1>
             <p style='font-size:15px; margin-top:8px;'>Reason: <b>{reason_code}</b></p>
         </div>
         """, unsafe_allow_html=True)
