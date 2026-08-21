@@ -443,6 +443,12 @@ if selected_asset == "FOREX (EUR/USD $)":
             }
             trade_logger.save_active_trade(active_trade, "forex")
             
+            entry_alert_key = f"ENTRY_FOREX_{current_candle_id}_{signal_type}"
+            if entry_alert_key not in st.session_state.notified_candles:
+                alert_msg = f"<b>🚀 NEW FOREX TRADE ENTERED: {signal_type}</b>\n\nSymbol: <b>EUR/USD</b>\nEntry Price: <b>${entry_zone_price:.5f}</b>\nTarget 1 (TP1): <b>${forex_tp1:.5f}</b> (+15 Pips)\nStop Loss (SL): <b>${forex_sl:.5f}</b> (-10 Pips)\nWin Confidence: <b>{confidence_score:.1f}%</b>"
+                send_telegram_alert(alert_msg)
+                st.session_state.notified_candles.add(entry_alert_key)
+            
         at = active_trade
         trade_finished = False
         trade_status = "WIN"
@@ -575,6 +581,12 @@ elif selected_asset == "BITCOIN (BTC/USDT)":
                 "start_time_iso": datetime.now().isoformat()
             }
             trade_logger.save_active_trade(active_trade_btc, "btc")
+            
+            entry_alert_key = f"ENTRY_BTC_{current_candle_id}_{signal_type}"
+            if entry_alert_key not in st.session_state.notified_candles:
+                alert_msg = f"<b>🚀 NEW BITCOIN TRADE ENTERED: {signal_type}</b>\n\nSymbol: <b>BTCUSDT</b>\nEntry Price: <b>${entry_zone_price:,.2f}</b>\nTarget 1 (TP1): <b>${btc_tp1:,.2f}</b> (+0.25%)\nStop Loss (SL): <b>${btc_sl:,.2f}</b> (-0.15%)\nWin Confidence: <b>{confidence_score:.1f}%</b>"
+                send_telegram_alert(alert_msg)
+                st.session_state.notified_candles.add(entry_alert_key)
             
         at = active_trade_btc
         trade_finished = False
@@ -732,6 +744,12 @@ else: # NIFTY 50 MODE
                 "start_time_iso": datetime.now().isoformat()
             }
             trade_logger.save_active_trade(active_trade_nifty, "nifty")
+            
+            entry_alert_key = f"ENTRY_NIFTY_{current_candle_id}_{signal_type}"
+            if entry_alert_key not in st.session_state.notified_candles:
+                alert_msg = f"<b>🚀 NEW NIFTY 50 TRADE ENTERED: {signal_type}</b>\n\nSymbol: <b>NIFTY {atm_strike} {'CE' if signal_type=='BUY_CALL' else 'PE'}</b>\nSpot Entry: <b>₹{entry_zone_price:,.2f}</b>\nTarget 1 (TP1): <b>₹{nifty_tp1:,.2f}</b> (+12 pts)\nStop Loss (SL): <b>₹{nifty_sl:,.2f}</b> (-8 pts)\nWin Confidence: <b>75.0%</b>"
+                send_telegram_alert(alert_msg)
+                st.session_state.notified_candles.add(entry_alert_key)
             
         at = active_trade_nifty
         trade_finished = False
@@ -913,3 +931,18 @@ if st.sidebar.button(f"🧹 Reset All History"):
 
 if st.sidebar.button("🔄 Refresh Signal Engine"):
     st.rerun()
+
+# 3-SECOND AUTOMATIC CONTINUOUS REFRESH ENGINE (UNFREEZE BOT ON STREAMLIT CLOUD)
+st.components.v1.html("""
+<script>
+    setTimeout(function() {
+        const buttons = window.parent.document.querySelectorAll('button');
+        for (let btn of buttons) {
+            if (btn.innerText.includes('Refresh Signal Engine') || btn.innerText.includes('🔄')) {
+                btn.click();
+                break;
+            }
+        }
+    }, 3000);
+</script>
+""", height=0)
