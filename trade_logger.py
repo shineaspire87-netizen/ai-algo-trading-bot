@@ -3,7 +3,6 @@ import os
 from datetime import datetime, timezone, timedelta
 
 TRADES_FILE = "trades.json"
-ACTIVE_TRADE_FILE = "active_trade.json"
 
 def get_ist_now():
     utc_now = datetime.now(timezone.utc)
@@ -22,23 +21,26 @@ def save_trades(trades):
     with open(TRADES_FILE, "w") as f:
         json.dump(trades, f, indent=4)
 
-def save_active_trade(trade_dict):
-    with open(ACTIVE_TRADE_FILE, "w") as f:
+def save_active_trade(trade_dict, asset_key="BTC"):
+    filename = f"active_trade_{asset_key.lower()}.json"
+    with open(filename, "w") as f:
         json.dump(trade_dict, f, indent=4)
 
-def load_active_trade():
-    if not os.path.exists(ACTIVE_TRADE_FILE):
+def load_active_trade(asset_key="BTC"):
+    filename = f"active_trade_{asset_key.lower()}.json"
+    if not os.path.exists(filename):
         return None
     try:
-        with open(ACTIVE_TRADE_FILE, "r") as f:
+        with open(filename, "r") as f:
             return json.load(f)
     except Exception:
         return None
 
-def clear_active_trade():
-    if os.path.exists(ACTIVE_TRADE_FILE):
+def clear_active_trade(asset_key="BTC"):
+    filename = f"active_trade_{asset_key.lower()}.json"
+    if os.path.exists(filename):
         try:
-            os.remove(ACTIVE_TRADE_FILE)
+            os.remove(filename)
         except Exception:
             pass
 
@@ -47,15 +49,27 @@ def delete_trade_by_id(trade_id):
     updated_trades = [t for t in trades if t.get("trade_id") != trade_id]
     save_trades(updated_trades)
 
-def clear_all_trades():
-    save_trades([])
-    clear_active_trade()
+def clear_asset_trades(asset_filter=None):
+    """Clears trade logs for a specific asset or all trades if asset_filter is None."""
+    if asset_filter is None:
+        save_trades([])
+        clear_active_trade("btc")
+        clear_active_trade("nifty")
+    else:
+        trades = load_trades()
+        updated_trades = [t for t in trades if asset_filter.upper() not in t.get("symbol", "").upper()]
+        save_trades(updated_trades)
+        clear_active_trade(asset_filter.lower())
 
-def calculate_brokerage_fees(qty, entry_price, exit_price):
-    flat_brokerage = 40.0
-    turnover = (entry_price + exit_price) * qty
-    stt_and_taxes = turnover * 0.0005
-    return round(flat_brokerage + stt_and_taxes, 2)
+def calculate_brokerage_fees(qty, entry_price, exit_price, is_crypto=False):
+    if is_crypto:
+        turnover = (entry_price + exit_price) * qty
+        return round(turnover * 0.00075, 2)  # 0.075% Binance trading fee
+    else:
+        flat_brokerage = 40.0
+        turnover = (entry_price + exit_price) * qty
+        stt_and_taxes = turnover * 0.0005
+        return round(flat_brokerage + stt_and_taxes, 2)
 
 def record_completed_trade(symbol, strike, entry_price, exit_price, qty, status, win_loss_reason, layer_breakdown):
     trades = load_trades()
@@ -63,10 +77,10 @@ def record_completed_trade(symbol, strike, entry_price, exit_price, qty, status,
     date_time_str = ist_now.strftime("%Y-%m-%d %I:%M:%S %p IST")
     today_str = ist_now.strftime("%Y-%m-%d")
     
+    is_crypto = "BTC" in symbol.upper()
     gross_pnl = round((exit_price - entry_price) * qty if status == "WIN" else (exit_price - entry_price) * qty, 2)
-    brokerage = calculate_brokerage_fees(qty, entry_price, exit_price)
+    brokerage = calculate_brokerage_fees(qty, entry_price, exit_price, is_crypto=is_crypto)
     net_pnl = round(gross_pnl - brokerage, 2)
-    
     actual_result = "WIN" if net_pnl > 0 else "LOSS"
     
     # DEDUPLICATION CHECK
@@ -80,6 +94,8 @@ def record_completed_trade(symbol, strike, entry_price, exit_price, qty, status,
         "date_time": date_time_str,
         "date": today_str,
         "symbol": symbol,
+        "asset_type": "BTC" if is_crypto else "NIFTY",
+        "currency": "$" if is_crypto else "₹",
         "strike": strike,
         "entry_price": entry_price,
         "exit_price": exit_price,
@@ -96,13 +112,20 @@ def record_completed_trade(symbol, strike, entry_price, exit_price, qty, status,
     save_trades(trades)
     return trade_record
 
-def get_today_trades():
+def filter_trades_by_asset(trades, asset_filter=None):
+    if not asset_filter:
+        return trades
+    target_key = "BTC" if "BTC" in asset_filter.upper() else "NIFTY"
+    return [t for t in trades if t.get("asset_type", "NIFTY") == target_key or target_key in t.get("symbol", "").upper()]
+
+def get_today_trades(asset_filter=None):
     trades = load_trades()
     today_str = get_ist_now().strftime("%Y-%m-%d")
-    return [t for t in trades if t.get("date") == today_str]
+    today_list = [t for t in trades if t.get("date") == today_str]
+    return filter_trades_by_asset(today_list, asset_filter)
 
-def get_today_summary():
-    today_trades = get_today_trades()
+def get_today_summary(asset_filter=None):
+    today_trades = get_today_trades(asset_filter)
     total_trades = len(today_trades)
     wins = len([t for t in today_trades if t.get("result") == "WIN"])
     losses = len([t for t in today_trades if t.get("result") == "LOSS"])
@@ -118,16 +141,17 @@ def get_today_summary():
         "trades_remaining": max(0, 3 - total_trades)
     }
 
-def get_weekly_trades(days=7):
+def get_weekly_trades(days=7, asset_filter=None):
     trades = load_trades()
     if not trades:
         return []
     ist_now = get_ist_now()
     cutoff_date = (ist_now - timedelta(days=days)).strftime("%Y-%m-%d")
-    return [t for t in trades if t.get("date", "") >= cutoff_date]
+    weekly_list = [t for t in trades if t.get("date", "") >= cutoff_date]
+    return filter_trades_by_asset(weekly_list, asset_filter)
 
-def get_weekly_summary(days=7):
-    weekly_trades = get_weekly_trades(days)
+def get_weekly_summary(days=7, asset_filter=None):
+    weekly_trades = get_weekly_trades(days, asset_filter)
     total_trades = len(weekly_trades)
     wins = len([t for t in weekly_trades if t.get("result") == "WIN"])
     losses = len([t for t in weekly_trades if t.get("result") == "LOSS"])

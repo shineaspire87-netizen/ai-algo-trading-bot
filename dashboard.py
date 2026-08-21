@@ -32,8 +32,6 @@ if "notified_candles" not in st.session_state:
     st.session_state.notified_candles = set()
 if "notified_completed_trades" not in st.session_state:
     st.session_state.notified_completed_trades = set()
-if "active_trade" not in st.session_state:
-    st.session_state.active_trade = None
 if "locked_candle_id" not in st.session_state:
     st.session_state.locked_candle_id = "NONE"
 if "locked_signal_state" not in st.session_state:
@@ -68,15 +66,18 @@ st.markdown("""
 st.sidebar.title("⚙️ System Control")
 selected_asset = st.sidebar.selectbox("🎯 Select Active Trading Market:", ["BITCOIN (BTC/USDT)", "NIFTY 50 (₹)"])
 
-if st.sidebar.button("🧹 Start Fresh From Today (Aug 20)"):
-    trade_logger.clear_all_trades()
-    st.sidebar.success("All Old Mock History Erased! Fresh Start Activated!")
+asset_key = "BTC" if selected_asset == "BITCOIN (BTC/USDT)" else "NIFTY"
+currency_sym = "$" if asset_key == "BTC" else "₹"
+
+if st.sidebar.button(f"🧹 Clear {asset_key} History"):
+    trade_logger.clear_asset_trades(asset_key)
+    st.sidebar.success(f"{asset_key} History Cleared!")
     st.rerun()
 
 is_open, market_status_text = check_market_status(selected_asset)
 
 st.markdown(f"<div class='main-title'>🎯 ANTONY QUANT AI: {selected_asset.upper()} CO-PILOT</div>", unsafe_allow_html=True)
-st.markdown("<div class='sub-title'>15M Candle Winning Direction Engine | Locked Candle Execution</div>", unsafe_allow_html=True)
+st.markdown("<div class='sub-title'>Isolated Dual-Asset Multi-Engine | Independent Trade Logs & History</div>", unsafe_allow_html=True)
 
 ist_now_dt = data_feed.get_ist_now()
 min_val = ist_now_dt.minute
@@ -137,7 +138,7 @@ if selected_asset == "BITCOIN (BTC/USDT)":
     """, height=85)
 else:
     st.components.v1.html("""
-    <div style="background-color: #111827; border: 1px solid #374151; padding: 12px; border-radius: 10px; text-align: center; font-family: monospace; color: #F3F4F6;">
+    <div style="background-color: #111827; border: 1px solid #374151; padding: 10px; border-radius: 10px; text-align: center; font-family: monospace; color: #F3F4F6;">
         <span id="live-date" style="color: #60A5FA; font-size: 14px; font-weight: bold;"></span> &nbsp;|&nbsp; 
         <span id="live-clock" style="color: #FBBF24; font-size: 16px; font-weight: bold;"></span><br>
         <span id="candle-timer" style="color: #FFD54F; font-size: 16px; font-weight: bold;">⏳ 15M CANDLE: Loading...</span>
@@ -176,18 +177,17 @@ if is_open:
 else:
     st.markdown(f"<div class='market-badge-closed'>{market_status_text} — LAST CLOSE DATA SHOWN</div>", unsafe_allow_html=True)
 
-# EXECUTION ENGINE WITH SAFE DATA HANDLING
+# EXECUTION ENGINE
 if selected_asset == "BITCOIN (BTC/USDT)":
     df_btc = data_feed.fetch_btc_live_data("BTCUSDT", config.TIMEFRAME)
-    if df_btc.empty:
-        # Fallback empty dataframe structure to prevent crashes
-        df_btc = pd.DataFrame([{
-            "open": 71600.0, "high": 71700.0, "low": 71500.0, "close": 71660.0, "volume": 50000.0
-        }])
+    if df_btc.empty or len(df_btc) < 5:
+        st.warning("⏳ Connecting to Binance 0ms Bitcoin Live Feed... Please wait 3 seconds.")
+        time_lib.sleep(3)
+        st.rerun()
         
     last_row = df_btc.iloc[-1]
-    spot_price = float(last_row.get('close', 71660.0))
-    entry_zone_price = float(last_row.get('open', 71600.0))
+    spot_price = float(last_row['close'])
+    entry_zone_price = float(last_row['open'])
     current_candle_id = f"BTC_{last_row.get('time', str(datetime.now().minute // 15))}"
     
     if st.session_state.locked_candle_id != current_candle_id or st.session_state.locked_signal_state is None:
@@ -205,14 +205,14 @@ if selected_asset == "BITCOIN (BTC/USDT)":
     btc_tp2 = entry_zone_price * (1 + config.BTC_TARGET_2_PCT / 100.0) if signal_type == "BUY_CALL" else entry_zone_price * (1 - config.BTC_TARGET_2_PCT / 100.0)
     btc_sl = entry_zone_price * (1 - config.BTC_STOP_LOSS_PCT / 100.0) if signal_type == "BUY_CALL" else entry_zone_price * (1 + config.BTC_STOP_LOSS_PCT / 100.0)
 
-    # PERSISTENT FILE-BACKED ACTIVE TRADE ENGINE
-    active_trade = trade_logger.load_active_trade()
+    # PERSISTENT BITCOIN ACTIVE TRADE ENGINE
+    active_trade = trade_logger.load_active_trade("btc")
     
     if signal_type in ["BUY_CALL", "BUY_PUT"]:
         if active_trade is None:
             active_trade = {
                 "candle_id": current_candle_id,
-                "asset": "BTC/USDT",
+                "asset_key": "BTC",
                 "symbol": f"BTC/USDT {signal_type}",
                 "strike": "BTCUSDT",
                 "entry_price": entry_zone_price,
@@ -223,7 +223,7 @@ if selected_asset == "BITCOIN (BTC/USDT)":
                 "breakdown": breakdown if isinstance(breakdown, dict) else {},
                 "start_time_iso": datetime.now().isoformat()
             }
-            trade_logger.save_active_trade(active_trade)
+            trade_logger.save_active_trade(active_trade, "btc")
             
         at = active_trade
         trade_finished = False
@@ -261,10 +261,9 @@ if selected_asset == "BITCOIN (BTC/USDT)":
             actual_net_pnl = recorded.get('net_pnl', 0)
             final_header_status = "WIN" if actual_net_pnl > 0 else "LOSS"
             
-            alert_msg = f"<b>🚨 TRADE COMPLETED: {final_header_status}</b>\n\nSymbol: <b>{at.get('symbol')}</b>\nNet PnL: <b>${actual_net_pnl:,.2f}</b>"
+            alert_msg = f"<b>🚨 BITCOIN TRADE COMPLETED: {final_header_status}</b>\n\nSymbol: <b>{at.get('symbol')}</b>\nNet PnL: <b>${actual_net_pnl:,.2f}</b>"
             send_telegram_alert(alert_msg)
-            trade_logger.clear_active_trade()
-            st.session_state.active_trade = None
+            trade_logger.clear_active_trade("btc")
             st.rerun()
 
     telegram_dedup_key = f"BTC_{current_candle_id}_{signal_type}"
@@ -362,6 +361,69 @@ else: # NIFTY 50 MODE
     st.sidebar.metric("NIFTY 50 Spot", f"₹{spot_price:,.2f}")
     st.sidebar.metric("India VIX", f"{india_vix:.2f}", delta=f"{delta_vix_15:+.2f}")
 
+    # PERSISTENT NIFTY ACTIVE TRADE ENGINE
+    active_trade_nifty = trade_logger.load_active_trade("nifty")
+    nifty_tp1 = spot_price + 12.0 if signal_type == "BUY_CALL" else spot_price - 12.0
+    nifty_sl = spot_price - 8.0 if signal_type == "BUY_CALL" else spot_price + 8.0
+
+    if signal_type in ["BUY_CALL", "BUY_PUT"]:
+        if active_trade_nifty is None:
+            active_trade_nifty = {
+                "candle_id": current_candle_id,
+                "asset_key": "NIFTY",
+                "symbol": f"NIFTY {atm_strike} {'CE' if signal_type=='BUY_CALL' else 'PE'}",
+                "strike": f"NIFTY {atm_strike}",
+                "entry_price": entry_zone_price,
+                "tp1": nifty_tp1,
+                "sl": nifty_sl,
+                "signal_type": signal_type,
+                "quantity": 25,
+                "breakdown": breakdown if isinstance(breakdown, dict) else {},
+                "start_time_iso": datetime.now().isoformat()
+            }
+            trade_logger.save_active_trade(active_trade_nifty, "nifty")
+            
+        at = active_trade_nifty
+        trade_finished = False
+        trade_status = "WIN"
+        exit_price = spot_price
+        
+        entry_v = at.get("entry_price", spot_price)
+        qty_v = at.get("quantity", 25)
+        bd_v = at.get("breakdown", {})
+        
+        if at.get("signal_type") == "BUY_CALL":
+            if spot_price >= at.get("tp1", spot_price + 12.0): trade_finished, trade_status, exit_price = True, "WIN", at.get("tp1", spot_price)
+            elif spot_price <= at.get("sl", spot_price - 8.0): trade_finished, trade_status, exit_price = True, "LOSS", at.get("sl", spot_price)
+        elif at.get("signal_type") == "BUY_PUT":
+            if spot_price <= at.get("tp1", spot_price - 12.0): trade_finished, trade_status, exit_price = True, "WIN", at.get("tp1", spot_price)
+            elif spot_price >= at.get("sl", spot_price + 8.0): trade_finished, trade_status, exit_price = True, "LOSS", at.get("sl", spot_price)
+                
+        if not trade_finished and (rem_candle_sec <= 5 or at.get("candle_id") != current_candle_id):
+            trade_finished = True
+            exit_price = spot_price
+            if at.get("signal_type") == "BUY_CALL":
+                trade_status = "WIN" if exit_price > entry_v else "LOSS"
+            else:
+                trade_status = "WIN" if exit_price < entry_v else "LOSS"
+                
+        if trade_finished:
+            pnl_calc = (exit_price - entry_v) * qty_v if trade_status == "WIN" else (exit_price - entry_v) * qty_v
+            post_mortem = ai_analyst.generate_trade_post_mortem(trade_status, bd_v, pnl_calc)
+            recorded = trade_logger.record_completed_trade(
+                symbol=at.get("symbol", f"NIFTY {atm_strike}"), strike=at.get("strike", f"NIFTY {atm_strike}"), entry_price=entry_v,
+                exit_price=exit_price, qty=qty_v, status=trade_status,
+                win_loss_reason=post_mortem, layer_breakdown=bd_v
+            )
+            
+            actual_net_pnl = recorded.get('net_pnl', 0)
+            final_header_status = "WIN" if actual_net_pnl > 0 else "LOSS"
+            
+            alert_msg = f"<b>🚨 NIFTY TRADE COMPLETED: {final_header_status}</b>\n\nSymbol: <b>{at.get('symbol')}</b>\nNet PnL: <b>₹{actual_net_pnl:,.2f}</b>"
+            send_telegram_alert(alert_msg)
+            trade_logger.clear_active_trade("nifty")
+            st.rerun()
+
     telegram_dedup_key = f"NIFTY_{current_candle_id}_{signal_type}"
     if signal_type in ["BUY_CALL", "BUY_PUT"] and telegram_dedup_key not in st.session_state.notified_candles:
         alert_msg = f"<b>🚨 NIFTY 50 CANDLE WIN SIGNAL</b>\n\nDirection: <b>{signal_type}</b>\nStrike: <b>NIFTY {atm_strike}</b>\nSpot: <b>₹{spot_price:,.2f}</b>\nSL: <b>-8 pts</b>\nTP1: <b>+12 pts</b>"
@@ -382,7 +444,6 @@ else: # NIFTY 50 MODE
     elif signal_type == "BUY_PUT":
         st.markdown(f"""
         <div class='signal-card-sell'>
-            {time_badge_html}
             <h1 style='color:#E040FB; margin:0;'>🟪 PREDICTED WINNING CANDLE: PUT (PE)</h1>
             <p style='font-size:18px; margin-top:8px;'>NIFTY 50 Spot: <b>₹{spot_price:,.2f}</b></p>
             <hr style='border-color:#E040FB;'>
@@ -422,53 +483,54 @@ if breakdown:
     </div>
     """, unsafe_allow_html=True)
 
+# ISOLATED PERFORMANCE LOGS & TABLES BASED ON ACTIVE ASSET SELECTION
 st.divider()
-st.subheader("📊 BOT PERFORMANCE LOGS & ACCURACY TRACKER")
+st.subheader(f"📊 {selected_asset.upper()} PERFORMANCE LOGS & ACCURACY TRACKER")
 
 tab1, tab2 = st.tabs(["📅 Today's Live Log", "📊 7-Day Weekly Performance Tracker"])
 
 with tab1:
-    today_summary = trade_logger.get_today_summary()
+    today_summary = trade_logger.get_today_summary(asset_key)
     col1, col2, col3, col4 = st.columns(4)
     col1.metric("Today's Trades", f"{today_summary['total_trades']}")
     col2.metric("Win Rate", f"{today_summary['win_rate']}%")
     col3.metric("Wins / Losses", f"{today_summary['wins']} W / {today_summary['losses']} L")
-    col4.metric("Net Daily PnL", f"₹{today_summary['net_pnl']:,.2f}")
+    col4.metric(f"Net Daily PnL ({currency_sym})", f"{currency_sym}{today_summary['net_pnl']:,.2f}")
     
-    today_trades = trade_logger.get_today_trades()
+    today_trades = trade_logger.get_today_trades(asset_key)
     if today_trades:
         df_today = pd.DataFrame(today_trades)
         st.dataframe(df_today[["date_time", "symbol", "entry_price", "exit_price", "quantity", "gross_pnl", "brokerage_fee", "net_pnl", "result"]], use_container_width=True)
     else:
-        st.info("ℹ️ No trades recorded today yet. Bot is scanning 15M candles for high-probability setups.")
+        st.info(f"ℹ️ No {selected_asset} trades recorded today yet. Bot is scanning 15M candles for high-probability setups.")
 
 with tab2:
-    weekly_summary = trade_logger.get_weekly_summary(days=7)
+    weekly_summary = trade_logger.get_weekly_summary(days=7, asset_filter=asset_key)
     col1, col2, col3, col4 = st.columns(4)
     col1.metric("1-Week Total Trades", f"{weekly_summary['total_trades']}")
     col2.metric("1-Week Win Rate", f"{weekly_summary['win_rate']}%")
     col3.metric("Wins / Losses", f"{weekly_summary['wins']} W / {weekly_summary['losses']} L")
-    col4.metric("1-Week Net PnL", f"₹{weekly_summary['net_pnl']:,.2f}")
+    col4.metric(f"1-Week Net PnL ({currency_sym})", f"{currency_sym}{weekly_summary['net_pnl']:,.2f}")
     
-    weekly_trades = trade_logger.get_weekly_trades(days=7)
+    weekly_trades = trade_logger.get_weekly_trades(days=7, asset_filter=asset_key)
     if weekly_trades:
         df_weekly = pd.DataFrame(weekly_trades)
         st.dataframe(df_weekly[["date_time", "symbol", "entry_price", "exit_price", "quantity", "gross_pnl", "brokerage_fee", "net_pnl", "result"]], use_container_width=True)
     else:
-        st.info("ℹ️ No weekly trade history recorded yet.")
+        st.info(f"ℹ️ No weekly {selected_asset} trade history recorded yet.")
 
-# BOT THOUGHTS & AI SELF-REFLECTION
+# ISOLATED BOT THOUGHTS & AI SELF-REFLECTION
 st.divider()
 col_title, col_clear = st.columns([3, 1])
 with col_title:
-    st.subheader("🧠 BOT THOUGHTS & AI SELF-REFLECTION")
+    st.subheader(f"🧠 {selected_asset.upper()} BOT THOUGHTS & AI SELF-REFLECTION")
 with col_clear:
-    if st.button("🧹 Clear All Bot Thoughts"):
-        trade_logger.clear_all_trades()
-        st.success("All Bot Thoughts Cleared!")
+    if st.button(f"🧹 Clear {asset_key} Thoughts"):
+        trade_logger.clear_asset_trades(asset_key)
+        st.success(f"{asset_key} Thoughts Cleared!")
         st.rerun()
 
-all_trades = trade_logger.load_trades()
+all_trades = trade_logger.filter_trades_by_asset(trade_logger.load_trades(), asset_key)
 if all_trades:
     for t in reversed(all_trades[-10:]):
         col_card, col_del = st.columns([5, 1])
@@ -477,7 +539,7 @@ if all_trades:
             st.markdown(f"""
             <div class='diagnostic-box'>
                 📅 <b>{t.get('date_time', 'N/A')}</b> | <span style='color:{"#FF5252" if t.get("result")=="LOSS" else "#00E676"}'>{t.get("result", "WIN")}</span><br>
-                📍 <b>Trade:</b> {t.get('symbol', 'N/A')} | Net PnL: ₹{t.get('net_pnl', 0)}<br><br>
+                📍 <b>Trade:</b> {t.get('symbol', 'N/A')} | Net PnL: {currency_sym}{t.get('net_pnl', 0)}<br><br>
                 💭 <b>Bot Reflection:</b><br>{t.get('post_mortem', post_mortem_text)}
             </div>
             """, unsafe_allow_html=True)
@@ -487,17 +549,17 @@ if all_trades:
                 st.success("Thought Deleted!")
                 st.rerun()
 else:
-    st.info("ℹ️ No Bot Thoughts recorded yet.")
+    st.info(f"ℹ️ No {selected_asset} Bot Thoughts recorded yet.")
 
 # END-OF-DAY AI SELF-DIAGNOSTIC REPORT
 st.divider()
-today_trades = trade_logger.get_today_trades()
+today_trades = trade_logger.get_today_trades(asset_key)
 eod_report = ai_analyst.generate_eod_bot_diagnostic(today_trades, india_vix if selected_asset == "NIFTY 50 (₹)" else 15.0, 1.0)
 st.markdown(f"<div class='diagnostic-box'>{eod_report}</div>", unsafe_allow_html=True)
 
-if st.sidebar.button("🧹 Clear All Trade History"):
-    trade_logger.clear_all_trades()
-    st.sidebar.success("Trade Logs Reset!")
+if st.sidebar.button(f"🧹 Reset All History"):
+    trade_logger.clear_asset_trades(None)
+    st.sidebar.success("All History Reset!")
     st.rerun()
 
 if st.sidebar.button("🔄 Refresh Signal Engine"):
