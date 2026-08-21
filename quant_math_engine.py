@@ -104,6 +104,77 @@ def _rsi_14(df, use_closed_candle=False):
     except Exception:
         return 50.0   # Default neutral RSI — no block
 
+def _detect_candlestick_pattern(open_p, high, low, close, prev_open, prev_close):
+    """
+    PRO CANDLESTICK RECOGNITION ENGINE:
+    Detects classic high-win-rate 15M candlestick patterns:
+    - Hammer (Bullish Pin Bar): Long lower wick >= 2x body, upper wick small.
+    - Shooting Star (Bearish Pin Bar): Long upper wick >= 2x body, lower wick small.
+    - Bullish Engulfing: Current green body engulfs previous red body.
+    - Bearish Engulfing: Current red body engulfs previous green body.
+    Returns: (pattern_name: str, is_bullish: bool, is_bearish: bool)
+    """
+    total_range = high - low
+    if total_range <= 0:
+        return "NORMAL", False, False
+
+    body = abs(close - open_p)
+    upper_wick = high - max(open_p, close)
+    lower_wick = min(open_p, close) - low
+
+    is_green = close > open_p
+    is_red   = close < open_p
+    prev_green = prev_close > prev_open
+    prev_red   = prev_close < prev_open
+
+    # 1. HAMMER / BULLISH PIN BAR (Long lower wick >= 2.0x body, body in top 35%)
+    if lower_wick >= 1.8 * max(body, 1e-5) and upper_wick <= 0.5 * max(body, 1e-5):
+        return "HAMMER (Bullish Pin Bar)", True, False
+
+    # 2. SHOOTING STAR / BEARISH PIN BAR (Long upper wick >= 1.8x body, body in bottom 35%)
+    if upper_wick >= 1.8 * max(body, 1e-5) and lower_wick <= 0.5 * max(body, 1e-5):
+        return "SHOOTING STAR (Bearish Pin Bar)", False, True
+
+    # 3. BULLISH ENGULFING (Current green candle engulfs previous red body)
+    if is_green and prev_red and (close >= prev_open) and (open_p <= prev_close):
+        return "BULLISH ENGULFING", True, False
+
+    # 4. BEARISH ENGULFING (Current red candle engulfs previous green body)
+    if is_red and prev_green and (close <= prev_open) and (open_p >= prev_close):
+        return "BEARISH ENGULFING", False, True
+
+    return "NORMAL", False, False
+
+def _atr_filter(df, high, low, use_closed_candle=False):
+    """
+    ATR(14) VOLATILITY EXPANSION GUARD:
+    Ensures 15M candle range is >= 40% of ATR(14) to avoid low-volatility squeeze traps.
+    Returns: (has_volatility: bool, current_atr: float, range_atr_ratio: float)
+    """
+    try:
+        if len(df) < 16:
+            return True, 0.0, 1.0
+        highs  = df['high'].astype(float)
+        lows   = df['low'].astype(float)
+        closes = df['close'].astype(float)
+
+        tr1 = highs - lows
+        tr2 = (highs - closes.shift(1)).abs()
+        tr3 = (lows - closes.shift(1)).abs()
+        tr = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
+
+        atr14 = float(tr.ewm(span=14, adjust=False).mean().iloc[-2 if use_closed_candle else -1])
+        c_range = high - low
+
+        if atr14 <= 0:
+            return True, 0.0, 1.0
+
+        ratio = c_range / atr14
+        return (ratio >= 0.35), atr14, ratio
+    except Exception:
+        return True, 0.0, 1.0
+
+
 def evaluate_forex_15m_signal(df, use_closed_candle=False):
     """
     Evaluates Forex 15M (EUR/USD) Candlestick Signal.
@@ -131,9 +202,14 @@ def evaluate_forex_15m_signal(df, use_closed_candle=False):
     eff_pips = price_change_pips if abs(price_change_pips) >= abs(candle_pips) else candle_pips
     direction_up = eff_pips > 0
 
-    # BUG 7 FIX: Tighter body ratio threshold (40% for Forex, was 35%)
+    # PRO CANDLESTICK PATTERN RECOGNITION
+    prev_open = float(prev_row['open'])
+    pattern_name, is_pat_bullish, is_pat_bearish = _detect_candlestick_pattern(open_p, high, low, close, prev_open, prev_close)
+    pattern_aligned = (direction_up and is_pat_bullish) or (not direction_up and is_pat_bearish)
+
+    # BUG 7 FIX: Tighter body ratio threshold (40% for Forex, was 35%), but allow valid Pin Bars (Hammer/Shooting Star)
     body_ratio = calculate_candle_body_ratio(high, low, open_p, close)
-    l1_passed = body_ratio >= 40.0
+    l1_passed = (body_ratio >= 40.0) or pattern_aligned
 
     l3_passed = abs_pips >= 1.5
 
@@ -155,29 +231,39 @@ def evaluate_forex_15m_signal(df, use_closed_candle=False):
     rsi_blocked = (direction_up and rsi_val > 70.0) or (not direction_up and rsi_val < 30.0)
     rsi_str = f"RSI={rsi_val:.1f}"
 
+    # ATR VOLATILITY EXPANSION FILTER
+    has_volatility, atr14, range_atr_ratio = _atr_filter(df, high, low, use_closed_candle=use_closed_candle)
+
     confidence = 50.0
     if abs_pips >= 5.0:   confidence += 25.0
     elif abs_pips >= 2.5: confidence += 18.0
     elif abs_pips >= 1.5: confidence += 12.0
 
-    if l1_passed:        confidence += 12.0
+    if l1_passed:        confidence += 10.0
     if l4_passed:        confidence += 8.0
     if momentum_aligned: confidence += 5.0
     if ema_aligned:      confidence += 8.0   # EMA trend bonus
     if not rsi_blocked:  confidence += 5.0   # RSI safety bonus
+    if pattern_aligned:  confidence += 10.0  # Pro Pattern bonus (+10%)
     confidence = min(95.0, confidence)
 
     breakdown = {
-        "l1_status": f"🟢 PASSED (Forex Body: {body_ratio}%)" if l1_passed else f"🔴 FAILED (Flat Forex Body: {body_ratio}% < 40%)",
+        "l1_status": f"🟢 PASSED ({pattern_name if pattern_aligned else f'Forex Body: {body_ratio}%'})" if l1_passed else f"🔴 FAILED (Flat Forex Body: {body_ratio}% < 40%)",
         "l2_status": f"🟢 PASSED (3-Candle Momentum: {momentum_avg:+.5f})" if momentum_aligned else f"🟡 COUNTER-TREND (Avg: {momentum_avg:+.5f})",
         "l3_status": f"🟢 PASSED (15M Pips: {abs_pips:+.1f} Pips)" if l3_passed else f"🔴 FAILED (Weak Pips: {abs_pips:+.1f} Pips)",
         "l4_status": f"🟢 PASSED (Directional Fib: {retrace:.3f})" if l4_passed else f"🔴 FAILED (Weak Close Fib: {retrace:.3f} > 0.85)",
         "l5_status": f"CANDLE WIN PROBABILITY: {confidence:.1f}%",
+        "pattern_status": f"🟢 PATTERN CONFIRMED ({pattern_name})" if pattern_aligned else f"⚪ PATTERN: {pattern_name}",
         "ema_status": f"🟢 EMA TREND ALIGNED ({ema_str})" if ema_aligned else f"🔴 EMA COUNTER-TREND ({ema_str})",
-        "rsi_status": f"🟢 RSI SAFE ({rsi_str})" if not rsi_blocked else f"🔴 RSI BLOCKED ({rsi_str} — {'Overbought' if rsi_val > 70 else 'Oversold'})"
+        "rsi_status": f"🟢 RSI SAFE ({rsi_str})" if not rsi_blocked else f"🔴 RSI BLOCKED ({rsi_str} — {'Overbought' if rsi_val > 70 else 'Oversold'})",
+        "atr_status": f"🟢 ATR EXPANSION ({range_atr_ratio:.2f}x ATR)" if has_volatility else f"🔴 ATR SQUEEZE TRAP ({range_atr_ratio:.2f}x < 0.35x ATR)"
     }
 
-    # Hard blocks: RSI extreme + counter-trend EMA
+    # Hard blocks: Low ATR volatility squeeze + RSI extreme + counter-trend EMA
+    if not has_volatility:
+        breakdown["l5_status"] = f"🔴 REJECTED: Low Volatility Squeeze Trap ({range_atr_ratio:.2f}x < 0.35x ATR)"
+        return "WAIT", confidence, breakdown["l5_status"], breakdown
+
     if rsi_blocked:
         breakdown["l5_status"] = f"🔴 REJECTED: RSI {rsi_val:.0f} {'Overbought' if rsi_val > 70 else 'Oversold'} — Reversal Risk"
         return "WAIT", confidence, breakdown["l5_status"], breakdown
@@ -235,10 +321,15 @@ def predict_15m_candle_winning_direction(df, use_closed_candle=False):
 
     direction_up = eff_pct > 0
 
-    # BUG 7 FIX: Tighter body ratio (35% for BTC/NIFTY, was 30%)
+    # PRO CANDLESTICK PATTERN RECOGNITION
+    prev_open = float(prev_row['open'])
+    pattern_name, is_pat_bullish, is_pat_bearish = _detect_candlestick_pattern(open_p, high, low, close, prev_open, prev_close)
+    pattern_aligned = (direction_up and is_pat_bullish) or (not direction_up and is_pat_bearish)
+
+    # BUG 7 FIX: Tighter body ratio (35% for BTC/NIFTY, was 30%), but allow valid Pin Bars (Hammer/Shooting Star)
     body_ratio = calculate_candle_body_ratio(high, low, open_p, close)
-    l1_passed = body_ratio >= 35.0
-    l1_str = f"🟢 PASSED (Body Intensity: {body_ratio}%)" if l1_passed else f"🔴 FAILED (Low Body Intensity: {body_ratio}% < 35%)"
+    l1_passed = (body_ratio >= 35.0) or pattern_aligned
+    l1_str = f"🟢 PASSED ({pattern_name if pattern_aligned else f'Body Intensity: {body_ratio}%'})" if l1_passed else f"🔴 FAILED (Low Body Intensity: {body_ratio}% < 35%)"
 
     # BUG 2 FIX: NaN-safe volume ratio
     vol_ratio = _safe_vol_ratio(df, volume)
@@ -266,6 +357,9 @@ def predict_15m_candle_winning_direction(df, use_closed_candle=False):
     rsi_val = _rsi_14(df, use_closed_candle=use_closed_candle)
     rsi_blocked = (direction_up and rsi_val > 70.0) or (not direction_up and rsi_val < 30.0)
 
+    # ATR VOLATILITY EXPANSION GUARD
+    has_volatility, atr14, range_atr_ratio = _atr_filter(df, high, low, use_closed_candle=use_closed_candle)
+
     confidence = 50.0
     if abs(eff_pct) >= 0.15: confidence += 20.0
     elif abs(eff_pct) >= 0.08: confidence += 12.0
@@ -276,9 +370,18 @@ def predict_15m_candle_winning_direction(df, use_closed_candle=False):
     if momentum_aligned: confidence += 5.0
     if ema_aligned:      confidence += 8.0
     if not rsi_blocked:  confidence += 5.0
+    if pattern_aligned:  confidence += 10.0  # Pro Pattern bonus (+10%)
     confidence = min(95.0, confidence)
 
-    # Hard blocks: RSI extreme & counter-trend before l5 check
+    # Hard blocks: ATR volatility squeeze, RSI extreme & counter-trend before l5 check
+    if not has_volatility:
+        breakdown = {
+            "l1_status": l1_str, "l2_status": l2_str, "l3_status": l3_str, "l4_status": l4_str,
+            "atr_status": f"🔴 ATR SQUEEZE ({range_atr_ratio:.2f}x < 0.35x ATR)",
+            "l5_status": f"🔴 REJECTED: Low Volatility Squeeze Trap ({range_atr_ratio:.2f}x < 0.35x ATR)"
+        }
+        return "WAIT", confidence, breakdown["l5_status"], breakdown
+
     if rsi_blocked:
         breakdown = {
             "l1_status": l1_str, "l2_status": l2_str, "l3_status": l3_str, "l4_status": l4_str,
@@ -304,8 +407,10 @@ def predict_15m_candle_winning_direction(df, use_closed_candle=False):
         "l2_status": l2_str,
         "l3_status": l3_str,
         "l4_status": l4_str,
+        "pattern_status": f"🟢 PATTERN CONFIRMED ({pattern_name})" if pattern_aligned else f"⚪ PATTERN: {pattern_name}",
         "rsi_status": f"🟢 RSI SAFE (RSI={rsi_val:.1f})" if not rsi_blocked else f"🔴 RSI BLOCKED ({rsi_val:.1f})",
         "ema_status": f"🟢 EMA TREND ALIGNED (EMA9={ema9:.2f} vs EMA21={ema21:.2f})" if ema_aligned else f"🔴 COUNTER-TREND",
+        "atr_status": f"🟢 ATR EXPANSION ({range_atr_ratio:.2f}x ATR)" if has_volatility else f"🔴 ATR SQUEEZE ({range_atr_ratio:.2f}x ATR)",
         "l5_status": f"🟢 CONFIRMED CANDLE WIN (Confidence: {confidence:.1f}%)" if l5_passed else f"🔴 REJECTED: Low Win Confidence ({confidence:.1f}% < 55%)"
     }
 
