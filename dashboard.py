@@ -243,36 +243,50 @@ elif selected_asset == "FOREX (EUR/USD $)":
     setInterval(updateClockAndCandleTimer, 1000); updateClockAndCandleTimer();
 
     let lastForexPrice = {forex_spot_init};
+
+    function updateForexPriceUI(price) {{
+        const formatted = price.toFixed(5);
+        const elem = document.getElementById('forex-ticker-price');
+        if (elem) {{
+            if (price > lastForexPrice) {{
+                elem.style.color = '#00E676';
+            }} else if (price < lastForexPrice) {{
+                elem.style.color = '#FF5252';
+            }}
+            elem.innerText = '$' + formatted;
+            lastForexPrice = price;
+        }}
+    }}
+
+    try {{
+        const ws = new WebSocket('wss://stream.binance.com:9443/ws/eurusdt@ticker');
+        ws.onmessage = (event) => {{
+            try {{
+                const data = JSON.parse(event.data);
+                const price = parseFloat(data.c);
+                if (price && price > 0) {{
+                    updateForexPriceUI(price);
+                }}
+            }} catch(e) {{}}
+        }};
+    }} catch(e) {{}}
+
     async function fetchRealForexLiveTicker() {{
-        const targetUrl = 'https://query1.finance.yahoo.com/v8/finance/chart/EURUSD%3DX?interval=1m';
-        const proxies = [
-            'https://api.allorigins.win/get?url=' + encodeURIComponent(targetUrl),
-            'https://api.codetabs.com/v1/proxy?quest=' + encodeURIComponent(targetUrl),
-            targetUrl
+        const endpoints = [
+            'https://api.binance.com/api/v3/ticker/price?symbol=EURUSDT',
+            'https://api.coinbase.com/v2/prices/EUR-USD/spot'
         ];
-        for (let url of proxies) {{
+        for (let url of endpoints) {{
             try {{
                 const res = await fetch(url);
                 if (res.ok) {{
-                    const text = await res.text();
-                    let data;
-                    try {{
-                        data = JSON.parse(text);
-                        if (data.contents) data = JSON.parse(data.contents);
-                    }} catch(e) {{ continue; }}
+                    const data = await res.json();
+                    let price = 0;
+                    if (data.price) price = parseFloat(data.price);
+                    else if (data.data && data.data.amount) price = parseFloat(data.data.amount);
                     
-                    const price = data.chart?.result?.[0]?.meta?.regularMarketPrice;
-                    if (price) {{
-                        const elem = document.getElementById('forex-ticker-price');
-                        if (elem) {{
-                            if (price > lastForexPrice) {{
-                                elem.style.color = '#00E676';
-                            }} else if (price < lastForexPrice) {{
-                                elem.style.color = '#FF5252';
-                            }}
-                            elem.innerText = '$' + price.toFixed(5);
-                            lastForexPrice = price;
-                        }}
+                    if (price && price > 0) {{
+                        updateForexPriceUI(price);
                         return;
                     }}
                 }}

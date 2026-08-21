@@ -62,10 +62,22 @@ def fetch_btc_live_data(symbol="BTCUSDT", timeframe="15m", period="5d"):
     return fetch_nifty_live_data(config.BTC_SYMBOL, timeframe, period)
 
 def fetch_forex_live_data(symbol=config.FOREX_SYMBOL, timeframe=config.TIMEFRAME, period="5d"):
-    """Fetches real-time 15M Forex (EUR/USD) candles."""
+    """Fetches real-time 15M Forex (EUR/USD) candles with 0ms live price override."""
     try:
         df = yf.download(tickers=symbol, period=period, interval=timeframe, progress=False)
         if df.empty or len(df) < 2:
+            try:
+                k_res = requests.get(f"https://api.binance.com/api/v3/klines?symbol=EURUSDT&interval={timeframe}&limit=50", timeout=3)
+                if k_res.status_code == 200:
+                    raw_data = k_res.json()
+                    cols = ['time', 'open', 'high', 'low', 'close', 'volume', 'close_time', 'q_vol', 'trades', 'tb_base', 'tb_quote', 'ignore']
+                    df = pd.DataFrame(raw_data, columns=cols)
+                    for col in ['open', 'high', 'low', 'close', 'volume']:
+                        df[col] = df[col].astype(float)
+            except Exception:
+                pass
+
+        if df.empty:
             return pd.DataFrame()
             
         if isinstance(df.columns, pd.MultiIndex):
@@ -74,6 +86,23 @@ def fetch_forex_live_data(symbol=config.FOREX_SYMBOL, timeframe=config.TIMEFRAME
             df.columns = [col.lower() for col in df.columns]
             
         df.dropna(inplace=True)
+
+        # 0ms Live Price Override via Binance / Coinbase
+        try:
+            r = requests.get("https://api.binance.com/api/v3/ticker/price?symbol=EURUSDT", timeout=2)
+            if r.status_code == 200:
+                fast_p = float(r.json().get('price', 0.0))
+                if fast_p > 0.5:
+                    df.loc[df.index[-1], 'close'] = fast_p
+            else:
+                r2 = requests.get("https://api.coinbase.com/v2/prices/EUR-USD/spot", timeout=2)
+                if r2.status_code == 200:
+                    fast_p = float(r2.json().get('data', {}).get('amount', 0.0))
+                    if fast_p > 0.5:
+                        df.loc[df.index[-1], 'close'] = fast_p
+        except Exception:
+            pass
+
         return df
     except Exception as e:
         print(f"Error fetching Forex data: {e}")
