@@ -32,6 +32,8 @@ if "notified_candles" not in st.session_state:
     st.session_state.notified_candles = set()
 if "notified_completed_trades" not in st.session_state:
     st.session_state.notified_completed_trades = set()
+if "completed_candles" not in st.session_state:
+    st.session_state.completed_candles = set()
 if "locked_candle_id" not in st.session_state:
     st.session_state.locked_candle_id = "NONE"
 if "locked_signal_state" not in st.session_state:
@@ -424,7 +426,7 @@ if selected_asset == "FOREX (EUR/USD $)":
     # PERSISTENT FOREX ACTIVE TRADE ENGINE WITH CORRECT DIRECTIONAL PNL
     active_trade = trade_logger.load_active_trade("forex")
     
-    if signal_type in ["BUY_CALL", "BUY_PUT"]:
+    if signal_type in ["BUY_CALL", "BUY_PUT"] and current_candle_id not in st.session_state.completed_candles:
         if active_trade is None:
             active_trade = {
                 "candle_id": current_candle_id,
@@ -477,7 +479,8 @@ if selected_asset == "FOREX (EUR/USD $)":
             actual_net_pnl = recorded.get('net_pnl', 0)
             final_header_status = "WIN" if actual_net_pnl > 0 else "LOSS"
             
-            trade_comp_key = f"COMPLETED_FOREX_{current_candle_id}_{final_header_status}"
+            st.session_state.completed_candles.add(current_candle_id)
+            trade_comp_key = f"COMPLETED_FOREX_{current_candle_id}"
             if trade_comp_key not in st.session_state.notified_completed_trades:
                 alert_msg = f"<b>🚨 FOREX TRADE COMPLETED: {final_header_status}</b>\n\nSymbol: <b>{at.get('symbol')}</b>\nNet PnL: <b>${actual_net_pnl:,.2f}</b>"
                 send_telegram_alert(alert_msg)
@@ -556,7 +559,7 @@ elif selected_asset == "BITCOIN (BTC/USDT)":
     # PERSISTENT BTC ACTIVE TRADE ENGINE WITH CORRECT DIRECTIONAL PNL
     active_trade_btc = trade_logger.load_active_trade("btc")
     
-    if signal_type in ["BUY_CALL", "BUY_PUT"]:
+    if signal_type in ["BUY_CALL", "BUY_PUT"] and current_candle_id not in st.session_state.completed_candles:
         if active_trade_btc is None:
             active_trade_btc = {
                 "candle_id": current_candle_id,
@@ -609,8 +612,13 @@ elif selected_asset == "BITCOIN (BTC/USDT)":
             actual_net_pnl = recorded.get('net_pnl', 0)
             final_header_status = "WIN" if actual_net_pnl > 0 else "LOSS"
             
-            alert_msg = f"<b>🚨 BITCOIN TRADE COMPLETED: {final_header_status}</b>\n\nSymbol: <b>{at.get('symbol')}</b>\nNet PnL: <b>${actual_net_pnl:,.2f}</b>"
-            send_telegram_alert(alert_msg)
+            st.session_state.completed_candles.add(current_candle_id)
+            trade_comp_key = f"COMPLETED_BTC_{current_candle_id}"
+            if trade_comp_key not in st.session_state.notified_completed_trades:
+                alert_msg = f"<b>🚨 BITCOIN TRADE COMPLETED: {final_header_status}</b>\n\nSymbol: <b>{at.get('symbol')}</b>\nNet PnL: <b>${actual_net_pnl:,.2f}</b>"
+                send_telegram_alert(alert_msg)
+                st.session_state.notified_completed_trades.add(trade_comp_key)
+                
             trade_logger.clear_active_trade("btc")
             st.rerun()
 
@@ -708,7 +716,7 @@ else: # NIFTY 50 MODE
     nifty_tp1 = spot_price + 12.0 if signal_type == "BUY_CALL" else spot_price - 12.0
     nifty_sl = spot_price - 8.0 if signal_type == "BUY_CALL" else spot_price + 8.0
 
-    if signal_type in ["BUY_CALL", "BUY_PUT"]:
+    if signal_type in ["BUY_CALL", "BUY_PUT"] and current_candle_id not in st.session_state.completed_candles:
         if active_trade_nifty is None:
             active_trade_nifty = {
                 "candle_id": current_candle_id,
@@ -761,8 +769,13 @@ else: # NIFTY 50 MODE
             actual_net_pnl = recorded.get('net_pnl', 0)
             final_header_status = "WIN" if actual_net_pnl > 0 else "LOSS"
             
-            alert_msg = f"<b>🚨 NIFTY TRADE COMPLETED: {final_header_status}</b>\n\nSymbol: <b>{at.get('symbol')}</b>\nNet PnL: <b>₹{actual_net_pnl:,.2f}</b>"
-            send_telegram_alert(alert_msg)
+            st.session_state.completed_candles.add(current_candle_id)
+            trade_comp_key = f"COMPLETED_NIFTY_{current_candle_id}"
+            if trade_comp_key not in st.session_state.notified_completed_trades:
+                alert_msg = f"<b>🚨 NIFTY TRADE COMPLETED: {final_header_status}</b>\n\nSymbol: <b>{at.get('symbol')}</b>\nNet PnL: <b>₹{actual_net_pnl:,.2f}</b>"
+                send_telegram_alert(alert_msg)
+                st.session_state.notified_completed_trades.add(trade_comp_key)
+                
             trade_logger.clear_active_trade("nifty")
             st.rerun()
 
