@@ -445,7 +445,8 @@ if selected_asset == "FOREX (EUR/USD $)":
             
             entry_alert_key = f"ENTRY_FOREX_{current_candle_id}_{signal_type}"
             if entry_alert_key not in st.session_state.notified_candles:
-                alert_msg = f"<b>🚀 NEW FOREX TRADE ENTERED: {signal_type}</b>\n\nSymbol: <b>EUR/USD</b>\nEntry Price: <b>${entry_zone_price:.5f}</b>\nTarget 1 (TP1): <b>${forex_tp1:.5f}</b> (+15 Pips)\nStop Loss (SL): <b>${forex_sl:.5f}</b> (-10 Pips)\nWin Confidence: <b>{confidence_score:.1f}%</b>"
+                dir_emoji = "🟩 UP (BUY EUR/USD)" if signal_type == "BUY_CALL" else "🟪 DOWN (SELL EUR/USD)"
+                alert_msg = f"<b>🚀 NEW 15M FOREX TRADE ENTERED</b>\n\nDirection: <b>{dir_emoji}</b>\n⏱️ Window: <b>Minute 0-1 Candle Open</b>\n🎯 Entry Zone: <b>${entry_zone_price:.5f}</b>\n✅ Target 1 (TP1): <b>${forex_tp1:.5f}</b> (+15 Pips)\n🎯 Target 2 (TP2): <b>${forex_tp2:.5f}</b> (+35 Pips)\n🛑 Stop Loss (SL): <b>${forex_sl:.5f}</b> (-10 Pips)\n🔥 Win Confidence: <b>{confidence_score:.1f}%</b>"
                 send_telegram_alert(alert_msg)
                 st.session_state.notified_candles.add(entry_alert_key)
             
@@ -488,7 +489,8 @@ if selected_asset == "FOREX (EUR/USD $)":
             st.session_state.completed_candles.add(current_candle_id)
             trade_comp_key = f"COMPLETED_FOREX_{current_candle_id}"
             if trade_comp_key not in st.session_state.notified_completed_trades:
-                alert_msg = f"<b>🚨 FOREX TRADE COMPLETED: {final_header_status}</b>\n\nSymbol: <b>{at.get('symbol')}</b>\nNet PnL: <b>${actual_net_pnl:,.2f}</b>"
+                res_emoji = "🟢 WIN" if final_header_status == "WIN" else "🔴 LOSS"
+                alert_msg = f"<b>🚨 FOREX TRADE COMPLETED: {res_emoji}</b>\n\nSymbol: <b>{at.get('symbol')}</b>\nEntry Price: <b>${entry_v:.5f}</b>\nExit Price: <b>${exit_price:.5f}</b>\nNet PnL: <b>${actual_net_pnl:,.2f}</b>"
                 send_telegram_alert(alert_msg)
                 st.session_state.notified_completed_trades.add(trade_comp_key)
                 
@@ -584,7 +586,8 @@ elif selected_asset == "BITCOIN (BTC/USDT)":
             
             entry_alert_key = f"ENTRY_BTC_{current_candle_id}_{signal_type}"
             if entry_alert_key not in st.session_state.notified_candles:
-                alert_msg = f"<b>🚀 NEW BITCOIN TRADE ENTERED: {signal_type}</b>\n\nSymbol: <b>BTCUSDT</b>\nEntry Price: <b>${entry_zone_price:,.2f}</b>\nTarget 1 (TP1): <b>${btc_tp1:,.2f}</b> (+0.25%)\nStop Loss (SL): <b>${btc_sl:,.2f}</b> (-0.15%)\nWin Confidence: <b>{confidence_score:.1f}%</b>"
+                dir_emoji = "🟩 UP (BUY BTC)" if signal_type == "BUY_CALL" else "🟪 DOWN (SELL BTC)"
+                alert_msg = f"<b>🚀 NEW 15M BITCOIN TRADE ENTERED</b>\n\nDirection: <b>{dir_emoji}</b>\n⏱️ Window: <b>Minute 0-1 Candle Open</b>\n🎯 Entry Zone: <b>${entry_zone_price:,.2f}</b>\n✅ Target 1 (TP1): <b>${btc_tp1:,.2f}</b> (+0.25%)\n🎯 Target 2 (TP2): <b>${btc_tp2:,.2f}</b> (+0.50%)\n🛑 Stop Loss (SL): <b>${btc_sl:,.2f}</b> (-0.15%)\n🔥 Win Confidence: <b>{confidence_score:.1f}%</b>"
                 send_telegram_alert(alert_msg)
                 st.session_state.notified_candles.add(entry_alert_key)
             
@@ -627,7 +630,8 @@ elif selected_asset == "BITCOIN (BTC/USDT)":
             st.session_state.completed_candles.add(current_candle_id)
             trade_comp_key = f"COMPLETED_BTC_{current_candle_id}"
             if trade_comp_key not in st.session_state.notified_completed_trades:
-                alert_msg = f"<b>🚨 BITCOIN TRADE COMPLETED: {final_header_status}</b>\n\nSymbol: <b>{at.get('symbol')}</b>\nNet PnL: <b>${actual_net_pnl:,.2f}</b>"
+                res_emoji = "🟢 WIN" if final_header_status == "WIN" else "🔴 LOSS"
+                alert_msg = f"<b>🚨 BITCOIN TRADE COMPLETED: {res_emoji}</b>\n\nSymbol: <b>{at.get('symbol')}</b>\nEntry Price: <b>${entry_v:,.2f}</b>\nExit Price: <b>${exit_price:,.2f}</b>\nNet PnL: <b>${actual_net_pnl:,.2f}</b>"
                 send_telegram_alert(alert_msg)
                 st.session_state.notified_completed_trades.add(trade_comp_key)
                 
@@ -747,7 +751,8 @@ else: # NIFTY 50 MODE
             
             entry_alert_key = f"ENTRY_NIFTY_{current_candle_id}_{signal_type}"
             if entry_alert_key not in st.session_state.notified_candles:
-                alert_msg = f"<b>🚀 NEW NIFTY 50 TRADE ENTERED: {signal_type}</b>\n\nSymbol: <b>NIFTY {atm_strike} {'CE' if signal_type=='BUY_CALL' else 'PE'}</b>\nSpot Entry: <b>₹{entry_zone_price:,.2f}</b>\nTarget 1 (TP1): <b>₹{nifty_tp1:,.2f}</b> (+12 pts)\nStop Loss (SL): <b>₹{nifty_sl:,.2f}</b> (-8 pts)\nWin Confidence: <b>75.0%</b>"
+                dir_emoji = "🟩 UP (CALL / CE)" if signal_type == "BUY_CALL" else "🟪 DOWN (PUT / PE)"
+                alert_msg = f"<b>🚀 NEW 15M NIFTY 50 TRADE ENTERED</b>\n\nDirection: <b>{dir_emoji}</b>\nStrike: <b>NIFTY {atm_strike} {'CE' if signal_type=='BUY_CALL' else 'PE'}</b>\n⏱️ Window: <b>Minute 0-1 Candle Open</b>\n🎯 Spot Entry: <b>₹{entry_zone_price:,.2f}</b>\n✅ Target 1 (TP1): <b>₹{nifty_tp1:,.2f}</b> (+12 pts)\n🛑 Stop Loss (SL): <b>₹{nifty_sl:,.2f}</b> (-8 pts)\n🔥 Win Confidence: <b>75.0%</b>"
                 send_telegram_alert(alert_msg)
                 st.session_state.notified_candles.add(entry_alert_key)
             
@@ -790,7 +795,8 @@ else: # NIFTY 50 MODE
             st.session_state.completed_candles.add(current_candle_id)
             trade_comp_key = f"COMPLETED_NIFTY_{current_candle_id}"
             if trade_comp_key not in st.session_state.notified_completed_trades:
-                alert_msg = f"<b>🚨 NIFTY TRADE COMPLETED: {final_header_status}</b>\n\nSymbol: <b>{at.get('symbol')}</b>\nNet PnL: <b>₹{actual_net_pnl:,.2f}</b>"
+                res_emoji = "🟢 WIN" if final_header_status == "WIN" else "🔴 LOSS"
+                alert_msg = f"<b>🚨 NIFTY 50 TRADE COMPLETED: {res_emoji}</b>\n\nSymbol: <b>{at.get('symbol')}</b>\nSpot Entry: <b>₹{entry_v:,.2f}</b>\nSpot Exit: <b>₹{exit_price:,.2f}</b>\nNet PnL: <b>₹{actual_net_pnl:,.2f}</b>"
                 send_telegram_alert(alert_msg)
                 st.session_state.notified_completed_trades.add(trade_comp_key)
                 
@@ -932,7 +938,7 @@ if st.sidebar.button(f"🧹 Reset All History"):
 if st.sidebar.button("🔄 Refresh Signal Engine"):
     st.rerun()
 
-# 3-SECOND AUTOMATIC CONTINUOUS REFRESH ENGINE (UNFREEZE BOT ON STREAMLIT CLOUD)
+# 2-SECOND HIGH-FREQUENCY AUTOMATIC CONTINUOUS REFRESH ENGINE (INSTANT CANDLE REFLECTION)
 st.components.v1.html("""
 <script>
     setTimeout(function() {
@@ -943,6 +949,6 @@ st.components.v1.html("""
                 break;
             }
         }
-    }, 3000);
+    }, 2000);
 </script>
 """, height=0)
