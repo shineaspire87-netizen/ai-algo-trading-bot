@@ -16,10 +16,10 @@ FOREX_START_CAPITAL_USD = 100.00     # $100.00 USD Starting Capital for Forex
 # NIFTY 15M MICRO-SCALP RISK PARAMETERS (RUPEES ₹)
 NIFTY_LOT_SIZE = 25
 DEFAULT_LOTS = 1
-STOP_LOSS_POINTS = 8.0               # Micro SL: -8 pts (-₹200 / lot)
-TARGET_1_POINTS = 12.0              # Micro TP1: +12 pts (+₹300 / lot)
-TARGET_2_POINTS = 25.0              # Micro TP2: +25 pts (+₹625 / lot)
-UNDERLYING_TARGET_NIFTY = 15.0
+STOP_LOSS_POINTS = 10.0              # BUG G FIX: Widened SL 8→10 pts (-₹250/lot) to avoid noise exits
+TARGET_1_POINTS = 18.0              # BUG G FIX: TP1 12→18 pts (+₹450/lot) → 1:1.8 R:R
+TARGET_2_POINTS = 30.0              # BUG G FIX: TP2 25→30 pts (+₹750/lot) → 1:3.0 R:R
+UNDERLYING_TARGET_NIFTY = 18.0
 
 # BITCOIN 15M MICRO-SCALP RISK PARAMETERS ($ USD)
 BTC_STOP_LOSS_PCT = 0.15             # Micro -0.15% Stop Loss (-$0.30 USD)

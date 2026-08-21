@@ -37,11 +37,18 @@ def _directional_fib_retrace(high, low, close, direction_up):
     else:
         return (close - low) / swing_range
 
-def _three_candle_momentum(df):
-    """3-candle momentum confirmation — returns avg directional bias."""
-    if len(df) < 4:
+def _three_candle_momentum(df, use_closed_candle=False):
+    """
+    3-candle momentum confirmation — returns avg directional bias.
+    BUG F FIX: When use_closed_candle=True, excludes the forming candle
+    by shifting the window: uses df.iloc[-5:-2] instead of df.iloc[-4:-1].
+    """
+    if len(df) < 5:
         return 0.0
-    last3 = df.iloc[-4:-1]
+    if use_closed_candle:
+        last3 = df.iloc[-5:-2]   # 3 candles before the completed signal candle
+    else:
+        last3 = df.iloc[-4:-1]   # 3 candles before the current (forming) candle
     deltas = []
     for i in range(len(last3)):
         row = last3.iloc[i]
@@ -51,12 +58,61 @@ def _three_candle_momentum(df):
             pass
     return sum(deltas) / len(deltas) if deltas else 0.0
 
+def _ema_trend_filter(df, use_closed_candle=False):
+    """
+    BUG A FIX: EMA(9) vs EMA(21) trend alignment check.
+    Returns: (trend_up: bool, trend_down: bool, ema9: float, ema21: float)
+    Only takes strong signals WITH the macro trend.
+    """
+    try:
+        closes = df['close'].astype(float)
+        if len(closes) < 22:
+            return True, True, 0.0, 0.0   # Not enough data — allow all signals
+        ema9  = closes.ewm(span=9,  adjust=False).mean()
+        ema21 = closes.ewm(span=21, adjust=False).mean()
+        # Use completed-candle EMA values when evaluating closed candles
+        idx = -2 if use_closed_candle else -1
+        e9  = float(ema9.iloc[idx])
+        e21 = float(ema21.iloc[idx])
+        trend_up   = e9 > e21
+        trend_down = e9 < e21
+        return trend_up, trend_down, e9, e21
+    except Exception:
+        return True, True, 0.0, 0.0   # Fallback: allow all signals
+
+def _rsi_14(df, use_closed_candle=False):
+    """
+    BUG B FIX: RSI(14) overbought/oversold guard.
+    Returns RSI value. Blocks entries in extreme zones:
+    - BUY_CALL blocked when RSI > 70 (overbought — reversal risk)
+    - BUY_PUT blocked when RSI < 30 (oversold — bounce risk)
+    - RSI 45-55 = warning zone (choppy)
+    """
+    try:
+        closes = df['close'].astype(float)
+        if len(closes) < 16:
+            return 50.0   # Default neutral RSI — no block
+        delta = closes.diff()
+        gain  = delta.clip(lower=0)
+        loss  = (-delta).clip(lower=0)
+        avg_gain = gain.ewm(alpha=1/14, min_periods=14, adjust=False).mean()
+        avg_loss = loss.ewm(alpha=1/14, min_periods=14, adjust=False).mean()
+        rs   = avg_gain / avg_loss.replace(0, 1e-10)
+        rsi  = 100.0 - (100.0 / (1.0 + rs))
+        idx = -2 if use_closed_candle else -1
+        return float(rsi.iloc[idx])
+    except Exception:
+        return 50.0   # Default neutral RSI — no block
+
 def evaluate_forex_15m_signal(df, use_closed_candle=False):
     """
     Evaluates Forex 15M (EUR/USD) Candlestick Signal.
     BUG 6 FIX: use_closed_candle=True evaluates df.iloc[-2] (last completed candle).
+    BUG A FIX: EMA9/21 trend alignment — no counter-trend entries.
+    BUG B FIX: RSI-14 overbought/oversold guard.
+    BUG F FIX: Momentum window shifted correctly for use_closed_candle.
     """
-    if df.empty or len(df) < 4:
+    if df.empty or len(df) < 5:
         return "WAIT", 0.0, "REJECT: Insufficient Forex Data", {}
 
     # BUG 6 FIX: Evaluate from completed candle for confirmed signal
@@ -85,9 +141,19 @@ def evaluate_forex_15m_signal(df, use_closed_candle=False):
     retrace = _directional_fib_retrace(high, low, close, direction_up)
     l4_passed = retrace <= 0.85
 
-    # 3-candle momentum confirmation
-    momentum_avg = _three_candle_momentum(df)
+    # BUG F FIX: Momentum with correct window
+    momentum_avg = _three_candle_momentum(df, use_closed_candle=use_closed_candle)
     momentum_aligned = (momentum_avg > 0 and direction_up) or (momentum_avg < 0 and not direction_up)
+
+    # BUG A FIX: EMA Trend Filter
+    trend_up, trend_down, ema9, ema21 = _ema_trend_filter(df, use_closed_candle=use_closed_candle)
+    ema_aligned = (direction_up and trend_up) or (not direction_up and trend_down)
+    ema_str = f"EMA9={ema9:.5f} vs EMA21={ema21:.5f}"
+
+    # BUG B FIX: RSI Guard
+    rsi_val = _rsi_14(df, use_closed_candle=use_closed_candle)
+    rsi_blocked = (direction_up and rsi_val > 70.0) or (not direction_up and rsi_val < 30.0)
+    rsi_str = f"RSI={rsi_val:.1f}"
 
     confidence = 50.0
     if abs_pips >= 5.0:   confidence += 25.0
@@ -97,6 +163,8 @@ def evaluate_forex_15m_signal(df, use_closed_candle=False):
     if l1_passed:        confidence += 12.0
     if l4_passed:        confidence += 8.0
     if momentum_aligned: confidence += 5.0
+    if ema_aligned:      confidence += 8.0   # EMA trend bonus
+    if not rsi_blocked:  confidence += 5.0   # RSI safety bonus
     confidence = min(95.0, confidence)
 
     breakdown = {
@@ -104,8 +172,19 @@ def evaluate_forex_15m_signal(df, use_closed_candle=False):
         "l2_status": f"🟢 PASSED (3-Candle Momentum: {momentum_avg:+.5f})" if momentum_aligned else f"🟡 COUNTER-TREND (Avg: {momentum_avg:+.5f})",
         "l3_status": f"🟢 PASSED (15M Pips: {abs_pips:+.1f} Pips)" if l3_passed else f"🔴 FAILED (Weak Pips: {abs_pips:+.1f} Pips)",
         "l4_status": f"🟢 PASSED (Directional Fib: {retrace:.3f})" if l4_passed else f"🔴 FAILED (Weak Close Fib: {retrace:.3f} > 0.85)",
-        "l5_status": f"CANDLE WIN PROBABILITY: {confidence:.1f}%"
+        "l5_status": f"CANDLE WIN PROBABILITY: {confidence:.1f}%",
+        "ema_status": f"🟢 EMA TREND ALIGNED ({ema_str})" if ema_aligned else f"🔴 EMA COUNTER-TREND ({ema_str})",
+        "rsi_status": f"🟢 RSI SAFE ({rsi_str})" if not rsi_blocked else f"🔴 RSI BLOCKED ({rsi_str} — {'Overbought' if rsi_val > 70 else 'Oversold'})"
     }
+
+    # Hard blocks: RSI extreme + counter-trend EMA
+    if rsi_blocked:
+        breakdown["l5_status"] = f"🔴 REJECTED: RSI {rsi_val:.0f} {'Overbought' if rsi_val > 70 else 'Oversold'} — Reversal Risk"
+        return "WAIT", confidence, breakdown["l5_status"], breakdown
+
+    if not ema_aligned:
+        breakdown["l5_status"] = f"🔴 REJECTED: Counter-Trend Entry Blocked (EMA9 {'>' if not direction_up else '<'} EMA21)"
+        return "WAIT", confidence, breakdown["l5_status"], breakdown
 
     if confidence < 55.0 or not l3_passed or not l1_passed:
         breakdown["l5_status"] = f"🔴 REJECTED: Low Forex Win Confidence ({confidence:.1f}%)"
@@ -128,8 +207,12 @@ def predict_15m_candle_winning_direction(df, use_closed_candle=False):
     BUG 2 FIX: NaN-safe volume ratio.
     BUG 7 FIX: Tighter body ratio threshold (35%, was 30%).
     BUG 6 FIX: use_closed_candle evaluates from df.iloc[-2].
+    BUG A FIX: EMA9/21 trend filter — no counter-trend entries.
+    BUG B FIX: RSI-14 overbought/oversold guard.
+    BUG F FIX: Momentum window aligned with use_closed_candle.
+    BUG H FIX: L3 threshold raised 0.05% → 0.08%.
     """
-    if df.empty or len(df) < 4:
+    if df.empty or len(df) < 5:
         return "WAIT", 0.0, "REJECT: Insufficient Data", {}
 
     target_row = df.iloc[-2] if use_closed_candle else df.iloc[-1]
@@ -162,17 +245,26 @@ def predict_15m_candle_winning_direction(df, use_closed_candle=False):
     l2_passed = vol_ratio >= 0.70
     l2_str = f"🟢 PASSED (Volume Acceleration: {vol_ratio:.1f}x)" if l2_passed else f"🔴 FAILED (Low Volume Accel: {vol_ratio:.1f}x < 0.7x)"
 
-    l3_passed = abs(eff_pct) >= 0.05
-    l3_str = f"🟢 PASSED (15M Momentum: {eff_pct:+.2f}%)" if l3_passed else f"🔴 FAILED (Weak Momentum: {eff_pct:+.2f}% < 0.05%)"
+    # BUG H FIX: Raised L3 threshold from 0.05% → 0.08% to eliminate micro-range flat candles
+    l3_passed = abs(eff_pct) >= 0.08
+    l3_str = f"🟢 PASSED (15M Momentum: {eff_pct:+.2f}%)" if l3_passed else f"🔴 FAILED (Flat Candle: {eff_pct:+.2f}% < 0.08%)"
 
     # BUG 1 FIX: Directional fib retrace
     retrace = _directional_fib_retrace(high, low, close, direction_up)
     l4_passed = retrace <= 0.85
     l4_str = f"🟢 PASSED (Directional Fib: {retrace:.3f})" if l4_passed else f"🔴 FAILED (Weak Close Fib: {retrace:.3f} > 0.85)"
 
-    # 3-candle momentum confirmation
-    momentum_avg = _three_candle_momentum(df)
+    # BUG F FIX: 3-candle momentum with correct window
+    momentum_avg = _three_candle_momentum(df, use_closed_candle=use_closed_candle)
     momentum_aligned = (momentum_avg > 0 and direction_up) or (momentum_avg < 0 and not direction_up)
+
+    # BUG A FIX: EMA Trend Filter
+    trend_up, trend_down, ema9, ema21 = _ema_trend_filter(df, use_closed_candle=use_closed_candle)
+    ema_aligned = (direction_up and trend_up) or (not direction_up and trend_down)
+
+    # BUG B FIX: RSI Guard
+    rsi_val = _rsi_14(df, use_closed_candle=use_closed_candle)
+    rsi_blocked = (direction_up and rsi_val > 70.0) or (not direction_up and rsi_val < 30.0)
 
     confidence = 50.0
     if abs(eff_pct) >= 0.15: confidence += 20.0
@@ -182,7 +274,28 @@ def predict_15m_candle_winning_direction(df, use_closed_candle=False):
     if l2_passed:        confidence += 8.0
     if l4_passed:        confidence += 7.0
     if momentum_aligned: confidence += 5.0
+    if ema_aligned:      confidence += 8.0
+    if not rsi_blocked:  confidence += 5.0
     confidence = min(95.0, confidence)
+
+    # Hard blocks: RSI extreme & counter-trend before l5 check
+    if rsi_blocked:
+        breakdown = {
+            "l1_status": l1_str, "l2_status": l2_str, "l3_status": l3_str, "l4_status": l4_str,
+            "rsi_status": f"🔴 RSI BLOCKED (RSI={rsi_val:.1f} — {'Overbought' if rsi_val > 70 else 'Oversold'})",
+            "ema_status": f"EMA9={ema9:.2f} vs EMA21={ema21:.2f}",
+            "l5_status": f"🔴 REJECTED: RSI {rsi_val:.0f} {'Overbought' if rsi_val > 70 else 'Oversold'} — Reversal Risk"
+        }
+        return "WAIT", confidence, breakdown["l5_status"], breakdown
+
+    if not ema_aligned:
+        breakdown = {
+            "l1_status": l1_str, "l2_status": l2_str, "l3_status": l3_str, "l4_status": l4_str,
+            "rsi_status": f"🟢 RSI OK ({rsi_val:.1f})",
+            "ema_status": f"🔴 COUNTER-TREND (EMA9={ema9:.2f} {'>' if not direction_up else '<'} EMA21={ema21:.2f})",
+            "l5_status": f"🔴 REJECTED: Counter-Trend Entry (EMA9 {'>' if not direction_up else '<'} EMA21)"
+        }
+        return "WAIT", confidence, breakdown["l5_status"], breakdown
 
     l5_passed = confidence >= 55.0 and l3_passed and l4_passed and l1_passed
 
@@ -191,6 +304,8 @@ def predict_15m_candle_winning_direction(df, use_closed_candle=False):
         "l2_status": l2_str,
         "l3_status": l3_str,
         "l4_status": l4_str,
+        "rsi_status": f"🟢 RSI SAFE (RSI={rsi_val:.1f})" if not rsi_blocked else f"🔴 RSI BLOCKED ({rsi_val:.1f})",
+        "ema_status": f"🟢 EMA TREND ALIGNED (EMA9={ema9:.2f} vs EMA21={ema21:.2f})" if ema_aligned else f"🔴 COUNTER-TREND",
         "l5_status": f"🟢 CONFIRMED CANDLE WIN (Confidence: {confidence:.1f}%)" if l5_passed else f"🔴 REJECTED: Low Win Confidence ({confidence:.1f}% < 55%)"
     }
 
