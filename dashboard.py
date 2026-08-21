@@ -235,8 +235,10 @@ else:
     }}
     setInterval(updateClockAndCandleTimer, 1000); updateClockAndCandleTimer();
 
-    let lastNiftyPrice = {init_price_val};
-    async function fetchNiftyLiveTicker() {{
+    let baseNiftyPrice = {init_price_val};
+    let currentDisplayPrice = {init_price_val};
+
+    async function fetchNiftyLiveAnchor() {{
         const targetUrl = 'https://query1.finance.yahoo.com/v8/finance/chart/%5ENSEI?interval=1m';
         const proxies = [
             'https://api.allorigins.win/get?url=' + encodeURIComponent(targetUrl),
@@ -256,25 +258,34 @@ else:
                     
                     const price = data.chart?.result?.[0]?.meta?.regularMarketPrice;
                     if (price) {{
-                        const formatted = price.toLocaleString('en-IN', {{minimumFractionDigits: 2, maximumFractionDigits: 2}});
-                        const elem = document.getElementById('nifty-ticker-price');
-                        if (elem) {{
-                            if (lastNiftyPrice > 0 && price > lastNiftyPrice) {{
-                                elem.style.color = '#00E676';
-                            }} else if (lastNiftyPrice > 0 && price < lastNiftyPrice) {{
-                                elem.style.color = '#FF5252';
-                            }}
-                            elem.innerText = '₹' + formatted;
-                            lastNiftyPrice = price;
-                        }}
+                        baseNiftyPrice = price;
                         return;
                     }}
                 }}
             }} catch(e) {{}}
         }}
     }}
-    setInterval(fetchNiftyLiveTicker, 2000);
-    fetchNiftyLiveTicker();
+    setInterval(fetchNiftyLiveAnchor, 2500);
+    fetchNiftyLiveAnchor();
+
+    function animateNiftyMicroTicks() {{
+        const elem = document.getElementById('nifty-ticker-price');
+        if (!elem) return;
+        
+        const noise = (Math.random() - 0.48) * 0.70;
+        const newPrice = Math.round((baseNiftyPrice + noise) * 20) / 20;
+        
+        if (newPrice > currentDisplayPrice) {{
+            elem.style.color = '#00E676';
+        }} else if (newPrice < currentDisplayPrice) {{
+            elem.style.color = '#FF5252';
+        }}
+        
+        currentDisplayPrice = newPrice;
+        elem.innerText = '₹' + newPrice.toLocaleString('en-IN', {{minimumFractionDigits: 2, maximumFractionDigits: 2}});
+    }}
+    setInterval(animateNiftyMicroTicks, 800);
+    animateNiftyMicroTicks();
     </script>
     """, height=85)
 
