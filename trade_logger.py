@@ -71,24 +71,34 @@ def calculate_brokerage_fees(qty, entry_price, exit_price, is_crypto=False):
     else:
         return 0.0  # Zero brokerage for paper forex/options testing
 
-def record_completed_trade(symbol, strike, entry_price, exit_price, qty, status, win_loss_reason, layer_breakdown):
+def record_completed_trade(symbol, strike, entry_price, exit_price, qty, status, win_loss_reason, layer_breakdown, signal_type=None):
+    """
+    BUG 3 & 8 FIX: Accepts signal_type parameter for bulletproof directional PnL.
+    signal_type = 'BUY_PUT' or 'BUY_CALL' — used for direction; falls back to symbol parsing.
+    """
     trades = load_trades()
     ist_now = get_ist_now()
     date_time_str = ist_now.strftime("%Y-%m-%d %I:%M:%S %p IST")
     today_str = ist_now.strftime("%Y-%m-%d")
     now_ts = datetime.now().timestamp()
-    
+
     sym_upper = symbol.upper()
     is_crypto = "BTC" in sym_upper
     is_forex = "FOREX" in sym_upper or "EUR" in sym_upper
-    is_put_short = "PUT" in sym_upper or "SHORT" in sym_upper or "SELL" in sym_upper
-    
-    # DIRECTIONAL PNL FORMULA FIX: Short/Put profit = (entry_price - exit_price) * qty
-    if is_put_short:
-        gross_pnl = round((entry_price - exit_price) * qty, 2)
+
+    # BUG 3 & 8 FIX: Use signal_type param first; fall back to symbol parsing
+    if signal_type is not None:
+        is_put_short = signal_type.upper() in ["BUY_PUT", "SHORT", "SELL"]
     else:
-        gross_pnl = round((exit_price - entry_price) * qty, 2)
-        
+        is_put_short = "PUT" in sym_upper or "SHORT" in sym_upper or "SELL" in sym_upper
+
+    # DIRECTIONAL PNL FORMULA: Short/Put profit = (entry - exit) * qty
+    if is_put_short:
+        gross_pnl = round((entry_price - exit_price) * qty, 6 if is_forex else 2)
+    else:
+        gross_pnl = round((exit_price - entry_price) * qty, 6 if is_forex else 2)
+    gross_pnl = round(gross_pnl, 2)
+
     brokerage = calculate_brokerage_fees(qty, entry_price, exit_price, is_crypto=is_crypto)
     net_pnl = round(gross_pnl - brokerage, 2)
     actual_result = "WIN" if net_pnl > 0 else "LOSS"

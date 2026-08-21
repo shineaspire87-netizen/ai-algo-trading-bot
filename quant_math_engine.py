@@ -8,56 +8,109 @@ def calculate_candle_body_ratio(high, low, open_p, close_p):
     body = abs(close_p - open_p)
     return round((body / total_range) * 100.0, 1)
 
-def evaluate_forex_15m_signal(df):
+def _safe_vol_ratio(df, volume):
+    """BUG 2 FIX: NaN-safe volume ratio calculation."""
+    try:
+        if 'volume' not in df.columns:
+            return 1.0
+        vol_series = df['volume'].replace(0, np.nan).dropna()
+        if len(vol_series) < 2:
+            return 1.0
+        avg_vol = float(vol_series.iloc[-6:-1].mean())
+        if np.isnan(avg_vol) or avg_vol <= 0:
+            return 1.0
+        return float(volume) / avg_vol
+    except Exception:
+        return 1.0
+
+def _directional_fib_retrace(high, low, close, direction_up):
     """
-    Evaluates Forex 15M (EUR/USD) Candlestick Signal with dynamic 0ms momentum scaling.
+    BUG 1 FIX: Correct directional Fibonacci retrace.
+    UP candle: small = strong close near top (CALL signal quality).
+    DOWN candle: small = strong close near bottom (PUT signal quality).
     """
-    if df.empty or len(df) < 3:
-        return "WAIT", 0.0, "REJECT: Insufficient Forex Data", {}
-    
-    last_row = df.iloc[-1]
-    prev_row = df.iloc[-2]
-    
-    close = float(last_row['close'])
-    open_p = float(last_row['open'])
-    high = float(last_row['high'])
-    low = float(last_row['low'])
-    prev_close = float(prev_row['close'])
-    
-    price_change_pips = (close - prev_close) * 10000.0  # Pips
-    candle_pips = (close - open_p) * 10000.0            # Intra-candle pips
-    
-    body_ratio = calculate_candle_body_ratio(high, low, open_p, close)
     swing_range = high - low
-    retrace = (high - close) / swing_range if swing_range > 0 else 0.5
-    
-    l1_passed = body_ratio >= 35.0
-    l3_passed = abs(price_change_pips) >= 1.5 or abs(candle_pips) >= 1.5  # Min 1.5 Pips momentum
-    l4_passed = retrace <= 0.92
-    
-    confidence = 50.0
+    if swing_range <= 0:
+        return 0.5
+    if direction_up:
+        return (high - close) / swing_range
+    else:
+        return (close - low) / swing_range
+
+def _three_candle_momentum(df):
+    """3-candle momentum confirmation — returns avg directional bias."""
+    if len(df) < 4:
+        return 0.0
+    last3 = df.iloc[-4:-1]
+    deltas = []
+    for i in range(len(last3)):
+        row = last3.iloc[i]
+        try:
+            deltas.append(float(row['close']) - float(row['open']))
+        except Exception:
+            pass
+    return sum(deltas) / len(deltas) if deltas else 0.0
+
+def evaluate_forex_15m_signal(df, use_closed_candle=False):
+    """
+    Evaluates Forex 15M (EUR/USD) Candlestick Signal.
+    BUG 6 FIX: use_closed_candle=True evaluates df.iloc[-2] (last completed candle).
+    """
+    if df.empty or len(df) < 4:
+        return "WAIT", 0.0, "REJECT: Insufficient Forex Data", {}
+
+    # BUG 6 FIX: Evaluate from completed candle for confirmed signal
+    target_row = df.iloc[-2] if use_closed_candle else df.iloc[-1]
+    prev_row   = df.iloc[-3] if use_closed_candle else df.iloc[-2]
+
+    close  = float(target_row['close'])
+    open_p = float(target_row['open'])
+    high   = float(target_row['high'])
+    low    = float(target_row['low'])
+    prev_close = float(prev_row['close'])
+
+    price_change_pips = (close - prev_close) * 10000.0
+    candle_pips = (close - open_p) * 10000.0
     abs_pips = max(abs(price_change_pips), abs(candle_pips))
-    if abs_pips >= 5.0: confidence += 25.0
+    eff_pips = price_change_pips if abs(price_change_pips) >= abs(candle_pips) else candle_pips
+    direction_up = eff_pips > 0
+
+    # BUG 7 FIX: Tighter body ratio threshold (40% for Forex, was 35%)
+    body_ratio = calculate_candle_body_ratio(high, low, open_p, close)
+    l1_passed = body_ratio >= 40.0
+
+    l3_passed = abs_pips >= 1.5
+
+    # BUG 1 FIX: Directional fib retrace
+    retrace = _directional_fib_retrace(high, low, close, direction_up)
+    l4_passed = retrace <= 0.85
+
+    # 3-candle momentum confirmation
+    momentum_avg = _three_candle_momentum(df)
+    momentum_aligned = (momentum_avg > 0 and direction_up) or (momentum_avg < 0 and not direction_up)
+
+    confidence = 50.0
+    if abs_pips >= 5.0:   confidence += 25.0
     elif abs_pips >= 2.5: confidence += 18.0
     elif abs_pips >= 1.5: confidence += 12.0
-    
-    if l1_passed: confidence += 12.0
-    if l4_passed: confidence += 8.0
+
+    if l1_passed:        confidence += 12.0
+    if l4_passed:        confidence += 8.0
+    if momentum_aligned: confidence += 5.0
     confidence = min(95.0, confidence)
-    
+
     breakdown = {
-        "l1_status": f"🟢 PASSED (Forex Body: {body_ratio}%)" if l1_passed else f"🔴 FAILED (Flat Forex Body: {body_ratio}%)",
-        "l2_status": "🟢 PASSED (Global Liquidity: $7.5 Trillion)",
-        "l3_status": f"🟢 PASSED (15M Pips Momentum: {abs_pips:+.1f} Pips)" if l3_passed else f"🔴 FAILED (Weak Pips: {abs_pips:+.1f} Pips)",
-        "l4_status": f"🟢 PASSED (Fib Discount: {retrace:.3f})" if l4_passed else f"🔴 FAILED (Overextended Fib: {retrace:.3f})",
+        "l1_status": f"🟢 PASSED (Forex Body: {body_ratio}%)" if l1_passed else f"🔴 FAILED (Flat Forex Body: {body_ratio}% < 40%)",
+        "l2_status": f"🟢 PASSED (3-Candle Momentum: {momentum_avg:+.5f})" if momentum_aligned else f"🟡 COUNTER-TREND (Avg: {momentum_avg:+.5f})",
+        "l3_status": f"🟢 PASSED (15M Pips: {abs_pips:+.1f} Pips)" if l3_passed else f"🔴 FAILED (Weak Pips: {abs_pips:+.1f} Pips)",
+        "l4_status": f"🟢 PASSED (Directional Fib: {retrace:.3f})" if l4_passed else f"🔴 FAILED (Weak Close Fib: {retrace:.3f} > 0.85)",
         "l5_status": f"CANDLE WIN PROBABILITY: {confidence:.1f}%"
     }
-    
-    if confidence < 55.0 or not l3_passed:
-        breakdown["l5_status"] = f"🔴 REJECTED: Low Forex Win Confidence ({confidence:.1f}% < 55% or < 1.5 pips)"
+
+    if confidence < 55.0 or not l3_passed or not l1_passed:
+        breakdown["l5_status"] = f"🔴 REJECTED: Low Forex Win Confidence ({confidence:.1f}%)"
         return "WAIT", confidence, breakdown["l5_status"], breakdown
-    
-    eff_pips = price_change_pips if abs(price_change_pips) >= abs(candle_pips) else candle_pips
+
     if eff_pips >= +1.5:
         breakdown["l5_status"] = f"🟢 CONFIRMED: EUR/USD Bullish Momentum ({eff_pips:+.1f} Pips)"
         return "BUY_CALL", confidence, breakdown["l5_status"], breakdown
@@ -68,52 +121,71 @@ def evaluate_forex_15m_signal(df):
         breakdown["l5_status"] = f"🔴 REJECTED: Sideways Forex Range ({eff_pips:+.1f} Pips)"
         return "WAIT", confidence, breakdown["l5_status"], breakdown
 
-def predict_15m_candle_winning_direction(df):
-    if df.empty or len(df) < 3:
+def predict_15m_candle_winning_direction(df, use_closed_candle=False):
+    """
+    BTC / NIFTY 15M candle direction predictor.
+    BUG 1 FIX: Directional fib retrace.
+    BUG 2 FIX: NaN-safe volume ratio.
+    BUG 7 FIX: Tighter body ratio threshold (35%, was 30%).
+    BUG 6 FIX: use_closed_candle evaluates from df.iloc[-2].
+    """
+    if df.empty or len(df) < 4:
         return "WAIT", 0.0, "REJECT: Insufficient Data", {}
-    
-    last_row = df.iloc[-1]
-    prev_row = df.iloc[-2]
-    
-    close = float(last_row['close'])
-    open_p = float(last_row['open'])
-    high = float(last_row['high'])
-    low = float(last_row['low'])
-    volume = float(last_row['volume']) if 'volume' in last_row and float(last_row['volume']) > 0 else 50000.0
-    
+
+    target_row = df.iloc[-2] if use_closed_candle else df.iloc[-1]
+    prev_row   = df.iloc[-3] if use_closed_candle else df.iloc[-2]
+
+    close  = float(target_row['close'])
+    open_p = float(target_row['open'])
+    high   = float(target_row['high'])
+    low    = float(target_row['low'])
+
+    try:
+        volume = float(target_row['volume']) if 'volume' in target_row.index and float(target_row['volume']) > 0 else 50000.0
+    except Exception:
+        volume = 50000.0
+
     prev_close = float(prev_row['close'])
-    price_change_pct = ((close - prev_close) / prev_close) * 100.0
-    candle_change_pct = ((close - open_p) / open_p) * 100.0
+    price_change_pct  = ((close - prev_close) / prev_close) * 100.0 if prev_close > 0 else 0.0
+    candle_change_pct = ((close - open_p) / open_p) * 100.0 if open_p > 0 else 0.0
     eff_pct = price_change_pct if abs(price_change_pct) >= abs(candle_change_pct) else candle_change_pct
-    
+
+    direction_up = eff_pct > 0
+
+    # BUG 7 FIX: Tighter body ratio (35% for BTC/NIFTY, was 30%)
     body_ratio = calculate_candle_body_ratio(high, low, open_p, close)
-    l1_passed = body_ratio >= 30.0
-    l1_str = f"🟢 PASSED (Body Intensity: {body_ratio}%)" if l1_passed else f"🔴 FAILED (Low Body Intensity: {body_ratio}% < 30%)"
-    
-    avg_vol = df['volume'].rolling(5).mean().iloc[-1] if 'volume' in df and df['volume'].iloc[-1] > 0 else 50000.0
-    vol_ratio = (volume / avg_vol) if avg_vol > 0 else 1.0
+    l1_passed = body_ratio >= 35.0
+    l1_str = f"🟢 PASSED (Body Intensity: {body_ratio}%)" if l1_passed else f"🔴 FAILED (Low Body Intensity: {body_ratio}% < 35%)"
+
+    # BUG 2 FIX: NaN-safe volume ratio
+    vol_ratio = _safe_vol_ratio(df, volume)
     l2_passed = vol_ratio >= 0.70
     l2_str = f"🟢 PASSED (Volume Acceleration: {vol_ratio:.1f}x)" if l2_passed else f"🔴 FAILED (Low Volume Accel: {vol_ratio:.1f}x < 0.7x)"
-    
+
     l3_passed = abs(eff_pct) >= 0.05
     l3_str = f"🟢 PASSED (15M Momentum: {eff_pct:+.2f}%)" if l3_passed else f"🔴 FAILED (Weak Momentum: {eff_pct:+.2f}% < 0.05%)"
-    
-    swing_range = high - low
-    retrace = (high - close) / swing_range if swing_range > 0 else 0.5
-    l4_passed = retrace <= 0.92
-    l4_str = f"🟢 PASSED (Fib Discount: {retrace:.3f})" if l4_passed else f"🔴 FAILED (Overextended Fib: {retrace:.3f} > 0.92)"
-    
+
+    # BUG 1 FIX: Directional fib retrace
+    retrace = _directional_fib_retrace(high, low, close, direction_up)
+    l4_passed = retrace <= 0.85
+    l4_str = f"🟢 PASSED (Directional Fib: {retrace:.3f})" if l4_passed else f"🔴 FAILED (Weak Close Fib: {retrace:.3f} > 0.85)"
+
+    # 3-candle momentum confirmation
+    momentum_avg = _three_candle_momentum(df)
+    momentum_aligned = (momentum_avg > 0 and direction_up) or (momentum_avg < 0 and not direction_up)
+
     confidence = 50.0
     if abs(eff_pct) >= 0.15: confidence += 20.0
     elif abs(eff_pct) >= 0.08: confidence += 12.0
-    
-    if l1_passed: confidence += 10.0
-    if l2_passed: confidence += 8.0
-    if l4_passed: confidence += 7.0
+
+    if l1_passed:        confidence += 10.0
+    if l2_passed:        confidence += 8.0
+    if l4_passed:        confidence += 7.0
+    if momentum_aligned: confidence += 5.0
     confidence = min(95.0, confidence)
-    
-    l5_passed = confidence >= 55.0 and l3_passed and l4_passed
-    
+
+    l5_passed = confidence >= 55.0 and l3_passed and l4_passed and l1_passed
+
     breakdown = {
         "l1_status": l1_str,
         "l2_status": l2_str,
@@ -121,7 +193,7 @@ def predict_15m_candle_winning_direction(df):
         "l4_status": l4_str,
         "l5_status": f"🟢 CONFIRMED CANDLE WIN (Confidence: {confidence:.1f}%)" if l5_passed else f"🔴 REJECTED: Low Win Confidence ({confidence:.1f}% < 55%)"
     }
-    
+
     if l5_passed and eff_pct > 0:
         return "BUY_CALL", confidence, breakdown["l5_status"], breakdown
     elif l5_passed and eff_pct < 0:
@@ -129,8 +201,12 @@ def predict_15m_candle_winning_direction(df):
     else:
         return "WAIT", confidence, breakdown["l5_status"], breakdown
 
-def evaluate_btc_15m_signal(df):
-    return predict_15m_candle_winning_direction(df)
+def evaluate_btc_15m_signal(df, use_closed_candle=False):
+    return predict_15m_candle_winning_direction(df, use_closed_candle=use_closed_candle)
+
+def evaluate_nifty_15m_signal(df, use_closed_candle=False):
+    """BUG 10 FIX: Real candle-based NIFTY signal using actual price data."""
+    return predict_15m_candle_winning_direction(df, use_closed_candle=use_closed_candle)
 
 def evaluate_volume_and_time_filter(volume, ist_time):
     if volume < config.MIN_15M_CANDLE_VOLUME:

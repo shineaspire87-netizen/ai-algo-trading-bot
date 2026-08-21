@@ -402,30 +402,38 @@ if selected_asset == "FOREX (EUR/USD $)":
         st.warning("⏳ Connecting to 0ms Forex EUR/USD Live Feed... Please wait 3 seconds.")
         time_lib.sleep(3)
         st.rerun()
-        
+
     last_row = df_forex.iloc[-1]
     spot_price = float(last_row['close'])
+    # Entry zone = open of CURRENT (forming) candle = Minute 0 price
     entry_zone_price = float(last_row['open'])
-    current_candle_id = f"FOREX_{last_row.get('time', str(datetime.now().minute // 15))}"
-    
+
+    # BUG 4 FIX: Use DatetimeIndex for stable candle_id (yfinance FOREX has DatetimeIndex, no 'time' column)
+    try:
+        candle_ts = df_forex.index[-1]
+        current_candle_id = f"FOREX_{pd.Timestamp(candle_ts).strftime('%Y%m%d%H%M')}"
+    except Exception:
+        current_candle_id = f"FOREX_{datetime.now().strftime('%Y%m%d%H%M')[:13]}"
+
+    # BUG 6 FIX: Evaluate signal from the LAST COMPLETED candle (df.iloc[-2]) for confirmed direction
     if st.session_state.locked_candle_id != current_candle_id or st.session_state.locked_signal_state is None or (isinstance(st.session_state.locked_signal_state, tuple) and st.session_state.locked_signal_state[0] == "WAIT"):
-        signal_type, confidence_score, reason_code, breakdown = quant_math_engine.evaluate_forex_15m_signal(df_forex)
+        signal_type, confidence_score, reason_code, breakdown = quant_math_engine.evaluate_forex_15m_signal(df_forex, use_closed_candle=True)
         st.session_state.locked_candle_id = current_candle_id
         st.session_state.locked_signal_state = (signal_type, confidence_score, reason_code, breakdown)
     else:
         signal_type, confidence_score, reason_code, breakdown = st.session_state.locked_signal_state
-    
+
     st.sidebar.info(f"Symbol: {config.FOREX_SYMBOL}")
     st.sidebar.info(f"Timeframe: {config.TIMEFRAME}")
     st.sidebar.metric("EUR/USD Live Spot", f"${spot_price:.5f}")
-    
+
     forex_tp1 = entry_zone_price + (config.FOREX_TARGET_1_PIPS / 10000.0) if signal_type == "BUY_CALL" else entry_zone_price - (config.FOREX_TARGET_1_PIPS / 10000.0)
     forex_tp2 = entry_zone_price + (config.FOREX_TARGET_2_PIPS / 10000.0) if signal_type == "BUY_CALL" else entry_zone_price - (config.FOREX_TARGET_2_PIPS / 10000.0)
-    forex_sl = entry_zone_price - (config.FOREX_STOP_LOSS_PIPS / 10000.0) if signal_type == "BUY_CALL" else entry_zone_price + (config.FOREX_STOP_LOSS_PIPS / 10000.0)
+    forex_sl  = entry_zone_price - (config.FOREX_STOP_LOSS_PIPS / 10000.0) if signal_type == "BUY_CALL" else entry_zone_price + (config.FOREX_STOP_LOSS_PIPS / 10000.0)
 
-    # PERSISTENT FOREX ACTIVE TRADE ENGINE WITH CORRECT DIRECTIONAL PNL
+    # PERSISTENT FOREX ACTIVE TRADE ENGINE
     active_trade = trade_logger.load_active_trade("forex")
-    
+
     if signal_type in ["BUY_CALL", "BUY_PUT"] and current_candle_id not in st.session_state.completed_candles:
         if active_trade is None:
             active_trade = {
@@ -442,50 +450,50 @@ if selected_asset == "FOREX (EUR/USD $)":
                 "start_time_iso": datetime.now().isoformat()
             }
             trade_logger.save_active_trade(active_trade, "forex")
-            
+
             entry_alert_key = f"ENTRY_FOREX_{current_candle_id}_{signal_type}"
             if entry_alert_key not in st.session_state.notified_candles:
                 dir_emoji = "🟩 UP (BUY EUR/USD)" if signal_type == "BUY_CALL" else "🟪 DOWN (SELL EUR/USD)"
                 alert_msg = f"<b>🚀 NEW 15M FOREX TRADE ENTERED</b>\n\nDirection: <b>{dir_emoji}</b>\n⏱️ Window: <b>Minute 0-1 Candle Open</b>\n🎯 Entry Zone: <b>${entry_zone_price:.5f}</b>\n✅ Target 1 (TP1): <b>${forex_tp1:.5f}</b> (+15 Pips)\n🎯 Target 2 (TP2): <b>${forex_tp2:.5f}</b> (+35 Pips)\n🛑 Stop Loss (SL): <b>${forex_sl:.5f}</b> (-10 Pips)\n🔥 Win Confidence: <b>{confidence_score:.1f}%</b>"
                 send_telegram_alert(alert_msg)
                 st.session_state.notified_candles.add(entry_alert_key)
-            
+
         at = active_trade
         trade_finished = False
         trade_status = "WIN"
         exit_price = spot_price
-        
+
         entry_v = at.get("entry_price", spot_price)
         qty_v = at.get("quantity", 100)
         bd_v = at.get("breakdown", {})
-        
-        if at.get("signal_type") == "BUY_CALL":
+        at_signal = at.get("signal_type", signal_type)
+
+        if at_signal == "BUY_CALL":
             if spot_price >= at.get("tp1", spot_price + 0.0015): trade_finished, trade_status, exit_price = True, "WIN", at.get("tp1", spot_price)
             elif spot_price <= at.get("sl", spot_price - 0.0010): trade_finished, trade_status, exit_price = True, "LOSS", at.get("sl", spot_price)
-        elif at.get("signal_type") == "BUY_PUT":
+        elif at_signal == "BUY_PUT":
             if spot_price <= at.get("tp1", spot_price - 0.0015): trade_finished, trade_status, exit_price = True, "WIN", at.get("tp1", spot_price)
             elif spot_price >= at.get("sl", spot_price + 0.0010): trade_finished, trade_status, exit_price = True, "LOSS", at.get("sl", spot_price)
-                
-        if not trade_finished and (rem_candle_sec <= 5 or at.get("candle_id") != current_candle_id):
+
+        # BUG 9 FIX: Close trade when candle_id changes (new candle opened) — reliable exit at candle close
+        if not trade_finished and at.get("candle_id") != current_candle_id:
             trade_finished = True
             exit_price = spot_price
-            if at.get("signal_type") == "BUY_CALL":
-                trade_status = "WIN" if exit_price > entry_v else "LOSS"
-            else:
-                trade_status = "WIN" if exit_price < entry_v else "LOSS"
-                
+            trade_status = "WIN" if (exit_price > entry_v if at_signal == "BUY_CALL" else exit_price < entry_v) else "LOSS"
+
         if trade_finished:
-            pnl_calc = (exit_price - entry_v) * qty_v if at.get("signal_type") == "BUY_CALL" else (entry_v - exit_price) * qty_v
+            pnl_calc = (exit_price - entry_v) * qty_v if at_signal == "BUY_CALL" else (entry_v - exit_price) * qty_v
             post_mortem = ai_analyst.generate_trade_post_mortem(trade_status, bd_v, pnl_calc)
+            # BUG 3 FIX: Pass signal_type for bulletproof directional PnL
             recorded = trade_logger.record_completed_trade(
                 symbol=at.get("symbol", "EUR/USD"), strike=at.get("strike", "EURUSD"), entry_price=entry_v,
                 exit_price=exit_price, qty=qty_v, status=trade_status,
-                win_loss_reason=post_mortem, layer_breakdown=bd_v
+                win_loss_reason=post_mortem, layer_breakdown=bd_v, signal_type=at_signal
             )
-            
+
             actual_net_pnl = recorded.get('net_pnl', 0)
             final_header_status = "WIN" if actual_net_pnl > 0 else "LOSS"
-            
+
             st.session_state.completed_candles.add(current_candle_id)
             trade_comp_key = f"COMPLETED_FOREX_{current_candle_id}"
             if trade_comp_key not in st.session_state.notified_completed_trades:
@@ -493,7 +501,7 @@ if selected_asset == "FOREX (EUR/USD $)":
                 alert_msg = f"<b>🚨 FOREX TRADE COMPLETED: {res_emoji}</b>\n\nSymbol: <b>{at.get('symbol')}</b>\nEntry Price: <b>${entry_v:.5f}</b>\nExit Price: <b>${exit_price:.5f}</b>\nNet PnL: <b>${actual_net_pnl:,.2f}</b>"
                 send_telegram_alert(alert_msg)
                 st.session_state.notified_completed_trades.add(trade_comp_key)
-                
+
             trade_logger.clear_active_trade("forex")
             st.rerun()
 
@@ -547,26 +555,37 @@ elif selected_asset == "BITCOIN (BTC/USDT)":
     last_row = df_btc.iloc[-1]
     spot_price = float(last_row.get('close', 74448.0))
     entry_zone_price = float(last_row.get('open', 74400.0))
-    current_candle_id = f"BTC_{last_row.get('time', str(datetime.now().minute // 15))}"
-    
+
+    # BUG 5 FIX: BTC candle_id normalized to 15m epoch floor (Binance 'time' = epoch ms)
+    try:
+        raw_ts = int(last_row.get('time', 0))
+        if raw_ts > 0:
+            epoch_15m = (raw_ts // (900 * 1000)) * (900 * 1000)  # Floor to 15m
+            current_candle_id = f"BTC_{epoch_15m}"
+        else:
+            current_candle_id = f"BTC_{datetime.now().strftime('%Y%m%d%H%M')[:13]}"
+    except Exception:
+        current_candle_id = f"BTC_{datetime.now().strftime('%Y%m%d%H%M')[:13]}"
+
+    # BUG 6 FIX: Signal from completed candle for confirmed direction
     if st.session_state.locked_candle_id != current_candle_id or st.session_state.locked_signal_state is None or (isinstance(st.session_state.locked_signal_state, tuple) and st.session_state.locked_signal_state[0] == "WAIT"):
-        signal_type, confidence_score, reason_code, breakdown = quant_math_engine.evaluate_btc_15m_signal(df_btc)
+        signal_type, confidence_score, reason_code, breakdown = quant_math_engine.evaluate_btc_15m_signal(df_btc, use_closed_candle=True)
         st.session_state.locked_candle_id = current_candle_id
         st.session_state.locked_signal_state = (signal_type, confidence_score, reason_code, breakdown)
     else:
         signal_type, confidence_score, reason_code, breakdown = st.session_state.locked_signal_state
-    
+
     st.sidebar.info(f"Symbol: {config.BTC_SYMBOL}")
     st.sidebar.info(f"Timeframe: {config.TIMEFRAME}")
     st.sidebar.metric("Bitcoin Live Spot", f"${spot_price:,.2f}")
-    
+
     btc_tp1 = entry_zone_price * (1 + config.BTC_TARGET_1_PCT / 100.0) if signal_type == "BUY_CALL" else entry_zone_price * (1 - config.BTC_TARGET_1_PCT / 100.0)
     btc_tp2 = entry_zone_price * (1 + config.BTC_TARGET_2_PCT / 100.0) if signal_type == "BUY_CALL" else entry_zone_price * (1 - config.BTC_TARGET_2_PCT / 100.0)
-    btc_sl = entry_zone_price * (1 - config.BTC_STOP_LOSS_PCT / 100.0) if signal_type == "BUY_CALL" else entry_zone_price * (1 + config.BTC_STOP_LOSS_PCT / 100.0)
+    btc_sl  = entry_zone_price * (1 - config.BTC_STOP_LOSS_PCT / 100.0) if signal_type == "BUY_CALL" else entry_zone_price * (1 + config.BTC_STOP_LOSS_PCT / 100.0)
 
-    # PERSISTENT BTC ACTIVE TRADE ENGINE WITH CORRECT DIRECTIONAL PNL
+    # PERSISTENT BTC ACTIVE TRADE ENGINE
     active_trade_btc = trade_logger.load_active_trade("btc")
-    
+
     if signal_type in ["BUY_CALL", "BUY_PUT"] and current_candle_id not in st.session_state.completed_candles:
         if active_trade_btc is None:
             active_trade_btc = {
@@ -583,50 +602,50 @@ elif selected_asset == "BITCOIN (BTC/USDT)":
                 "start_time_iso": datetime.now().isoformat()
             }
             trade_logger.save_active_trade(active_trade_btc, "btc")
-            
+
             entry_alert_key = f"ENTRY_BTC_{current_candle_id}_{signal_type}"
             if entry_alert_key not in st.session_state.notified_candles:
                 dir_emoji = "🟩 UP (BUY BTC)" if signal_type == "BUY_CALL" else "🟪 DOWN (SELL BTC)"
                 alert_msg = f"<b>🚀 NEW 15M BITCOIN TRADE ENTERED</b>\n\nDirection: <b>{dir_emoji}</b>\n⏱️ Window: <b>Minute 0-1 Candle Open</b>\n🎯 Entry Zone: <b>${entry_zone_price:,.2f}</b>\n✅ Target 1 (TP1): <b>${btc_tp1:,.2f}</b> (+0.25%)\n🎯 Target 2 (TP2): <b>${btc_tp2:,.2f}</b> (+0.50%)\n🛑 Stop Loss (SL): <b>${btc_sl:,.2f}</b> (-0.15%)\n🔥 Win Confidence: <b>{confidence_score:.1f}%</b>"
                 send_telegram_alert(alert_msg)
                 st.session_state.notified_candles.add(entry_alert_key)
-            
+
         at = active_trade_btc
         trade_finished = False
         trade_status = "WIN"
         exit_price = spot_price
-        
+
         entry_v = at.get("entry_price", spot_price)
         qty_v = at.get("quantity", 25)
         bd_v = at.get("breakdown", {})
-        
-        if at.get("signal_type") == "BUY_CALL":
+        at_signal = at.get("signal_type", signal_type)
+
+        if at_signal == "BUY_CALL":
             if spot_price >= at.get("tp1", spot_price * 1.0025): trade_finished, trade_status, exit_price = True, "WIN", at.get("tp1", spot_price)
             elif spot_price <= at.get("sl", spot_price * 0.9985): trade_finished, trade_status, exit_price = True, "LOSS", at.get("sl", spot_price)
-        elif at.get("signal_type") == "BUY_PUT":
+        elif at_signal == "BUY_PUT":
             if spot_price <= at.get("tp1", spot_price * 0.9975): trade_finished, trade_status, exit_price = True, "WIN", at.get("tp1", spot_price)
             elif spot_price >= at.get("sl", spot_price * 1.0015): trade_finished, trade_status, exit_price = True, "LOSS", at.get("sl", spot_price)
-                
-        if not trade_finished and (rem_candle_sec <= 5 or at.get("candle_id") != current_candle_id):
+
+        # BUG 9 FIX: Close on candle_id change — exit at clean candle boundary
+        if not trade_finished and at.get("candle_id") != current_candle_id:
             trade_finished = True
             exit_price = spot_price
-            if at.get("signal_type") == "BUY_CALL":
-                trade_status = "WIN" if exit_price > entry_v else "LOSS"
-            else:
-                trade_status = "WIN" if exit_price < entry_v else "LOSS"
-                
+            trade_status = "WIN" if (exit_price > entry_v if at_signal == "BUY_CALL" else exit_price < entry_v) else "LOSS"
+
         if trade_finished:
-            pnl_calc = (exit_price - entry_v) * qty_v if at.get("signal_type") == "BUY_CALL" else (entry_v - exit_price) * qty_v
+            pnl_calc = (exit_price - entry_v) * qty_v if at_signal == "BUY_CALL" else (entry_v - exit_price) * qty_v
             post_mortem = ai_analyst.generate_trade_post_mortem(trade_status, bd_v, pnl_calc)
+            # BUG 3 FIX: Pass signal_type for bulletproof directional PnL
             recorded = trade_logger.record_completed_trade(
                 symbol=at.get("symbol", "BTCUSDT"), strike=at.get("strike", "BTCUSDT"), entry_price=entry_v,
                 exit_price=exit_price, qty=qty_v, status=trade_status,
-                win_loss_reason=post_mortem, layer_breakdown=bd_v
+                win_loss_reason=post_mortem, layer_breakdown=bd_v, signal_type=at_signal
             )
-            
+
             actual_net_pnl = recorded.get('net_pnl', 0)
             final_header_status = "WIN" if actual_net_pnl > 0 else "LOSS"
-            
+
             st.session_state.completed_candles.add(current_candle_id)
             trade_comp_key = f"COMPLETED_BTC_{current_candle_id}"
             if trade_comp_key not in st.session_state.notified_completed_trades:
@@ -634,7 +653,7 @@ elif selected_asset == "BITCOIN (BTC/USDT)":
                 alert_msg = f"<b>🚨 BITCOIN TRADE COMPLETED: {res_emoji}</b>\n\nSymbol: <b>{at.get('symbol')}</b>\nEntry Price: <b>${entry_v:,.2f}</b>\nExit Price: <b>${exit_price:,.2f}</b>\nNet PnL: <b>${actual_net_pnl:,.2f}</b>"
                 send_telegram_alert(alert_msg)
                 st.session_state.notified_completed_trades.add(trade_comp_key)
-                
+
             trade_logger.clear_active_trade("btc")
             st.rerun()
 
@@ -696,29 +715,19 @@ else: # NIFTY 50 MODE
     c_low = float(last_row['low'])
     c_volume = float(last_row['volume']) if 'volume' in last_row else 65000.0
     atm_strike = data_feed.calculate_atm_strike(spot_price)
-    
-    current_candle_id = f"NIFTY_{datetime.now().minute // 15}"
+
+    # BUG 4 FIX: Use DatetimeIndex for stable NIFTY candle_id
+    try:
+        nifty_ts = df.index[-1]
+        current_candle_id = f"NIFTY_{pd.Timestamp(nifty_ts).strftime('%Y%m%d%H%M')}"
+    except Exception:
+        current_candle_id = f"NIFTY_{datetime.now().strftime('%Y%m%d%H%M')[:13]}"
 
     if st.session_state.locked_candle_id != current_candle_id or st.session_state.locked_signal_state is None or (isinstance(st.session_state.locked_signal_state, tuple) and st.session_state.locked_signal_state[0] == "WAIT"):
-        prev_close = float(df['close'].iloc[-4])
-        nifty_dir = "UP" if spot_price > prev_close else ("DOWN" if spot_price < prev_close else "FLAT")
-        heavy_k = 4 if nifty_dir != "FLAT" else 2
-        heavy_a = 0.82
-        pcr_val = 1.18 if nifty_dir == "UP" else (0.82 if nifty_dir == "DOWN" else 1.0)
-        delta_pcr = +0.03 if nifty_dir == "UP" else (-0.03 if nifty_dir == "DOWN" else 0.0)
-        ce_wall = atm_strike + 200
-        pe_wall = atm_strike - 200
-        ist_now = data_feed.get_ist_now()
-
-        signal_type, reason_code, pos_multiplier, breakdown = quant_math_engine.master_institutional_decision_engine(
-            nifty_direction=nifty_dir, heavyweight_k=heavy_k, heavyweight_a=heavy_a,
-            india_vix=india_vix, delta_vix_15=delta_vix_15, pcr_oi=pcr_val, delta_pcr_15=delta_pcr,
-            nifty_spot=spot_price, nearest_ce_wall=ce_wall, nearest_pe_wall=pe_wall,
-            volume_15m=c_volume, candle_high=c_high, candle_low=c_low, ist_time=ist_now.time(),
-            nifty_target=config.UNDERLYING_TARGET_NIFTY
-        )
+        # BUG 10 FIX: Use real candle-based NIFTY engine instead of fake institutional engine
+        signal_type, confidence_score, reason_code, breakdown = quant_math_engine.evaluate_nifty_15m_signal(df, use_closed_candle=True)
         st.session_state.locked_candle_id = current_candle_id
-        st.session_state.locked_signal_state = (signal_type, 75.0, reason_code, breakdown)
+        st.session_state.locked_signal_state = (signal_type, confidence_score, reason_code, breakdown)
     else:
         signal_type, confidence_score, reason_code, breakdown = st.session_state.locked_signal_state
 
@@ -727,10 +736,10 @@ else: # NIFTY 50 MODE
     st.sidebar.metric("NIFTY 50 Spot", f"₹{spot_price:,.2f}")
     st.sidebar.metric("India VIX", f"{india_vix:.2f}", delta=f"{delta_vix_15:+.2f}")
 
-    # PERSISTENT NIFTY ACTIVE TRADE ENGINE WITH CORRECT DIRECTIONAL PNL
+    # PERSISTENT NIFTY ACTIVE TRADE ENGINE
     active_trade_nifty = trade_logger.load_active_trade("nifty")
-    nifty_tp1 = spot_price + 12.0 if signal_type == "BUY_CALL" else spot_price - 12.0
-    nifty_sl = spot_price - 8.0 if signal_type == "BUY_CALL" else spot_price + 8.0
+    nifty_tp1 = entry_zone_price + 12.0 if signal_type == "BUY_CALL" else entry_zone_price - 12.0
+    nifty_sl  = entry_zone_price - 8.0  if signal_type == "BUY_CALL" else entry_zone_price + 8.0
 
     if signal_type in ["BUY_CALL", "BUY_PUT"] and current_candle_id not in st.session_state.completed_candles:
         if active_trade_nifty is None:
@@ -748,50 +757,50 @@ else: # NIFTY 50 MODE
                 "start_time_iso": datetime.now().isoformat()
             }
             trade_logger.save_active_trade(active_trade_nifty, "nifty")
-            
+
             entry_alert_key = f"ENTRY_NIFTY_{current_candle_id}_{signal_type}"
             if entry_alert_key not in st.session_state.notified_candles:
                 dir_emoji = "🟩 UP (CALL / CE)" if signal_type == "BUY_CALL" else "🟪 DOWN (PUT / PE)"
-                alert_msg = f"<b>🚀 NEW 15M NIFTY 50 TRADE ENTERED</b>\n\nDirection: <b>{dir_emoji}</b>\nStrike: <b>NIFTY {atm_strike} {'CE' if signal_type=='BUY_CALL' else 'PE'}</b>\n⏱️ Window: <b>Minute 0-1 Candle Open</b>\n🎯 Spot Entry: <b>₹{entry_zone_price:,.2f}</b>\n✅ Target 1 (TP1): <b>₹{nifty_tp1:,.2f}</b> (+12 pts)\n🛑 Stop Loss (SL): <b>₹{nifty_sl:,.2f}</b> (-8 pts)\n🔥 Win Confidence: <b>75.0%</b>"
+                alert_msg = f"<b>🚀 NEW 15M NIFTY 50 TRADE ENTERED</b>\n\nDirection: <b>{dir_emoji}</b>\nStrike: <b>NIFTY {atm_strike} {'CE' if signal_type=='BUY_CALL' else 'PE'}</b>\n⏱️ Window: <b>Minute 0-1 Candle Open</b>\n🎯 Spot Entry: <b>₹{entry_zone_price:,.2f}</b>\n✅ Target 1 (TP1): <b>₹{nifty_tp1:,.2f}</b> (+12 pts)\n🛑 Stop Loss (SL): <b>₹{nifty_sl:,.2f}</b> (-8 pts)\n🔥 Win Confidence: <b>{confidence_score:.1f}%</b>"
                 send_telegram_alert(alert_msg)
                 st.session_state.notified_candles.add(entry_alert_key)
-            
+
         at = active_trade_nifty
         trade_finished = False
         trade_status = "WIN"
         exit_price = spot_price
-        
+
         entry_v = at.get("entry_price", spot_price)
         qty_v = at.get("quantity", 25)
         bd_v = at.get("breakdown", {})
-        
-        if at.get("signal_type") == "BUY_CALL":
-            if spot_price >= at.get("tp1", spot_price + 12.0): trade_finished, trade_status, exit_price = True, "WIN", at.get("tp1", spot_price)
-            elif spot_price <= at.get("sl", spot_price - 8.0): trade_finished, trade_status, exit_price = True, "LOSS", at.get("sl", spot_price)
-        elif at.get("signal_type") == "BUY_PUT":
-            if spot_price <= at.get("tp1", spot_price - 12.0): trade_finished, trade_status, exit_price = True, "WIN", at.get("tp1", spot_price)
-            elif spot_price >= at.get("sl", spot_price + 8.0): trade_finished, trade_status, exit_price = True, "LOSS", at.get("sl", spot_price)
-                
-        if not trade_finished and (rem_candle_sec <= 5 or at.get("candle_id") != current_candle_id):
+        at_signal = at.get("signal_type", signal_type)
+
+        if at_signal == "BUY_CALL":
+            if spot_price >= at.get("tp1", entry_v + 12.0): trade_finished, trade_status, exit_price = True, "WIN", at.get("tp1", spot_price)
+            elif spot_price <= at.get("sl", entry_v - 8.0):  trade_finished, trade_status, exit_price = True, "LOSS", at.get("sl", spot_price)
+        elif at_signal == "BUY_PUT":
+            if spot_price <= at.get("tp1", entry_v - 12.0): trade_finished, trade_status, exit_price = True, "WIN", at.get("tp1", spot_price)
+            elif spot_price >= at.get("sl", entry_v + 8.0):  trade_finished, trade_status, exit_price = True, "LOSS", at.get("sl", spot_price)
+
+        # BUG 9 FIX: Close on candle_id change — clean candle boundary exit
+        if not trade_finished and at.get("candle_id") != current_candle_id:
             trade_finished = True
             exit_price = spot_price
-            if at.get("signal_type") == "BUY_CALL":
-                trade_status = "WIN" if exit_price > entry_v else "LOSS"
-            else:
-                trade_status = "WIN" if exit_price < entry_v else "LOSS"
-                
+            trade_status = "WIN" if (exit_price > entry_v if at_signal == "BUY_CALL" else exit_price < entry_v) else "LOSS"
+
         if trade_finished:
-            pnl_calc = (exit_price - entry_v) * qty_v if at.get("signal_type") == "BUY_CALL" else (entry_v - exit_price) * qty_v
+            pnl_calc = (exit_price - entry_v) * qty_v if at_signal == "BUY_CALL" else (entry_v - exit_price) * qty_v
             post_mortem = ai_analyst.generate_trade_post_mortem(trade_status, bd_v, pnl_calc)
+            # BUG 3 FIX: Pass signal_type for bulletproof directional PnL
             recorded = trade_logger.record_completed_trade(
                 symbol=at.get("symbol", f"NIFTY {atm_strike}"), strike=at.get("strike", f"NIFTY {atm_strike}"), entry_price=entry_v,
                 exit_price=exit_price, qty=qty_v, status=trade_status,
-                win_loss_reason=post_mortem, layer_breakdown=bd_v
+                win_loss_reason=post_mortem, layer_breakdown=bd_v, signal_type=at_signal
             )
-            
+
             actual_net_pnl = recorded.get('net_pnl', 0)
             final_header_status = "WIN" if actual_net_pnl > 0 else "LOSS"
-            
+
             st.session_state.completed_candles.add(current_candle_id)
             trade_comp_key = f"COMPLETED_NIFTY_{current_candle_id}"
             if trade_comp_key not in st.session_state.notified_completed_trades:
@@ -799,7 +808,7 @@ else: # NIFTY 50 MODE
                 alert_msg = f"<b>🚨 NIFTY 50 TRADE COMPLETED: {res_emoji}</b>\n\nSymbol: <b>{at.get('symbol')}</b>\nSpot Entry: <b>₹{entry_v:,.2f}</b>\nSpot Exit: <b>₹{exit_price:,.2f}</b>\nNet PnL: <b>₹{actual_net_pnl:,.2f}</b>"
                 send_telegram_alert(alert_msg)
                 st.session_state.notified_completed_trades.add(trade_comp_key)
-                
+
             trade_logger.clear_active_trade("nifty")
             st.rerun()
 
