@@ -192,7 +192,9 @@ else:
     <div style="background-color: #111827; border: 1px solid #374151; padding: 12px; border-radius: 10px; text-align: center; font-family: monospace; color: #F3F4F6;">
         <span id="live-date" style="color: #60A5FA; font-size: 14px; font-weight: bold;"></span> &nbsp;|&nbsp; 
         <span id="live-clock" style="color: #FBBF24; font-size: 16px; font-weight: bold;"></span><br>
-        <span id="candle-timer" style="color: #FFD54F; font-size: 16px; font-weight: bold;">⏳ 15M CANDLE: Loading...</span>
+        <span id="candle-timer" style="color: #FFD54F; font-size: 16px; font-weight: bold;">⏳ 15M CANDLE: Loading...</span> &nbsp;|&nbsp;
+        <span style="color:#00E676; font-weight:bold;">⚡ NIFTY TICKER: </span>
+        <span id="nifty-ticker-price" style="color: #00E676; font-size: 20px; font-weight: bold;">₹Loading...</span>
     </div>
     <script>
     function updateClockAndCandleTimer() {
@@ -220,8 +222,42 @@ else:
         }
     }
     setInterval(updateClockAndCandleTimer, 1000); updateClockAndCandleTimer();
+
+    let lastNiftyPrice = 0;
+    async function fetchNiftyLiveTicker() {
+        const urls = [
+            'https://query1.finance.yahoo.com/v8/finance/chart/%5ENSEI?interval=1m',
+            'https://query2.finance.yahoo.com/v8/finance/chart/%5ENSEI?interval=1m',
+            'https://query1.finance.yahoo.com/v8/finance/chart/^NSEI?interval=1m'
+        ];
+        for (let url of urls) {
+            try {
+                const res = await fetch(url);
+                if (res.ok) {
+                    const data = await res.json();
+                    const price = data.chart?.result?.[0]?.meta?.regularMarketPrice;
+                    if (price) {
+                        const formatted = price.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                        const elem = document.getElementById('nifty-ticker-price');
+                        if (elem) {
+                            if (lastNiftyPrice > 0 && price > lastNiftyPrice) {
+                                elem.style.color = '#00E676';
+                            } else if (lastNiftyPrice > 0 && price < lastNiftyPrice) {
+                                elem.style.color = '#FF5252';
+                            }
+                            elem.innerText = '₹' + formatted;
+                            lastNiftyPrice = price;
+                        }
+                        break;
+                    }
+                }
+            } catch(e) {}
+        }
+    }
+    setInterval(fetchNiftyLiveTicker, 1500);
+    fetchNiftyLiveTicker();
     </script>
-    """, height=75)
+    """, height=85)
 
 if is_open:
     st.markdown(f"<div class='market-badge-open'>{market_status_text}</div>", unsafe_allow_html=True)
