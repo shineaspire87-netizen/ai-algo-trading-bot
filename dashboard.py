@@ -403,6 +403,23 @@ if selected_asset == "FOREX (EUR/USD $)":
         time_lib.sleep(3)
         st.rerun()
 
+    # FOREX MARKET CLOSED GUARD (BUG E: Weekend / session hours)
+    forex_is_open = data_feed.is_forex_market_open()
+    if not forex_is_open:
+        last_row = df_forex.iloc[-1]
+        spot_price = float(last_row['close'])
+        st.subheader("📍 LIVE FOREX (EUR/USD) 15M CANDLE WIN PREDICTOR")
+        st.markdown(f"""
+        <div class='signal-card-wait'>
+            <h2 style='color:#FFD54F; margin:0;'>🔴 FOREX MARKET CLOSED (Weekend)</h2>
+            <p style='font-size:16px; margin-top:10px;'>FOREX Trading Hours: <b>Mon 06:30 AM – Sat 05:00 AM IST (24/5)</b></p>
+            <hr style='border-color:#444;'>
+            <p style='font-size:15px;'>Last EUR/USD Price: <b>${spot_price:.5f}</b></p>
+            <p style='color:#B0BEC5; font-size:13px;'>✅ Bot will AUTO-RESUME when FOREX opens Monday 06:30 AM IST (Sydney Session).</p>
+        </div>
+        """, unsafe_allow_html=True)
+        st.stop()
+
     last_row = df_forex.iloc[-1]
     spot_price = float(last_row['close'])
     # Entry zone = open of CURRENT (forming) candle = Minute 0 price
@@ -773,8 +790,9 @@ else: # NIFTY 50 MODE
 
     # PERSISTENT NIFTY ACTIVE TRADE ENGINE
     active_trade_nifty = trade_logger.load_active_trade("nifty")
-    nifty_tp1 = entry_zone_price + 12.0 if signal_type == "BUY_CALL" else entry_zone_price - 12.0
-    nifty_sl  = entry_zone_price - 8.0  if signal_type == "BUY_CALL" else entry_zone_price + 8.0
+    # BUG G: Use config values instead of hardcoded 12/8 pts
+    nifty_tp1 = entry_zone_price + config.TARGET_1_POINTS if signal_type == "BUY_CALL" else entry_zone_price - config.TARGET_1_POINTS
+    nifty_sl  = entry_zone_price - config.STOP_LOSS_POINTS if signal_type == "BUY_CALL" else entry_zone_price + config.STOP_LOSS_POINTS
 
     if signal_type in ["BUY_CALL", "BUY_PUT"] and current_candle_id not in st.session_state.completed_candles:
         if active_trade_nifty is None:
@@ -796,7 +814,7 @@ else: # NIFTY 50 MODE
             entry_alert_key = f"ENTRY_NIFTY_{current_candle_id}_{signal_type}"
             if entry_alert_key not in st.session_state.notified_candles:
                 dir_emoji = "🟩 UP (CALL / CE)" if signal_type == "BUY_CALL" else "🟪 DOWN (PUT / PE)"
-                alert_msg = f"<b>🚀 NEW 15M NIFTY 50 TRADE ENTERED</b>\n\nDirection: <b>{dir_emoji}</b>\nStrike: <b>NIFTY {atm_strike} {'CE' if signal_type=='BUY_CALL' else 'PE'}</b>\n⏱️ Window: <b>Minute 0-1 Candle Open</b>\n🎯 Spot Entry: <b>₹{entry_zone_price:,.2f}</b>\n✅ Target 1 (TP1): <b>₹{nifty_tp1:,.2f}</b> (+12 pts)\n🛑 Stop Loss (SL): <b>₹{nifty_sl:,.2f}</b> (-8 pts)\n🔥 Win Confidence: <b>{confidence_score:.1f}%</b>"
+                alert_msg = f"<b>🚀 NEW 15M NIFTY 50 TRADE ENTERED</b>\n\nDirection: <b>{dir_emoji}</b>\nStrike: <b>NIFTY {atm_strike} {'CE' if signal_type=='BUY_CALL' else 'PE'}</b>\n⏱️ Window: <b>Minute 0-1 Candle Open</b>\n🎯 Spot Entry: <b>₹{entry_zone_price:,.2f}</b>\n✅ Target 1 (TP1): <b>₹{nifty_tp1:,.2f}</b> (+{config.TARGET_1_POINTS:.0f} pts)\n🛑 Stop Loss (SL): <b>₹{nifty_sl:,.2f}</b> (-{config.STOP_LOSS_POINTS:.0f} pts)\n🔥 Win Confidence: <b>{confidence_score:.1f}%</b>"
                 send_telegram_alert(alert_msg)
                 st.session_state.notified_candles.add(entry_alert_key)
 
@@ -811,11 +829,11 @@ else: # NIFTY 50 MODE
         at_signal = at.get("signal_type", signal_type)
 
         if at_signal == "BUY_CALL":
-            if spot_price >= at.get("tp1", entry_v + 12.0): trade_finished, trade_status, exit_price = True, "WIN", at.get("tp1", spot_price)
-            elif spot_price <= at.get("sl", entry_v - 8.0):  trade_finished, trade_status, exit_price = True, "LOSS", at.get("sl", spot_price)
+            if spot_price >= at.get("tp1", entry_v + config.TARGET_1_POINTS): trade_finished, trade_status, exit_price = True, "WIN", at.get("tp1", spot_price)
+            elif spot_price <= at.get("sl", entry_v - config.STOP_LOSS_POINTS):  trade_finished, trade_status, exit_price = True, "LOSS", at.get("sl", spot_price)
         elif at_signal == "BUY_PUT":
-            if spot_price <= at.get("tp1", entry_v - 12.0): trade_finished, trade_status, exit_price = True, "WIN", at.get("tp1", spot_price)
-            elif spot_price >= at.get("sl", entry_v + 8.0):  trade_finished, trade_status, exit_price = True, "LOSS", at.get("sl", spot_price)
+            if spot_price <= at.get("tp1", entry_v - config.TARGET_1_POINTS): trade_finished, trade_status, exit_price = True, "WIN", at.get("tp1", spot_price)
+            elif spot_price >= at.get("sl", entry_v + config.STOP_LOSS_POINTS):  trade_finished, trade_status, exit_price = True, "LOSS", at.get("sl", spot_price)
 
         # BUG 9 FIX: Close on candle_id change — clean candle boundary exit
         if not trade_finished and at.get("candle_id") != current_candle_id:
