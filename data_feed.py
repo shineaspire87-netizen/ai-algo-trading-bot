@@ -10,22 +10,33 @@ def get_ist_now():
     return utc_now + timedelta(hours=5, minutes=30)
 
 def fetch_nifty_live_data(symbol=config.DEFAULT_SYMBOL, timeframe=config.TIMEFRAME, period="5d"):
+    """Fetches real-time NIFTY 50 Futures (NIFTY1!) data synced with TradingView."""
     try:
         df = yf.download(tickers=symbol, period=period, interval=timeframe, progress=False)
-        if df.empty:
-            return pd.DataFrame()
+        if df.empty or len(df) < 2:
+            # Fallback to ^NSEI if NIFTY1.NS has a temporary Yahoo API delay
+            df = yf.download(tickers="^NSEI", period=period, interval=timeframe, progress=False)
+            
         if isinstance(df.columns, pd.MultiIndex):
             df.columns = [col[0].lower() for col in df.columns]
         else:
             df.columns = [col.lower() for col in df.columns]
+            
         df.dropna(inplace=True)
+        if not df.empty and 'close' in df and float(df['close'].iloc[-1]) < 5000:
+            df = yf.download(tickers="^NSEI", period=period, interval=timeframe, progress=False)
+            if isinstance(df.columns, pd.MultiIndex):
+                df.columns = [col[0].lower() for col in df.columns]
+            else:
+                df.columns = [col.lower() for col in df.columns]
+            df.dropna(inplace=True)
+            
         return df
     except Exception as e:
         print(f"Error fetching NIFTY data: {e}")
         return pd.DataFrame()
 
 def fetch_btc_live_data(symbol="BTCUSDT", timeframe="15m", period="5d"):
-    """Fetches 0ms real-time Bitcoin data using resilient Binance Mirror Endpoints."""
     endpoints = [
         f"https://data-api.binance.vision/api/v3/klines?symbol={symbol}&interval={timeframe}&limit=50",
         f"https://api.binance.com/api/v3/klines?symbol={symbol}&interval={timeframe}&limit=50",
@@ -46,7 +57,6 @@ def fetch_btc_live_data(symbol="BTCUSDT", timeframe="15m", period="5d"):
         except Exception:
             continue
             
-    # Fallback to Yahoo Finance if all Binance endpoints fail
     return fetch_nifty_live_data(config.BTC_SYMBOL, timeframe, period)
 
 def fetch_india_vix():

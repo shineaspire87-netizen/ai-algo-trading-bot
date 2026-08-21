@@ -2,27 +2,27 @@ import os
 from datetime import time
 
 PRIMARY_MODE = "NIFTY50_OPTIONS"
-DEFAULT_SYMBOL = "^NSEI"           # NIFTY 50 Ticker
-BTC_SYMBOL = "BTC-USD"             # Bitcoin Ticker
-VIX_SYMBOL = "^INDIAVIX"           # India VIX Ticker
-TIMEFRAME = "15m"                  # 15-Minute Timeframe
+DEFAULT_SYMBOL = "NIFTY1.NS"         # Synced to TradingView NIFTY1! Futures
+BTC_SYMBOL = "BTC-USD"               # Bitcoin Ticker
+VIX_SYMBOL = "^INDIAVIX"             # India VIX Ticker
+TIMEFRAME = "15m"                    # 15-Minute Timeframe
 
-# --- USER CAPITAL BUDGETING ---
-BTC_START_CAPITAL_USD = 20.00      # $20.00 USD Starting Capital for Bitcoin
-NIFTY_START_CAPITAL_INR = 2000.00  # ₹2,000.00 INR Starting Capital for NIFTY 50
+# USER CAPITAL BUDGETING
+BTC_START_CAPITAL_USD = 20.00        # $20.00 USD Starting Capital for Bitcoin
+NIFTY_START_CAPITAL_INR = 2000.00    # ₹2,000.00 INR Starting Capital for NIFTY 50
 
-# --- NIFTY 15M MICRO-SCALP RISK PARAMETERS (RUPEES ₹) ---
+# NIFTY 15M MICRO-SCALP RISK PARAMETERS (RUPEES ₹)
 NIFTY_LOT_SIZE = 25
 DEFAULT_LOTS = 1
-STOP_LOSS_POINTS = 8.0             # Micro SL: -8 pts (-₹200 / lot)
-TARGET_1_POINTS = 12.0            # Micro TP1: +12 pts (+₹300 / lot)
-TARGET_2_POINTS = 25.0            # Micro TP2: +25 pts (+₹625 / lot)
+STOP_LOSS_POINTS = 8.0               # Micro SL: -8 pts (-₹200 / lot)
+TARGET_1_POINTS = 12.0              # Micro TP1: +12 pts (+₹300 / lot)
+TARGET_2_POINTS = 25.0              # Micro TP2: +25 pts (+₹625 / lot)
 UNDERLYING_TARGET_NIFTY = 15.0
 
-# --- BITCOIN 15M MICRO-SCALP RISK PARAMETERS ($ USD) ---
-BTC_STOP_LOSS_PCT = 0.15           # Micro -0.15% Stop Loss (-$0.30 USD)
-BTC_TARGET_1_PCT = 0.25            # Micro +0.25% Quick Target (+$0.50 USD)
-BTC_TARGET_2_PCT = 0.50            # Micro +0.50% Trend Target (+$1.00 USD)
+# BITCOIN 15M MICRO-SCALP RISK PARAMETERS ($ USD)
+BTC_STOP_LOSS_PCT = 0.15             # Micro -0.15% Stop Loss (-$0.30 USD)
+BTC_TARGET_1_PCT = 0.25              # Micro +0.25% Quick Target (+$0.50 USD)
+BTC_TARGET_2_PCT = 0.50              # Micro +0.50% Trend Target (+$1.00 USD)
 
 # STRICT 1-CANDLE EXPIRATION
 MAX_HOLDING_CANDLES = 1
