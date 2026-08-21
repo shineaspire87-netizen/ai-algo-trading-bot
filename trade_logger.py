@@ -168,10 +168,21 @@ def get_weekly_summary(days=7, asset_filter=None):
     }
 
 def get_account_capital_summary(asset_filter="BTC", custom_start_cap=None):
-    is_btc = "BTC" in asset_filter.upper()
-    default_cap = getattr(config, "BTC_START_CAPITAL_USD", 20.00) if is_btc else getattr(config, "NIFTY_START_CAPITAL_INR", 2000.00)
+    asset_str = str(asset_filter).upper()
+    is_btc = "BTC" in asset_str
+    is_forex = "FOREX" in asset_str
+    
+    if is_btc:
+        default_cap = getattr(config, "BTC_START_CAPITAL_USD", 20.00)
+        curr_sym = "$"
+    elif is_forex:
+        default_cap = getattr(config, "FOREX_START_CAPITAL_USD", 100.00)
+        curr_sym = "$"
+    else:
+        default_cap = getattr(config, "NIFTY_START_CAPITAL_INR", 2000.00)
+        curr_sym = "₹"
+
     start_cap = custom_start_cap if custom_start_cap is not None else default_cap
-    curr_sym = "$" if is_btc else "₹"
     
     summary = get_weekly_summary(days=30, asset_filter=asset_filter)
     cum_pnl = summary.get("net_pnl", 0.0)
