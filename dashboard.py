@@ -4,8 +4,10 @@ import numpy as np
 import time as time_lib
 from datetime import datetime, time, timezone, timedelta
 import requests
+import importlib
 
 import config
+importlib.reload(config)
 import data_feed
 import quant_math_engine
 import trade_logger
@@ -70,7 +72,7 @@ asset_key = "BTC" if selected_asset == "BITCOIN (BTC/USDT)" else "NIFTY"
 currency_sym = "$" if asset_key == "BTC" else "₹"
 
 # Custom Capital Input Override in Sidebar
-default_cap_val = config.BTC_START_CAPITAL_USD if asset_key == "BTC" else config.NIFTY_START_CAPITAL_INR
+default_cap_val = getattr(config, "BTC_START_CAPITAL_USD", 20.00) if asset_key == "BTC" else getattr(config, "NIFTY_START_CAPITAL_INR", 2000.00)
 user_cap_input = st.sidebar.number_input(f"💰 {asset_key} Starting Capital ({currency_sym}):", min_value=1.0, value=float(default_cap_val), step=5.0)
 
 if st.sidebar.button(f"🧹 Clear {asset_key} History"):
@@ -91,11 +93,17 @@ col_c1, col_c2, col_c3, col_c4 = st.columns(4)
 col_c1.metric("Starting Capital", f"{currency_sym}{cap_summary['starting_capital']:,.2f}")
 col_c2.metric("Current Equity", f"{currency_sym}{cap_summary['current_equity']:,.2f}")
 if asset_key == "BTC":
-    col_c3.metric("Max Risk / Trade", f"-${config.BTC_START_CAPITAL_USD * (config.BTC_STOP_LOSS_PCT/100):.2f} (-0.15%)")
-    col_c4.metric("Target 1 Profit", f"+${config.BTC_START_CAPITAL_USD * (config.BTC_TARGET_1_PCT/100):.2f} (+0.25%)")
+    btc_start_cap = getattr(config, "BTC_START_CAPITAL_USD", 20.00)
+    btc_sl_pct = getattr(config, "BTC_STOP_LOSS_PCT", 0.15)
+    btc_tp1_pct = getattr(config, "BTC_TARGET_1_PCT", 0.25)
+    col_c3.metric("Max Risk / Trade", f"-${btc_start_cap * (btc_sl_pct/100):.2f} (-0.15%)")
+    col_c4.metric("Target 1 Profit", f"+${btc_start_cap * (btc_tp1_pct/100):.2f} (+0.25%)")
 else:
-    col_c3.metric("Max Risk / Trade", f"-₹{config.STOP_LOSS_POINTS * config.NIFTY_LOT_SIZE:,.0f} (-8 pts)")
-    col_c4.metric("Target 1 Profit", f"+₹{config.TARGET_1_POINTS * config.NIFTY_LOT_SIZE:,.0f} (+12 pts)")
+    nifty_sl_pts = getattr(config, "STOP_LOSS_POINTS", 8.0)
+    nifty_tp1_pts = getattr(config, "TARGET_1_POINTS", 12.0)
+    nifty_lot = getattr(config, "NIFTY_LOT_SIZE", 25)
+    col_c3.metric("Max Risk / Trade", f"-₹{nifty_sl_pts * nifty_lot:,.0f} (-8 pts)")
+    col_c4.metric("Target 1 Profit", f"+₹{nifty_tp1_pts * nifty_lot:,.0f} (+12 pts)")
 
 st.divider()
 

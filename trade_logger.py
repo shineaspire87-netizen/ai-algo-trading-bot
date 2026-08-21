@@ -1,7 +1,9 @@
 import json
 import os
 from datetime import datetime, timezone, timedelta
+import importlib
 import config
+importlib.reload(config)
 
 TRADES_FILE = "trades.json"
 
@@ -167,7 +169,7 @@ def get_weekly_summary(days=7, asset_filter=None):
 
 def get_account_capital_summary(asset_filter="BTC", custom_start_cap=None):
     is_btc = "BTC" in asset_filter.upper()
-    default_cap = config.BTC_START_CAPITAL_USD if is_btc else config.NIFTY_START_CAPITAL_INR
+    default_cap = getattr(config, "BTC_START_CAPITAL_USD", 20.00) if is_btc else getattr(config, "NIFTY_START_CAPITAL_INR", 2000.00)
     start_cap = custom_start_cap if custom_start_cap is not None else default_cap
     curr_sym = "$" if is_btc else "₹"
     
