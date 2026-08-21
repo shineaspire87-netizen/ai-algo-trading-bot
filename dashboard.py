@@ -714,6 +714,27 @@ else: # NIFTY 50 MODE
     c_high = float(last_row['high'])
     c_low = float(last_row['low'])
     c_volume = float(last_row['volume']) if 'volume' in last_row else 65000.0
+
+    # PRICE SANITY CHECK: NIFTY 50 should be between 5000 and 100000
+    # If price is < 5000 it means yfinance returned garbage data (MultiIndex parsing error)
+    if spot_price < 5000.0:
+        st.error(f"⚠️ Invalid NIFTY Price Detected: ₹{spot_price:.2f}. Fetching fresh data...")
+        # Fallback: try the spot index directly
+        try:
+            df_fallback = data_feed.fetch_nifty_live_data("^NSEI", config.TIMEFRAME)
+            if not df_fallback.empty and float(df_fallback.iloc[-1]['close']) > 5000:
+                df = df_fallback
+                last_row = df.iloc[-1]
+                spot_price = float(last_row['close'])
+                entry_zone_price = float(last_row['open'])
+                c_high = float(last_row['high'])
+                c_low = float(last_row['low'])
+        except Exception:
+            pass
+        if spot_price < 5000.0:
+            st.error("🔴 NIFTY data feed error. Cannot display accurate price. Please refresh in a few seconds.")
+            st.stop()
+
     atm_strike = data_feed.calculate_atm_strike(spot_price)
 
     # BUG 4 FIX: Use DatetimeIndex for stable NIFTY candle_id
@@ -722,6 +743,20 @@ else: # NIFTY 50 MODE
         current_candle_id = f"NIFTY_{pd.Timestamp(nifty_ts).strftime('%Y%m%d%H%M')}"
     except Exception:
         current_candle_id = f"NIFTY_{datetime.now().strftime('%Y%m%d%H%M')[:13]}"
+
+    # MARKET CLOSED GUARD: Block signal generation after NSE hours (3:30 PM)
+    if not is_open:
+        st.subheader("📍 LIVE NIFTY 50 15M CANDLE WIN PREDICTOR")
+        st.markdown(f"""
+        <div class='signal-card-wait'>
+            <h2 style='color:#FFD54F; margin:0;'>🔴 NSE MARKET CLOSED</h2>
+            <p style='font-size:16px; margin-top:10px;'>Trading Hours: <b>09:15 AM – 03:30 PM IST (Mon-Fri)</b></p>
+            <hr style='border-color:#444;'>
+            <p style='font-size:15px;'>Last Close Price: <b>₹{spot_price:,.2f}</b> | India VIX: <b>{india_vix:.2f}</b></p>
+            <p style='color:#B0BEC5; font-size:13px;'>✅ Bot will AUTO-RESUME trading signals when NSE opens tomorrow at 09:15 AM IST.</p>
+        </div>
+        """, unsafe_allow_html=True)
+        st.stop()
 
     if st.session_state.locked_candle_id != current_candle_id or st.session_state.locked_signal_state is None or (isinstance(st.session_state.locked_signal_state, tuple) and st.session_state.locked_signal_state[0] == "WAIT"):
         # BUG 10 FIX: Use real candle-based NIFTY engine instead of fake institutional engine

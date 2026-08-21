@@ -10,33 +10,48 @@ def get_ist_now():
     return utc_now + timedelta(hours=5, minutes=30)
 
 def fetch_nifty_live_data(symbol=config.DEFAULT_SYMBOL, timeframe=config.TIMEFRAME, period="5d"):
-    try:
-        df = yf.download(tickers=symbol, period=period, interval=timeframe, progress=False)
-        if df.empty or len(df) < 2 or (isinstance(df, pd.DataFrame) and 'close' in df and len(df['close']) > 0 and float(df['close'].iloc[-1]) < 5000):
-            df = yf.download(tickers="^NSEI", period=period, interval=timeframe, progress=False)
-            symbol_to_use = "^NSEI"
-        else:
-            symbol_to_use = symbol
-            
+    """
+    Fetches NIFTY 50 live 15M OHLCV data.
+    Price sanity check: if returned price < 5000 it's garbage data → retry with ^NSEI.
+    """
+    def _clean_df(df):
+        """Flatten MultiIndex columns and clean the DataFrame."""
+        if df.empty:
+            return df
         if isinstance(df.columns, pd.MultiIndex):
-            df.columns = [col[0].lower() for col in df.columns]
+            # Flatten: take first level (Open/High/Low/Close/Volume), lowercase
+            df.columns = [col[0].lower() if col[0] else col[1].lower() for col in df.columns]
         else:
             df.columns = [col.lower() for col in df.columns]
-            
         df.dropna(inplace=True)
-        
-        try:
-            ticker_obj = yf.Ticker(symbol_to_use)
-            fast_price = float(ticker_obj.fast_info.get('lastPrice', 0.0) or ticker_obj.fast_info.get('regularMarketPrice', 0.0))
-            if fast_price > 10000.0:
-                df.loc[df.index[-1], 'close'] = fast_price
-        except Exception:
-            pass
-            
+        # Drop duplicate column names (MultiIndex artefact)
+        df = df.loc[:, ~df.columns.duplicated()]
         return df
-    except Exception as e:
-        print(f"Error fetching NIFTY data: {e}")
-        return pd.DataFrame()
+
+    for sym in [symbol, "^NSEI"]:
+        try:
+            df = yf.download(tickers=sym, period=period, interval=timeframe, progress=False, auto_adjust=True)
+            df = _clean_df(df)
+            if df.empty or len(df) < 2:
+                continue
+            price_check = float(df['close'].iloc[-1])
+            if price_check < 5000.0:
+                continue  # Bad data — try next symbol
+            # 0ms fast_info real-time close override
+            try:
+                ticker_obj = yf.Ticker(sym)
+                fast_price = float(ticker_obj.fast_info.get('lastPrice', 0.0) or ticker_obj.fast_info.get('regularMarketPrice', 0.0))
+                if fast_price > 5000.0:
+                    df.loc[df.index[-1], 'close'] = fast_price
+            except Exception:
+                pass
+            return df
+        except Exception as e:
+            print(f"Error fetching NIFTY data ({sym}): {e}")
+            continue
+
+    return pd.DataFrame()
+
 
 def fetch_btc_live_data(symbol="BTCUSDT", timeframe="15m", period="5d"):
     endpoints = [
