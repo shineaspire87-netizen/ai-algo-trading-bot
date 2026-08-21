@@ -1,31 +1,31 @@
-# ================================================================================
-# ANTONY QUANT AI TERMINAL - CONFIGURATION ENGINE (15M PURE CANDLE SCALPER)
-# ================================================================================
 import os
 from datetime import time
 
 PRIMARY_MODE = "NIFTY50_OPTIONS"
 DEFAULT_SYMBOL = "^NSEI"           # NIFTY 50 Ticker
-BTC_SYMBOL = "BTCUSDT"             # Binance Spot Bitcoin Ticker
+BTC_SYMBOL = "BTC-USD"             # Bitcoin Ticker
 VIX_SYMBOL = "^INDIAVIX"           # India VIX Ticker
-TIMEFRAME = "15m"                  # 15-Minute Candle Timeframe
-INITIAL_CAPITAL = 50.0             # Default Bot Trading Capital ($50.00 USD)
+TIMEFRAME = "15m"                  # 15-Minute Timeframe
+
+# --- USER CAPITAL BUDGETING ---
+BTC_START_CAPITAL_USD = 20.00      # $20.00 USD Starting Capital for Bitcoin
+NIFTY_START_CAPITAL_INR = 2000.00  # ₹2,000.00 INR Starting Capital for NIFTY 50
 
 # --- NIFTY 15M MICRO-SCALP RISK PARAMETERS (RUPEES ₹) ---
 NIFTY_LOT_SIZE = 25
 DEFAULT_LOTS = 1
-STOP_LOSS_POINTS = 8.0             # Micro SL: -8 pts (Strict Risk: ₹200 / lot)
-TARGET_1_POINTS = 12.0            # Micro TP1: +12 pts (Quick Profit: ₹300 / lot)
-TARGET_2_POINTS = 25.0            # Micro TP2: +25 pts (Max Profit: ₹625 / lot)
-UNDERLYING_TARGET_NIFTY = 15.0     # Micro NIFTY spot move target
+STOP_LOSS_POINTS = 8.0             # Micro SL: -8 pts (-₹200 / lot)
+TARGET_1_POINTS = 12.0            # Micro TP1: +12 pts (+₹300 / lot)
+TARGET_2_POINTS = 25.0            # Micro TP2: +25 pts (+₹625 / lot)
+UNDERLYING_TARGET_NIFTY = 15.0
 
 # --- BITCOIN 15M MICRO-SCALP RISK PARAMETERS ($ USD) ---
-BTC_STOP_LOSS_PCT = 0.15           # Micro -0.15% Stop Loss (Just ~$100 USD)
-BTC_TARGET_1_PCT = 0.25            # Micro +0.25% Quick Target (Just ~$170 USD)
-BTC_TARGET_2_PCT = 0.50            # Micro +0.45% Trend Target (Just ~$300 USD)
+BTC_STOP_LOSS_PCT = 0.15           # Micro -0.15% Stop Loss (-$0.30 USD)
+BTC_TARGET_1_PCT = 0.25            # Micro +0.25% Quick Target (+$0.50 USD)
+BTC_TARGET_2_PCT = 0.50            # Micro +0.50% Trend Target (+$1.00 USD)
 
 # STRICT 1-CANDLE EXPIRATION
-MAX_HOLDING_CANDLES = 1            # Strictly exit at 15-Min candle close (15m MAX)
+MAX_HOLDING_CANDLES = 1
 
 # 5-LAYER INSTITUTIONAL THRESHOLDS
 MIN_HEAVYWEIGHT_K = 4
@@ -44,5 +44,5 @@ FIB_DISCOUNT_MAX = 0.886
 LUNCH_HOUR_START = time(11, 30)
 LUNCH_HOUR_END = time(13, 30)
 
-TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "8939955418:AAFXd58Nwr84uIGeqrvIqvntveWwHjqmenE")
-TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "1072750499")
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
+TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "")

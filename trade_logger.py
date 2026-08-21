@@ -1,6 +1,7 @@
 import json
 import os
 from datetime import datetime, timezone, timedelta
+import config
 
 TRADES_FILE = "trades.json"
 
@@ -50,7 +51,6 @@ def delete_trade_by_id(trade_id):
     save_trades(updated_trades)
 
 def clear_asset_trades(asset_filter=None):
-    """Clears trade logs for a specific asset or all trades if asset_filter is None."""
     if asset_filter is None:
         save_trades([])
         clear_active_trade("btc")
@@ -64,7 +64,7 @@ def clear_asset_trades(asset_filter=None):
 def calculate_brokerage_fees(qty, entry_price, exit_price, is_crypto=False):
     if is_crypto:
         turnover = (entry_price + exit_price) * qty
-        return round(turnover * 0.00075, 2)  # 0.075% Binance trading fee
+        return round(turnover * 0.00075, 2)
     else:
         flat_brokerage = 40.0
         turnover = (entry_price + exit_price) * qty
@@ -83,7 +83,6 @@ def record_completed_trade(symbol, strike, entry_price, exit_price, qty, status,
     net_pnl = round(gross_pnl - brokerage, 2)
     actual_result = "WIN" if net_pnl > 0 else "LOSS"
     
-    # DEDUPLICATION CHECK
     if trades:
         last_trade = trades[-1]
         if last_trade.get("symbol") == symbol and abs(last_trade.get("entry_price", 0) - entry_price) < 0.01 and last_trade.get("result") == actual_result:
@@ -164,4 +163,23 @@ def get_weekly_summary(days=7, asset_filter=None):
         "losses": losses,
         "win_rate": round(win_rate, 1),
         "net_pnl": round(net_pnl, 2)
+    }
+
+def get_account_capital_summary(asset_filter="BTC", custom_start_cap=None):
+    is_btc = "BTC" in asset_filter.upper()
+    default_cap = config.BTC_START_CAPITAL_USD if is_btc else config.NIFTY_START_CAPITAL_INR
+    start_cap = custom_start_cap if custom_start_cap is not None else default_cap
+    curr_sym = "$" if is_btc else "₹"
+    
+    summary = get_weekly_summary(days=30, asset_filter=asset_filter)
+    cum_pnl = summary.get("net_pnl", 0.0)
+    current_equity = round(start_cap + cum_pnl, 2)
+    roi_pct = round((cum_pnl / start_cap) * 100.0, 1) if start_cap > 0 else 0.0
+    
+    return {
+        "starting_capital": start_cap,
+        "current_equity": current_equity,
+        "cum_pnl": cum_pnl,
+        "roi_pct": roi_pct,
+        "currency": curr_sym
     }
