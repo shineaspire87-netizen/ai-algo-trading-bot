@@ -4,12 +4,14 @@ from datetime import time
 PRIMARY_MODE = "NIFTY50_OPTIONS"
 DEFAULT_SYMBOL = "NIFTY1.NS"         # Synced to TradingView NIFTY1! Futures
 BTC_SYMBOL = "BTC-USD"               # Bitcoin Ticker
+FOREX_SYMBOL = "EURUSD=X"            # EUR/USD Forex Ticker
 VIX_SYMBOL = "^INDIAVIX"             # India VIX Ticker
 TIMEFRAME = "15m"                    # 15-Minute Timeframe
 
 # USER CAPITAL BUDGETING
 BTC_START_CAPITAL_USD = 20.00        # $20.00 USD Starting Capital for Bitcoin
 NIFTY_START_CAPITAL_INR = 2000.00    # ₹2,000.00 INR Starting Capital for NIFTY 50
+FOREX_START_CAPITAL_USD = 100.00     # $100.00 USD Starting Capital for Forex
 
 # NIFTY 15M MICRO-SCALP RISK PARAMETERS (RUPEES ₹)
 NIFTY_LOT_SIZE = 25
@@ -23,6 +25,11 @@ UNDERLYING_TARGET_NIFTY = 15.0
 BTC_STOP_LOSS_PCT = 0.15             # Micro -0.15% Stop Loss (-$0.30 USD)
 BTC_TARGET_1_PCT = 0.25              # Micro +0.25% Quick Target (+$0.50 USD)
 BTC_TARGET_2_PCT = 0.50              # Micro +0.50% Trend Target (+$1.00 USD)
+
+# FOREX 15M SCALP RISK PARAMETERS (PIPS & $ USD)
+FOREX_STOP_LOSS_PIPS = 10.0          # -10 Pips SL (-$1.00 USD per 0.01 lot)
+FOREX_TARGET_1_PIPS = 15.0           # +15 Pips TP1 (+$1.50 USD per 0.01 lot)
+FOREX_TARGET_2_PIPS = 35.0           # +35 Pips TP2 (+$3.50 USD per 0.01 lot)
 
 # STRICT 1-CANDLE EXPIRATION
 MAX_HOLDING_CANDLES = 1
