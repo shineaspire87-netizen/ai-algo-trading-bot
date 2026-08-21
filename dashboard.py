@@ -69,21 +69,15 @@ st.markdown("""
 st.sidebar.title("⚙️ System Control")
 selected_asset = st.sidebar.selectbox("🎯 Select Active Trading Market:", ["FOREX (EUR/USD $)", "BITCOIN (BTC/USDT)", "NIFTY 50 (₹)"])
 
-if selected_asset == "BITCOIN (BTC/USDT)":
-    asset_key = "BTC"
-elif selected_asset == "FOREX (EUR/USD $)":
-    asset_key = "FOREX"
-else:
-    asset_key = "NIFTY"
+if selected_asset == "BITCOIN (BTC/USDT)": asset_key = "BTC"
+elif selected_asset == "FOREX (EUR/USD $)": asset_key = "FOREX"
+else: asset_key = "NIFTY"
 
 currency_sym = "$" if asset_key in ["BTC", "FOREX"] else "₹"
 
-if asset_key == "BTC":
-    default_cap_val = getattr(config, "BTC_START_CAPITAL_USD", 20.00)
-elif asset_key == "FOREX":
-    default_cap_val = getattr(config, "FOREX_START_CAPITAL_USD", 100.00)
-else:
-    default_cap_val = getattr(config, "NIFTY_START_CAPITAL_INR", 2000.00)
+if asset_key == "BTC": default_cap_val = getattr(config, "BTC_START_CAPITAL_USD", 20.00)
+elif asset_key == "FOREX": default_cap_val = getattr(config, "FOREX_START_CAPITAL_USD", 100.00)
+else: default_cap_val = getattr(config, "NIFTY_START_CAPITAL_INR", 2000.00)
 
 user_cap_input = st.sidebar.number_input(f"💰 {asset_key} Starting Capital ({currency_sym}):", min_value=1.0, value=float(default_cap_val), step=5.0)
 
@@ -91,6 +85,12 @@ if st.sidebar.button(f"🧹 Clear {asset_key} History"):
     trade_logger.clear_asset_trades(asset_key)
     st.sidebar.success(f"{asset_key} History Cleared!")
     st.rerun()
+
+ist_now_dt = data_feed.get_ist_now()
+min_val = ist_now_dt.minute
+sec_val = ist_now_dt.second
+elapsed_candle_sec = ((min_val % 15) * 60) + sec_val
+rem_candle_sec = 900 - elapsed_candle_sec
 
 with st.sidebar.expander("🛠️ Active Trade Debug Status", expanded=True):
     cur_active_trade = trade_logger.load_active_trade(asset_key.lower())
@@ -106,6 +106,7 @@ with st.sidebar.expander("🛠️ Active Trade Debug Status", expanded=True):
             st.write(f"**TP1 Target:** {currency_sym}{cur_active_trade.get('tp1', 0.0):,.2f}")
             st.write(f"**Stop Loss:** {currency_sym}{cur_active_trade.get('sl', 0.0):,.2f}")
         st.write(f"**Candle ID:** {cur_active_trade.get('candle_id', 'N/A')}")
+        st.write(f"**Time Remaining:** {rem_candle_sec // 60}m {rem_candle_sec % 60}s")
     else:
         st.info(f"ℹ️ No Active {asset_key} Trade currently running.")
 
@@ -165,12 +166,6 @@ st.markdown(f"""
 
 st.divider()
 
-ist_now_dt = data_feed.get_ist_now()
-min_val = ist_now_dt.minute
-sec_val = ist_now_dt.second
-elapsed_candle_sec = ((min_val % 15) * 60) + sec_val
-rem_candle_sec = 900 - elapsed_candle_sec
-
 if rem_candle_sec >= 660:
     time_badge_html = "<div class='time-badge-safe'>🟢 SAFEST ENTRY WINDOW ACTIVE (MIN 0-4): EXECUTE NOW @ ENTRY ZONE</div>"
 elif 300 <= rem_candle_sec < 660:
@@ -178,7 +173,6 @@ elif 300 <= rem_candle_sec < 660:
 else:
     time_badge_html = "<div class='time-badge-late'>🔴 LATE ENTRY WARNING: TOO LATE FOR THIS CANDLE (WAIT FOR NEXT CANDLE OPEN)</div>"
 
-# DYNAMIC TICKER COMPONENTS (BITCOIN WEBSOCKET, FOREX 0MS TICKER & NIFTY TICKER)
 if selected_asset == "BITCOIN (BTC/USDT)":
     st.components.v1.html("""
     <div style="background-color: #111827; border: 1px solid #374151; padding: 12px; border-radius: 10px; text-align: center; font-family: monospace; color: #F3F4F6;">
@@ -427,11 +421,12 @@ if selected_asset == "FOREX (EUR/USD $)":
     forex_tp2 = entry_zone_price + (config.FOREX_TARGET_2_PIPS / 10000.0) if signal_type == "BUY_CALL" else entry_zone_price - (config.FOREX_TARGET_2_PIPS / 10000.0)
     forex_sl = entry_zone_price - (config.FOREX_STOP_LOSS_PIPS / 10000.0) if signal_type == "BUY_CALL" else entry_zone_price + (config.FOREX_STOP_LOSS_PIPS / 10000.0)
 
-    active_trade_forex = trade_logger.load_active_trade("forex")
-
+    # PERSISTENT FOREX ACTIVE TRADE ENGINE WITH CORRECT DIRECTIONAL PNL
+    active_trade = trade_logger.load_active_trade("forex")
+    
     if signal_type in ["BUY_CALL", "BUY_PUT"]:
-        if active_trade_forex is None:
-            active_trade_forex = {
+        if active_trade is None:
+            active_trade = {
                 "candle_id": current_candle_id,
                 "asset_key": "FOREX",
                 "symbol": f"EUR/USD {signal_type}",
@@ -444,9 +439,9 @@ if selected_asset == "FOREX (EUR/USD $)":
                 "breakdown": breakdown if isinstance(breakdown, dict) else {},
                 "start_time_iso": datetime.now().isoformat()
             }
-            trade_logger.save_active_trade(active_trade_forex, "forex")
+            trade_logger.save_active_trade(active_trade, "forex")
             
-        at = active_trade_forex
+        at = active_trade
         trade_finished = False
         trade_status = "WIN"
         exit_price = spot_price
@@ -471,9 +466,10 @@ if selected_asset == "FOREX (EUR/USD $)":
                 trade_status = "WIN" if exit_price < entry_v else "LOSS"
                 
         if trade_finished:
-            post_mortem = ai_analyst.generate_trade_post_mortem(trade_status, bd_v, 1.50 if trade_status=="WIN" else -1.00)
+            pnl_calc = (exit_price - entry_v) * qty_v if at.get("signal_type") == "BUY_CALL" else (entry_v - exit_price) * qty_v
+            post_mortem = ai_analyst.generate_trade_post_mortem(trade_status, bd_v, pnl_calc)
             recorded = trade_logger.record_completed_trade(
-                symbol=at.get("symbol", "EUR/USD BUY_CALL"), strike=at.get("strike", "EURUSD"), entry_price=entry_v,
+                symbol=at.get("symbol", "EUR/USD"), strike=at.get("strike", "EURUSD"), entry_price=entry_v,
                 exit_price=exit_price, qty=qty_v, status=trade_status,
                 win_loss_reason=post_mortem, layer_breakdown=bd_v
             )
@@ -481,16 +477,14 @@ if selected_asset == "FOREX (EUR/USD $)":
             actual_net_pnl = recorded.get('net_pnl', 0)
             final_header_status = "WIN" if actual_net_pnl > 0 else "LOSS"
             
-            alert_msg = f"<b>🚨 FOREX EUR/USD TRADE COMPLETED: {final_header_status}</b>\n\nSymbol: <b>{at.get('symbol')}</b>\nNet PnL: <b>${actual_net_pnl:,.2f}</b>"
-            send_telegram_alert(alert_msg)
+            trade_comp_key = f"COMPLETED_FOREX_{current_candle_id}_{final_header_status}"
+            if trade_comp_key not in st.session_state.notified_completed_trades:
+                alert_msg = f"<b>🚨 FOREX TRADE COMPLETED: {final_header_status}</b>\n\nSymbol: <b>{at.get('symbol')}</b>\nNet PnL: <b>${actual_net_pnl:,.2f}</b>"
+                send_telegram_alert(alert_msg)
+                st.session_state.notified_completed_trades.add(trade_comp_key)
+                
             trade_logger.clear_active_trade("forex")
             st.rerun()
-
-    telegram_dedup_key = f"FOREX_{current_candle_id}_{signal_type}"
-    if signal_type in ["BUY_CALL", "BUY_PUT"] and telegram_dedup_key not in st.session_state.notified_candles:
-        alert_msg = f"<b>🚨 FOREX EUR/USD 15M CANDLE WIN SIGNAL</b>\n\nDirection: <b>{signal_type}</b>\nWin Confidence: <b>{confidence_score:.1f}%</b>\nEntry Zone (Locked): <b>${entry_zone_price:.5f}</b>\nTP1 (+15 Pips): <b>${forex_tp1:.5f}</b>\nSL (-10 Pips): <b>${forex_sl:.5f}</b>"
-        send_telegram_alert(alert_msg)
-        st.session_state.notified_candles.add(telegram_dedup_key)
 
     st.subheader("📍 LIVE FOREX (EUR/USD) 15M CANDLE WIN PREDICTOR")
     if signal_type == "BUY_CALL":
@@ -559,6 +553,67 @@ elif selected_asset == "BITCOIN (BTC/USDT)":
     btc_tp2 = entry_zone_price * (1 + config.BTC_TARGET_2_PCT / 100.0) if signal_type == "BUY_CALL" else entry_zone_price * (1 - config.BTC_TARGET_2_PCT / 100.0)
     btc_sl = entry_zone_price * (1 - config.BTC_STOP_LOSS_PCT / 100.0) if signal_type == "BUY_CALL" else entry_zone_price * (1 + config.BTC_STOP_LOSS_PCT / 100.0)
 
+    # PERSISTENT BTC ACTIVE TRADE ENGINE WITH CORRECT DIRECTIONAL PNL
+    active_trade_btc = trade_logger.load_active_trade("btc")
+    
+    if signal_type in ["BUY_CALL", "BUY_PUT"]:
+        if active_trade_btc is None:
+            active_trade_btc = {
+                "candle_id": current_candle_id,
+                "asset_key": "BTC",
+                "symbol": f"BTCUSDT {signal_type}",
+                "strike": "BTCUSDT",
+                "entry_price": entry_zone_price,
+                "tp1": btc_tp1,
+                "sl": btc_sl,
+                "signal_type": signal_type,
+                "quantity": 25,
+                "breakdown": breakdown if isinstance(breakdown, dict) else {},
+                "start_time_iso": datetime.now().isoformat()
+            }
+            trade_logger.save_active_trade(active_trade_btc, "btc")
+            
+        at = active_trade_btc
+        trade_finished = False
+        trade_status = "WIN"
+        exit_price = spot_price
+        
+        entry_v = at.get("entry_price", spot_price)
+        qty_v = at.get("quantity", 25)
+        bd_v = at.get("breakdown", {})
+        
+        if at.get("signal_type") == "BUY_CALL":
+            if spot_price >= at.get("tp1", spot_price * 1.0025): trade_finished, trade_status, exit_price = True, "WIN", at.get("tp1", spot_price)
+            elif spot_price <= at.get("sl", spot_price * 0.9985): trade_finished, trade_status, exit_price = True, "LOSS", at.get("sl", spot_price)
+        elif at.get("signal_type") == "BUY_PUT":
+            if spot_price <= at.get("tp1", spot_price * 0.9975): trade_finished, trade_status, exit_price = True, "WIN", at.get("tp1", spot_price)
+            elif spot_price >= at.get("sl", spot_price * 1.0015): trade_finished, trade_status, exit_price = True, "LOSS", at.get("sl", spot_price)
+                
+        if not trade_finished and (rem_candle_sec <= 5 or at.get("candle_id") != current_candle_id):
+            trade_finished = True
+            exit_price = spot_price
+            if at.get("signal_type") == "BUY_CALL":
+                trade_status = "WIN" if exit_price > entry_v else "LOSS"
+            else:
+                trade_status = "WIN" if exit_price < entry_v else "LOSS"
+                
+        if trade_finished:
+            pnl_calc = (exit_price - entry_v) * qty_v if at.get("signal_type") == "BUY_CALL" else (entry_v - exit_price) * qty_v
+            post_mortem = ai_analyst.generate_trade_post_mortem(trade_status, bd_v, pnl_calc)
+            recorded = trade_logger.record_completed_trade(
+                symbol=at.get("symbol", "BTCUSDT"), strike=at.get("strike", "BTCUSDT"), entry_price=entry_v,
+                exit_price=exit_price, qty=qty_v, status=trade_status,
+                win_loss_reason=post_mortem, layer_breakdown=bd_v
+            )
+            
+            actual_net_pnl = recorded.get('net_pnl', 0)
+            final_header_status = "WIN" if actual_net_pnl > 0 else "LOSS"
+            
+            alert_msg = f"<b>🚨 BITCOIN TRADE COMPLETED: {final_header_status}</b>\n\nSymbol: <b>{at.get('symbol')}</b>\nNet PnL: <b>${actual_net_pnl:,.2f}</b>"
+            send_telegram_alert(alert_msg)
+            trade_logger.clear_active_trade("btc")
+            st.rerun()
+
     st.subheader("📍 LIVE BITCOIN 15M CANDLE WIN PREDICTOR")
     if signal_type == "BUY_CALL":
         st.markdown(f"""
@@ -583,7 +638,7 @@ elif selected_asset == "BITCOIN (BTC/USDT)":
     else:
         st.markdown(f"""
         <div class='signal-card-wait'>
-            <h1 style='color:#B0BEC5; margin:0;'>⚪ WAIT - LOW CANDLE WIN CONFIDENCE (< 70%)</h1>
+            <h1 style='color:#B0BEC5; margin:0;'>⚪ WAIT - LOW CANDLE WIN CONFIDENCE (< 65%)</h1>
             <p style='font-size:15px; margin-top:8px;'>Reason: <b>{reason_code}</b></p>
         </div>
         """, unsafe_allow_html=True)
@@ -648,6 +703,69 @@ else: # NIFTY 50 MODE
     st.sidebar.metric("NIFTY 50 Spot", f"₹{spot_price:,.2f}")
     st.sidebar.metric("India VIX", f"{india_vix:.2f}", delta=f"{delta_vix_15:+.2f}")
 
+    # PERSISTENT NIFTY ACTIVE TRADE ENGINE WITH CORRECT DIRECTIONAL PNL
+    active_trade_nifty = trade_logger.load_active_trade("nifty")
+    nifty_tp1 = spot_price + 12.0 if signal_type == "BUY_CALL" else spot_price - 12.0
+    nifty_sl = spot_price - 8.0 if signal_type == "BUY_CALL" else spot_price + 8.0
+
+    if signal_type in ["BUY_CALL", "BUY_PUT"]:
+        if active_trade_nifty is None:
+            active_trade_nifty = {
+                "candle_id": current_candle_id,
+                "asset_key": "NIFTY",
+                "symbol": f"NIFTY {atm_strike} {'CE' if signal_type=='BUY_CALL' else 'PE'}",
+                "strike": f"NIFTY {atm_strike}",
+                "entry_price": entry_zone_price,
+                "tp1": nifty_tp1,
+                "sl": nifty_sl,
+                "signal_type": signal_type,
+                "quantity": 25,
+                "breakdown": breakdown if isinstance(breakdown, dict) else {},
+                "start_time_iso": datetime.now().isoformat()
+            }
+            trade_logger.save_active_trade(active_trade_nifty, "nifty")
+            
+        at = active_trade_nifty
+        trade_finished = False
+        trade_status = "WIN"
+        exit_price = spot_price
+        
+        entry_v = at.get("entry_price", spot_price)
+        qty_v = at.get("quantity", 25)
+        bd_v = at.get("breakdown", {})
+        
+        if at.get("signal_type") == "BUY_CALL":
+            if spot_price >= at.get("tp1", spot_price + 12.0): trade_finished, trade_status, exit_price = True, "WIN", at.get("tp1", spot_price)
+            elif spot_price <= at.get("sl", spot_price - 8.0): trade_finished, trade_status, exit_price = True, "LOSS", at.get("sl", spot_price)
+        elif at.get("signal_type") == "BUY_PUT":
+            if spot_price <= at.get("tp1", spot_price - 12.0): trade_finished, trade_status, exit_price = True, "WIN", at.get("tp1", spot_price)
+            elif spot_price >= at.get("sl", spot_price + 8.0): trade_finished, trade_status, exit_price = True, "LOSS", at.get("sl", spot_price)
+                
+        if not trade_finished and (rem_candle_sec <= 5 or at.get("candle_id") != current_candle_id):
+            trade_finished = True
+            exit_price = spot_price
+            if at.get("signal_type") == "BUY_CALL":
+                trade_status = "WIN" if exit_price > entry_v else "LOSS"
+            else:
+                trade_status = "WIN" if exit_price < entry_v else "LOSS"
+                
+        if trade_finished:
+            pnl_calc = (exit_price - entry_v) * qty_v if at.get("signal_type") == "BUY_CALL" else (entry_v - exit_price) * qty_v
+            post_mortem = ai_analyst.generate_trade_post_mortem(trade_status, bd_v, pnl_calc)
+            recorded = trade_logger.record_completed_trade(
+                symbol=at.get("symbol", f"NIFTY {atm_strike}"), strike=at.get("strike", f"NIFTY {atm_strike}"), entry_price=entry_v,
+                exit_price=exit_price, qty=qty_v, status=trade_status,
+                win_loss_reason=post_mortem, layer_breakdown=bd_v
+            )
+            
+            actual_net_pnl = recorded.get('net_pnl', 0)
+            final_header_status = "WIN" if actual_net_pnl > 0 else "LOSS"
+            
+            alert_msg = f"<b>🚨 NIFTY TRADE COMPLETED: {final_header_status}</b>\n\nSymbol: <b>{at.get('symbol')}</b>\nNet PnL: <b>₹{actual_net_pnl:,.2f}</b>"
+            send_telegram_alert(alert_msg)
+            trade_logger.clear_active_trade("nifty")
+            st.rerun()
+
     st.subheader("📍 LIVE NIFTY 50 15M CANDLE WIN PREDICTOR")
     if signal_type == "BUY_CALL":
         st.markdown(f"""
@@ -672,7 +790,7 @@ else: # NIFTY 50 MODE
     else:
         st.markdown(f"""
         <div class='signal-card-wait'>
-            <h1 style='color:#B0BEC5; margin:0;'>⚪ WAIT - LOW CANDLE WIN CONFIDENCE (< 70%)</h1>
+            <h1 style='color:#B0BEC5; margin:0;'>⚪ WAIT - LOW CANDLE WIN CONFIDENCE (< 65%)</h1>
             <p style='font-size:15px; margin-top:8px;'>Reason: <b>{reason_code}</b></p>
         </div>
         """, unsafe_allow_html=True)

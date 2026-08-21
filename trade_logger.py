@@ -57,6 +57,7 @@ def clear_asset_trades(asset_filter=None):
         save_trades([])
         clear_active_trade("btc")
         clear_active_trade("nifty")
+        clear_active_trade("forex")
     else:
         trades = load_trades()
         updated_trades = [t for t in trades if asset_filter.upper() not in t.get("symbol", "").upper()]
@@ -68,10 +69,7 @@ def calculate_brokerage_fees(qty, entry_price, exit_price, is_crypto=False):
         turnover = (entry_price + exit_price) * qty
         return round(turnover * 0.00075, 2)
     else:
-        flat_brokerage = 40.0
-        turnover = (entry_price + exit_price) * qty
-        stt_and_taxes = turnover * 0.0005
-        return round(flat_brokerage + stt_and_taxes, 2)
+        return 0.0  # Zero brokerage for paper forex/options testing
 
 def record_completed_trade(symbol, strike, entry_price, exit_price, qty, status, win_loss_reason, layer_breakdown):
     trades = load_trades()
@@ -83,29 +81,19 @@ def record_completed_trade(symbol, strike, entry_price, exit_price, qty, status,
     sym_upper = symbol.upper()
     is_crypto = "BTC" in sym_upper
     is_forex = "FOREX" in sym_upper or "EUR" in sym_upper
+    is_put_short = "PUT" in sym_upper or "SHORT" in sym_upper or "SELL" in sym_upper
     
-    if is_crypto:
-        asset_type = "BTC"
-        curr_sym = "$"
-        gross_pnl = round((exit_price - entry_price) * qty if status == "WIN" else (exit_price - entry_price) * qty, 2)
-        brokerage = calculate_brokerage_fees(qty, entry_price, exit_price, is_crypto=True)
-    elif is_forex:
-        asset_type = "FOREX"
-        curr_sym = "$"
-        # For Forex: 10 pips SL = -$1.00 per 0.01 lot, 15 pips TP1 = +$1.50 per 0.01 lot
-        pip_diff = (exit_price - entry_price) * 10000.0
-        gross_pnl = round(pip_diff * 0.10, 2) if status == "WIN" else round(pip_diff * 0.10, 2)
-        brokerage = 0.0  # Zero commission for forex demo/micro lot
+    # DIRECTIONAL PNL FORMULA FIX: Short/Put profit = (entry_price - exit_price) * qty
+    if is_put_short:
+        gross_pnl = round((entry_price - exit_price) * qty, 2)
     else:
-        asset_type = "NIFTY"
-        curr_sym = "₹"
-        gross_pnl = round((exit_price - entry_price) * qty if status == "WIN" else (exit_price - entry_price) * qty, 2)
-        brokerage = calculate_brokerage_fees(qty, entry_price, exit_price, is_crypto=False)
+        gross_pnl = round((exit_price - entry_price) * qty, 2)
         
+    brokerage = calculate_brokerage_fees(qty, entry_price, exit_price, is_crypto=is_crypto)
     net_pnl = round(gross_pnl - brokerage, 2)
     actual_result = "WIN" if net_pnl > 0 else "LOSS"
     
-    # 5-second deduplication guard
+    # 5-SECOND DEDUPLICATION GUARD
     if trades:
         last_trade = trades[-1]
         last_ts = last_trade.get("timestamp_epoch", 0)
@@ -118,8 +106,8 @@ def record_completed_trade(symbol, strike, entry_price, exit_price, qty, status,
         "date_time": date_time_str,
         "date": today_str,
         "symbol": symbol,
-        "asset_type": asset_type,
-        "currency": curr_sym,
+        "asset_type": "BTC" if is_crypto else ("FOREX" if is_forex else "NIFTY"),
+        "currency": "$" if (is_crypto or is_forex) else "₹",
         "strike": strike,
         "entry_price": entry_price,
         "exit_price": exit_price,
