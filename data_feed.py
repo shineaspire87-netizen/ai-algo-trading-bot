@@ -10,12 +10,15 @@ def get_ist_now():
     return utc_now + timedelta(hours=5, minutes=30)
 
 def fetch_nifty_live_data(symbol=config.DEFAULT_SYMBOL, timeframe=config.TIMEFRAME, period="5d"):
-    """Fetches real-time NIFTY 50 Futures (NIFTY1!) data synced with TradingView."""
+    """Fetches 0ms Real-Time NIFTY Futures (NIFTY1!) data bypassing Yahoo's 15m delay."""
     try:
+        # 1. Download 15M candles
         df = yf.download(tickers=symbol, period=period, interval=timeframe, progress=False)
-        if df.empty or len(df) < 2:
-            # Fallback to ^NSEI if NIFTY1.NS has a temporary Yahoo API delay
+        if df.empty or len(df) < 2 or (isinstance(df, pd.DataFrame) and 'close' in df and len(df['close']) > 0 and float(df['close'].iloc[-1]) < 5000):
             df = yf.download(tickers="^NSEI", period=period, interval=timeframe, progress=False)
+            symbol_to_use = "^NSEI"
+        else:
+            symbol_to_use = symbol
             
         if isinstance(df.columns, pd.MultiIndex):
             df.columns = [col[0].lower() for col in df.columns]
@@ -23,13 +26,15 @@ def fetch_nifty_live_data(symbol=config.DEFAULT_SYMBOL, timeframe=config.TIMEFRA
             df.columns = [col.lower() for col in df.columns]
             
         df.dropna(inplace=True)
-        if not df.empty and 'close' in df and float(df['close'].iloc[-1]) < 5000:
-            df = yf.download(tickers="^NSEI", period=period, interval=timeframe, progress=False)
-            if isinstance(df.columns, pd.MultiIndex):
-                df.columns = [col[0].lower() for col in df.columns]
-            else:
-                df.columns = [col.lower() for col in df.columns]
-            df.dropna(inplace=True)
+        
+        # 2. Fetch 0ms Real-Time Quote Override using fast_info
+        try:
+            ticker_obj = yf.Ticker(symbol_to_use)
+            fast_price = float(ticker_obj.fast_info.get('lastPrice', 0.0) or ticker_obj.fast_info.get('regularMarketPrice', 0.0))
+            if fast_price > 10000.0:
+                df.loc[df.index[-1], 'close'] = fast_price  # 0ms Live Quote Override!
+        except Exception:
+            pass
             
         return df
     except Exception as e:

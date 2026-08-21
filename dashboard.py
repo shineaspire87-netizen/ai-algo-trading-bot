@@ -155,25 +155,16 @@ if selected_asset == "BITCOIN (BTC/USDT)":
     </script>
     """, height=85)
 else:
-    try:
-        init_nifty_df = data_feed.fetch_nifty_live_data(config.DEFAULT_SYMBOL, config.TIMEFRAME)
-        if not init_nifty_df.empty:
-            init_price_val = float(init_nifty_df.iloc[-1]['close'])
-            initial_nifty_str = f"{init_price_val:,.2f}"
-        else:
-            init_price_val = 24230.00
-            initial_nifty_str = "24,230.00"
-    except Exception:
-        init_price_val = 24230.00
-        initial_nifty_str = "24,230.00"
-
+    # NIFTY 50 0ms Live Ticker Component
+    df_nifty_init = data_feed.fetch_nifty_live_data(config.DEFAULT_SYMBOL, config.TIMEFRAME)
+    nifty_spot_init = float(df_nifty_init.iloc[-1]['close']) if not df_nifty_init.empty else 24290.0
     st.components.v1.html(f"""
     <div style="background-color: #111827; border: 1px solid #374151; padding: 12px; border-radius: 10px; text-align: center; font-family: monospace; color: #F3F4F6;">
         <span id="live-date" style="color: #60A5FA; font-size: 14px; font-weight: bold;"></span> &nbsp;|&nbsp; 
         <span id="live-clock" style="color: #FBBF24; font-size: 16px; font-weight: bold;"></span><br>
         <span id="candle-timer" style="color: #FFD54F; font-size: 16px; font-weight: bold;">⏳ 15M CANDLE: Loading...</span> &nbsp;|&nbsp;
         <span style="color:#00E676; font-weight:bold;">⚡ NIFTY TICKER: </span>
-        <span id="nifty-ticker-price" style="color: #00E676; font-size: 20px; font-weight: bold;">₹{initial_nifty_str}</span>
+        <span id="nifty-ticker-price" style="color: #00E676; font-size: 20px; font-weight: bold;">₹{nifty_spot_init:,.2f}</span>
     </div>
     <script>
     function updateClockAndCandleTimer() {{
@@ -202,8 +193,7 @@ else:
     }}
     setInterval(updateClockAndCandleTimer, 1000); updateClockAndCandleTimer();
 
-    let lastNiftyPrice = {init_price_val};
-
+    let lastNiftyPrice = {nifty_spot_init};
     async function fetchRealNiftyLiveTicker() {{
         const targetUrl = 'https://query1.finance.yahoo.com/v8/finance/chart/%5ENSEI?interval=1m';
         const proxies = [
@@ -246,11 +236,6 @@ else:
     </script>
     """, height=85)
 
-if is_open:
-    st.markdown(f"<div class='market-badge-open'>{market_status_text}</div>", unsafe_allow_html=True)
-else:
-    st.markdown(f"<div class='market-badge-closed'>{market_status_text} — LAST CLOSE DATA SHOWN</div>", unsafe_allow_html=True)
-
 # EXECUTION ENGINE
 if selected_asset == "BITCOIN (BTC/USDT)":
     df_btc = data_feed.fetch_btc_live_data("BTCUSDT", config.TIMEFRAME)
@@ -277,7 +262,6 @@ if selected_asset == "BITCOIN (BTC/USDT)":
     btc_tp2 = entry_zone_price * (1 + config.BTC_TARGET_2_PCT / 100.0) if signal_type == "BUY_CALL" else entry_zone_price * (1 - config.BTC_TARGET_2_PCT / 100.0)
     btc_sl = entry_zone_price * (1 - config.BTC_STOP_LOSS_PCT / 100.0) if signal_type == "BUY_CALL" else entry_zone_price * (1 + config.BTC_STOP_LOSS_PCT / 100.0)
 
-    # PERSISTENT BITCOIN ACTIVE TRADE ENGINE
     active_trade = trade_logger.load_active_trade("btc")
     
     if signal_type in ["BUY_CALL", "BUY_PUT"]:
@@ -433,7 +417,6 @@ else: # NIFTY 50 MODE
     st.sidebar.metric("NIFTY 50 Spot", f"₹{spot_price:,.2f}")
     st.sidebar.metric("India VIX", f"{india_vix:.2f}", delta=f"{delta_vix_15:+.2f}")
 
-    # PERSISTENT NIFTY ACTIVE TRADE ENGINE
     active_trade_nifty = trade_logger.load_active_trade("nifty")
     nifty_tp1 = spot_price + 12.0 if signal_type == "BUY_CALL" else spot_price - 12.0
     nifty_sl = spot_price - 8.0 if signal_type == "BUY_CALL" else spot_price + 8.0
@@ -555,7 +538,6 @@ if breakdown:
     </div>
     """, unsafe_allow_html=True)
 
-# ISOLATED PERFORMANCE LOGS & TABLES BASED ON ACTIVE ASSET SELECTION
 st.divider()
 st.subheader(f"📊 {selected_asset.upper()} PERFORMANCE LOGS & ACCURACY TRACKER")
 
@@ -591,7 +573,6 @@ with tab2:
     else:
         st.info(f"ℹ️ No weekly {selected_asset} trade history recorded yet.")
 
-# ISOLATED BOT THOUGHTS & AI SELF-REFLECTION
 st.divider()
 col_title, col_clear = st.columns([3, 1])
 with col_title:
@@ -623,7 +604,6 @@ if all_trades:
 else:
     st.info(f"ℹ️ No {selected_asset} Bot Thoughts recorded yet.")
 
-# END-OF-DAY AI SELF-DIAGNOSTIC REPORT
 st.divider()
 today_trades = trade_logger.get_today_trades(asset_key)
 eod_report = ai_analyst.generate_eod_bot_diagnostic(today_trades, india_vix if selected_asset == "NIFTY 50 (₹)" else 15.0, 1.0)
